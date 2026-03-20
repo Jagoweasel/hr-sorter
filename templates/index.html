@@ -1,0 +1,20 @@
+{{ define "content" }}
+<div class="grid grid-cols-3 gap-6">
+    <!-- Left: Contact List -->
+    <div class="col-span-1 bg-white p-4 rounded shadow">
+        <h2 class="text-lg font-semibold mb-4 border-b pb-2">Recruiters & HRs</h2>
+        <div id="contact-list" hx-get="/contacts" hx-trigger="load, every 30s" hx-swap="innerHTML">
+            <!-- HTMX will load the contacts here -->
+            <p class="text-gray-500 italic">Loading contacts...</p>
+        </div>
+    </div>
+
+    <!-- Right: Message History -->
+    <div class="col-span-2 bg-white p-4 rounded shadow min-h-[500px]">
+        <h2 class="text-lg font-semibold mb-4 border-b pb-2">Message History</h2>
+        <div id="chat-history">
+            <p class="text-gray-500 italic">Select a contact to view history</p>
+        </div>
+    </div>
+</div>
+{{ end }}

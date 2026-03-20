@@ -1,0 +1,31 @@
+# HR Sorter
+
+A simple Go application to monitor incoming Telegram messages from recruiters/HRs across multiple accounts and store them in a SQLite database with an HTMX-powered web UI.
+
+## Features
+- Multiple Telegram accounts support (MTProto Userbot).
+- Automatic contact and message capture.
+- Lightweight SQLite database.
+- Fast and reactive UI using HTMX and Tailwind CSS.
+
+## Prerequisites
+- Go 1.21+
+- Telegram `API_ID` and `API_HASH` from [my.telegram.org](https://my.telegram.org).
+
+## Setup
+1. Clone the repository.
+2. Copy `.env.example` to `.env` and fill in your Telegram API credentials.
+3. Run `go mod tidy` to install dependencies.
+4. Run the application:
+   ```bash
+   go run cmd/hr-sorter/main.go
+   ```
+
+## Adding Accounts
+Currently, adding accounts is planned via a CLI helper or an internal web form.
+(Implementation in progress).
+
+## Tech Stack
+- **Backend:** Go, `gotd/td` (MTProto), `sqlx`.
+- **Database:** SQLite (pure Go driver).
+- **Frontend:** HTMX, Tailwind CSS, Go Templates.
