@@ -1,0 +1,42 @@
+{{ define "content" }}
+<div class="max-w-4xl mx-auto bg-white p-6 rounded shadow">
+    <div class="flex justify-between items-center mb-6 border-b pb-4">
+        <h2 class="text-2xl font-bold text-gray-800">Linked Accounts</h2>
+        <a href="/" class="text-blue-600 hover:underline">Back to Dashboard</a>
+    </div>
+
+    <table class="w-full text-left border-collapse">
+        <thead>
+            <tr class="bg-gray-100">
+                <th class="p-3 border">Phone Number</th>
+                <th class="p-3 border">Status</th>
+                <th class="p-3 border">Added On</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ range . }}
+            <tr class="hover:bg-gray-50">
+                <td class="p-3 border font-mono">{{ .PhoneNumber }}</td>
+                <td class="p-3 border text-center">
+                    {{ if eq .Status "active" }}
+                    <span class="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded border border-green-400">ACTIVE</span>
+                    {{ else }}
+                    <span class="bg-yellow-100 text-yellow-800 text-xs font-semibold px-2.5 py-0.5 rounded border border-yellow-400">{{ .Status }}</span>
+                    {{ end }}
+                </td>
+                <td class="p-3 border text-sm text-gray-600">{{ .CreatedAt.Format "Jan 02, 2006" }}</td>
+            </tr>
+            {{ else }}
+            <tr>
+                <td colspan="3" class="p-8 text-center text-gray-500 italic">No accounts linked yet.</td>
+            </tr>
+            {{ end }}
+        </tbody>
+    </table>
+
+    <div class="mt-8 p-4 bg-blue-50 border border-blue-200 rounded">
+        <h3 class="font-bold text-blue-800 mb-2">How to add more?</h3>
+        <p class="text-sm text-blue-700">Use the CLI helper: <code>go run cmd/add-account/main.go</code></p>
+    </div>
+</div>
+{{ end }}
