@@ -35,7 +35,6 @@ func (m *Manager) StartAccount(ctx context.Context, acc models.Account) error {
 	}
 
 	dispatcher := tg.NewUpdateDispatcher()
-
 	client := telegram.NewClient(m.appID, m.appHash, telegram.Options{
 		SessionStorage: &session.FileStorage{
 			Path: acc.SessionPath,
@@ -43,21 +42,22 @@ func (m *Manager) StartAccount(ctx context.Context, acc models.Account) error {
 		UpdateHandler: dispatcher,
 	})
 
+	api := tg.NewClient(client)
+
 	dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, u *tg.UpdateNewMessage) error {
-		return m.HandleNewMessage(ctx, u, e.Users, acc.ID)
+		return m.HandleNewMessage(ctx, api, u, e.Users, acc.ID)
 	})
 
 	log.Printf("Starting account %s...", acc.PhoneNumber)
 
 	return client.Run(ctx, func(ctx context.Context) error {
-		// Just wait for context cancellation
 		log.Printf("Account %s is now running.", acc.PhoneNumber)
 		<-ctx.Done()
 		return ctx.Err()
 	})
 }
 
-func (m *Manager) HandleNewMessage(ctx context.Context, u *tg.UpdateNewMessage, users map[int64]*tg.User, accountID int64) error {
+func (m *Manager) HandleNewMessage(ctx context.Context, api *tg.Client, u *tg.UpdateNewMessage, users map[int64]*tg.User, accountID int64) error {
 	msg, ok := u.Message.(*tg.Message)
 	if !ok {
 		return nil
@@ -71,11 +71,27 @@ func (m *Manager) HandleNewMessage(ctx context.Context, u *tg.UpdateNewMessage, 
 	userID := peer.UserID
 	text := msg.Message
 
-	user, ok := users[userID]
+	var user *tg.User
+	user, ok = users[userID]
 	if !ok {
-		// If we don't have user in current entities, we might skip it or fetch it.
-		// For now, let's at least log the ID.
-		log.Printf("Message from unknown user %d", userID)
+		log.Printf("Fetching missing user info for %d...", userID)
+		usersRes, err := api.UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUser{
+			UserID: userID,
+		}})
+		if err != nil {
+			log.Printf("Failed to fetch user %d: %v", userID, err)
+			return nil
+		}
+
+		if len(usersRes) > 0 {
+			if u, ok := usersRes[0].(*tg.User); ok {
+				user = u
+			}
+		}
+	}
+
+	if user == nil {
+		log.Printf("Could not resolve user %d", userID)
 		return nil
 	}
 
@@ -83,19 +99,25 @@ func (m *Manager) HandleNewMessage(ctx context.Context, u *tg.UpdateNewMessage, 
 	_, err := database.DB.Exec("INSERT OR IGNORE INTO contacts (tg_user_id, first_name, last_name, username) VALUES (?, ?, ?, ?)",
 		user.ID, user.FirstName, user.LastName, user.Username)
 	if err != nil {
+		log.Printf("DB Error saving contact: %v", err)
 		return err
 	}
 
 	var contactID int64
 	err = database.DB.Get(&contactID, "SELECT id FROM contacts WHERE tg_user_id = ?", user.ID)
 	if err != nil {
+		log.Printf("DB Error getting contact ID: %v", err)
 		return err
 	}
 
 	// Save message
 	_, err = database.DB.Exec("INSERT INTO messages (account_id, contact_id, text, is_incoming, timestamp) VALUES (?, ?, ?, ?, ?)",
 		accountID, contactID, text, !msg.Out, time.Unix(int64(msg.Date), 0))
+	if err != nil {
+		log.Printf("DB Error saving message: %v", err)
+		return err
+	}
 
-	log.Printf("Captured message from @%s on account %d", user.Username, accountID)
-	return err
+	log.Printf("Successfully captured message from @%s (Internal ID: %d)", user.Username, contactID)
+	return nil
 }

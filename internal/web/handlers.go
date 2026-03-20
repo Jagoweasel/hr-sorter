@@ -51,7 +51,7 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 	}
 	var contacts []ContactWithLastMsg
 	query := `
-		SELECT c.*, (SELECT text FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1) as last_message
+		SELECT c.*, COALESCE((SELECT text FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1), 'No messages yet') as last_message
 		FROM contacts c
 		ORDER BY (SELECT timestamp FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1) DESC`
 
