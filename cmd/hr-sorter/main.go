@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"hr-sorter/internal/database"
+	"hr-sorter/internal/models"
 	"hr-sorter/internal/tgclient"
 	"hr-sorter/internal/web"
 )
@@ -27,7 +29,22 @@ func main() {
 	apiID, _ := strconv.Atoi(apiIDStr)
 
 	manager := tgclient.NewManager(apiID, apiHash)
-	_ = manager // Will be used to start accounts from DB
+
+	// Fetch active accounts from DB
+	var accounts []models.Account
+	err := database.DB.Select(&accounts, "SELECT * FROM accounts WHERE status = 'active'")
+	if err != nil {
+		log.Fatalf("failed to fetch accounts: %v", err)
+	}
+
+	ctx := context.Background()
+	for _, acc := range accounts {
+		go func(a models.Account) {
+			if err := manager.StartAccount(ctx, a); err != nil {
+				log.Printf("Account %s failed: %v", a.PhoneNumber, err)
+			}
+		}(acc)
+	}
 
 	mux := http.NewServeMux()
 	web.RegisterRoutes(mux)
