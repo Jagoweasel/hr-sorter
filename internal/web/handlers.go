@@ -23,6 +23,7 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/contacts/", handleContactActions) // Catch-all for /contacts/{id}/actions etc
 	mux.HandleFunc("/sequences/create", handleCreateSequence)
 	mux.HandleFunc("/sequences/add-contact", handleAddToSequence)
+	mux.HandleFunc("/sequences/add-stage-modal", handleAddStageModal)
 	mux.HandleFunc("/stages/update", handleUpdateStage)
 	mux.HandleFunc("/stages/add", handleAddStage)
 	mux.HandleFunc("/sequences/move", handleMoveSequence)
@@ -134,14 +135,13 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 				<!-- Action menu button (dots) -->
 				<button class="absolute right-2 bottom-2 opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded transition-opacity"
 				        hx-get="/contacts/%d/actions"
-						hx-target="next .actions-menu"
+						hx-target="#modal-container"
 						hx-swap="innerHTML"
 						onclick="event.stopPropagation()">
 					<svg class="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
 						<path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
 					</svg>
 				</button>
-				<div class="actions-menu absolute right-8 bottom-2 z-50"></div>
 			</div>
 		`, c.ID, c.ID, c.FirstName, c.LastName, statusIndicator, c.Username, html.EscapeString(lastMsg), c.ID)
 	}
@@ -365,20 +365,29 @@ func handleContactActions(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(path, "/actions") {
 		id := strings.TrimPrefix(strings.TrimSuffix(path, "/actions"), "/contacts/")
 		fmt.Fprintf(w, `
-			<div class="bg-white border shadow-xl rounded-lg py-2 w-48 text-sm" 
-			     hx-on:htmx:click-outside="this.innerHTML = ''">
-				<button class="w-full text-left px-4 py-2 hover:bg-blue-50 text-blue-700 font-medium"
-				        hx-get="/contacts/%s/create-sequence-modal"
-						hx-target="#modal-container"
-						hx-on:htmx:after-request="this.closest('.actions-menu').innerHTML = ''">
-					Start Sequence
-				</button>
-				<button class="w-full text-left px-4 py-2 hover:bg-blue-50 text-gray-700"
-				        hx-get="/contacts/%s/add-to-sequence-modal"
-						hx-target="#modal-container"
-						hx-on:htmx:after-request="this.closest('.actions-menu').innerHTML = ''">
-					Add to Existing
-				</button>
+			<div class="fixed inset-0 bg-black/20 backdrop-blur-[1px] flex items-center justify-center z-[100]" id="modal" onclick="if(event.target === this) htmx.remove('#modal')">
+				<div class="bg-white border shadow-2xl rounded-2xl p-2 w-64 overflow-hidden" onclick="event.stopPropagation()">
+					<div class="px-4 py-3 border-b mb-1">
+						<p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Recruiter Actions</p>
+					</div>
+					<button class="w-full text-left px-4 py-3 hover:bg-blue-50 text-blue-700 font-bold text-sm transition-colors rounded-xl flex items-center justify-between group"
+					        hx-get="/contacts/%s/create-sequence-modal"
+							hx-target="#modal-container"
+							hx-on:htmx:after-request="htmx.remove('#modal')">
+						Start Sequence
+						<span class="opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+					</button>
+					<button class="w-full text-left px-4 py-3 hover:bg-blue-50 text-gray-700 font-bold text-sm transition-colors rounded-xl flex items-center justify-between group"
+					        hx-get="/contacts/%s/add-to-sequence-modal"
+							hx-target="#modal-container"
+							hx-on:htmx:after-request="htmx.remove('#modal')">
+						Add to Existing
+						<span class="opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+					</button>
+					<div class="p-2 border-t mt-1">
+						<button onclick="htmx.remove('#modal')" class="w-full py-2 text-[10px] font-black text-gray-400 uppercase hover:text-gray-600 transition-colors">Cancel</button>
+					</div>
+				</div>
 			</div>
 		`, id, id)
 		return
@@ -399,48 +408,55 @@ func handleContactActions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		fmt.Fprintf(w, `
-			<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]" id="modal" onclick="if(event.target === this) htmx.remove('#modal')">
-				<div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg overflow-y-auto max-h-[90vh]" onclick="event.stopPropagation()">
-					<h2 class="text-xl font-bold mb-4 border-b pb-2">Start New Interview Sequence</h2>
+			<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[110] overflow-y-auto p-4" id="modal" onclick="if(event.target === this) htmx.remove('#modal')">
+				<div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-lg my-auto relative" onclick="event.stopPropagation()">
+					<div class="flex justify-between items-center mb-6 border-b pb-4">
+						<h2 class="text-2xl font-black text-gray-900 tracking-tight">New Sequence</h2>
+						<button onclick="htmx.remove('#modal')" class="text-gray-400 hover:text-gray-600">
+							<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+						</button>
+					</div>
 					<form hx-post="/sequences/create" hx-target="body">
 						<input type="hidden" name="contact_id" value="%s">
-						<div class="space-y-4">
-							<div class="grid grid-cols-2 gap-4">
+						<div class="space-y-6">
+							<div class="grid grid-cols-2 gap-6">
 								<div>
-									<label class="block text-xs font-bold text-gray-500 uppercase">Company Name</label>
-									<input type="text" name="company_name" required class="mt-1 block w-full border rounded-md p-2 bg-gray-50 focus:bg-white" placeholder="Google">
+									<label class="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Company</label>
+									<input type="text" name="company_name" required class="block w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 focus:ring-0 transition-colors text-sm font-bold bg-gray-50" placeholder="Google">
 								</div>
 								<div>
-									<label class="block text-xs font-bold text-gray-500 uppercase">Vacancy Name</label>
-									<input type="text" name="vacancy_name" required class="mt-1 block w-full border rounded-md p-2 bg-gray-50 focus:bg-white" placeholder="Senior Go Developer">
+									<label class="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Vacancy</label>
+									<input type="text" name="vacancy_name" required class="block w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 focus:ring-0 transition-colors text-sm font-bold bg-gray-50" placeholder="Senior Go Dev">
 								</div>
 							</div>
 							<div>
-								<label class="block text-xs font-bold text-gray-500 uppercase">Initial Contact Date</label>
-								<input type="datetime-local" name="initial_date" value="%s" class="mt-1 block w-full border rounded-md p-2 bg-gray-50">
+								<label class="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Initial Contact Date</label>
+								<input type="datetime-local" name="initial_date" value="%s" class="block w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 focus:ring-0 text-sm font-bold bg-gray-50">
 							</div>
 							
-							<div class="border-t pt-4">
-								<p class="text-xs font-bold text-gray-500 uppercase mb-2">Technical Stages</p>
-								<div id="tech-stages" class="space-y-2">
-									<div class="flex items-center space-x-2">
-										<input type="text" name="tech_stage_name[]" value="Technical Interview 1" class="flex-1 border rounded-md p-2 text-sm">
-										<select name="tech_stage_type[]" class="border rounded-md p-2 text-sm bg-gray-50">
-											<option value="">General</option>
-											<option value="Theory">Theory</option>
-											<option value="Live Coding">Live Coding</option>
-											<option value="System Design">System Design</option>
+							<div class="bg-blue-50/50 rounded-2xl p-6 border-2 border-blue-100/50">
+								<p class="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] mb-4">Technical Stages</p>
+								<div id="tech-stages" class="space-y-3">
+									<div class="flex items-center space-x-3">
+										<input type="text" name="tech_stage_name[]" value="Technical Interview 1" class="flex-1 border-2 border-white rounded-xl p-2.5 text-sm font-bold shadow-sm">
+										<select name="tech_stage_type[]" class="border-2 border-white rounded-xl p-2.5 text-[10px] font-black bg-white shadow-sm appearance-none pr-8">
+											<option value="">GENERAL</option>
+											<option value="Theory">THEORY</option>
+											<option value="Live Coding">CODING</option>
+											<option value="System Design">DESIGN</option>
 										</select>
 									</div>
 								</div>
 								<button type="button" 
-								        onclick="const div = document.createElement('div'); div.className = 'flex items-center space-x-2 mt-2'; div.innerHTML = '<input type=\'text\' name=\'tech_stage_name[]\' value=\'Technical Interview ' + (document.querySelectorAll('#tech-stages > div').length + 1) + '\' class=\'flex-1 border rounded-md p-2 text-sm\'><select name=\'tech_stage_type[]\' class=\'border rounded-md p-2 text-sm bg-gray-50\'><option value=\'\'>General</option><option value=\'Theory\'>Theory</option><option value=\'Live Coding\'>Live Coding</option><option value=\'System Design\'>System Design</option></select>'; document.getElementById('tech-stages').appendChild(div)"
-										class="mt-2 text-xs text-blue-600 hover:text-blue-800 font-bold">+ Add Tech Stage</button>
+								        onclick="const div = document.createElement('div'); div.className = 'flex items-center space-x-3 mt-3 animate-in fade-in slide-in-from-top-2 duration-200'; div.innerHTML = '<input type=\'text\' name=\'tech_stage_name[]\' value=\'Technical Interview ' + (document.querySelectorAll('#tech-stages > div').length + 1) + '\' class=\'flex-1 border-2 border-white rounded-xl p-2.5 text-sm font-bold shadow-sm\'><select name=\'tech_stage_type[]\' class=\'border-2 border-white rounded-xl p-2.5 text-[10px] font-black bg-white shadow-sm appearance-none pr-8\'><option value=\'\'>GENERAL</option><option value=\'Theory\'>THEORY</option><option value=\'Live Coding\'>CODING</option><option value=\'System Design\'>DESIGN</option></select>'; document.getElementById('tech-stages').appendChild(div)"
+										class="mt-4 text-[10px] text-blue-600 hover:text-blue-800 font-black uppercase tracking-widest flex items-center space-x-2">
+									<span>+ Add Technical Stage</span>
+								</button>
 							</div>
 						</div>
-						<div class="mt-8 flex justify-end space-x-3 border-t pt-4">
-							<button type="button" onclick="htmx.remove('#modal')" class="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm font-medium">Cancel</button>
-							<button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-bold shadow-lg">Create Sequence</button>
+						<div class="mt-10 flex justify-end space-x-4">
+							<button type="button" onclick="htmx.remove('#modal')" class="px-6 py-3 text-gray-400 hover:text-gray-600 text-xs font-black uppercase tracking-widest">Cancel</button>
+							<button type="submit" class="px-8 py-3 bg-gray-900 text-white rounded-xl hover:bg-black font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:-translate-y-0.5 transition-all">Create</button>
 						</div>
 					</form>
 				</div>
@@ -456,26 +472,26 @@ func handleContactActions(w http.ResponseWriter, r *http.Request) {
 
 		options := ""
 		for _, s := range sequences {
-			options += fmt.Sprintf(`<option value="%d">%s - %s</option>`, s.ID, s.CompanyName, s.VacancyName)
+			options += fmt.Sprintf(`<option value="%d">%s — %s</option>`, s.ID, s.CompanyName, s.VacancyName)
 		}
 
 		fmt.Fprintf(w, `
-			<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]" id="modal" onclick="if(event.target === this) htmx.remove('#modal')">
-				<div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md" onclick="event.stopPropagation()">
-					<h2 class="text-xl font-bold mb-4">Add Recruiter to Sequence</h2>
+			<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[110]" id="modal" onclick="if(event.target === this) htmx.remove('#modal')">
+				<div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md relative" onclick="event.stopPropagation()">
+					<div class="flex justify-between items-center mb-6">
+						<h2 class="text-xl font-black text-gray-900 tracking-tight">Link Recruiter</h2>
+					</div>
 					<form hx-post="/sequences/add-contact" hx-target="body">
 						<input type="hidden" name="contact_id" value="%s">
 						<div class="space-y-4">
-							<div>
-								<label class="block text-sm font-medium text-gray-700">Select Sequence</label>
-								<select name="sequence_id" required class="mt-1 block w-full border rounded-md p-2">
-									%s
-								</select>
-							</div>
+							<label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Select Active Sequence</label>
+							<select name="sequence_id" required class="block w-full border-2 border-gray-100 rounded-xl p-3 text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none transition-colors">
+								%s
+							</select>
 						</div>
-						<div class="mt-6 flex justify-end space-x-3">
-							<button type="button" onclick="htmx.remove('#modal')" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
-							<button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Add to Sequence</button>
+						<div class="mt-8 flex justify-end space-x-3">
+							<button type="button" onclick="htmx.remove('#modal')" class="px-5 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Cancel</button>
+							<button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg hover:bg-blue-700 transition-colors">Confirm Link</button>
 						</div>
 					</form>
 				</div>
@@ -483,6 +499,37 @@ func handleContactActions(w http.ResponseWriter, r *http.Request) {
 		`, contactID, options)
 		return
 	}
+}
+
+func handleAddStageModal(w http.ResponseWriter, r *http.Request) {
+	seqID := r.URL.Query().Get("sequence_id")
+
+	fmt.Fprintf(w, `
+		<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[110]" id="modal" onclick="if(event.target === this) htmx.remove('#modal')">
+			<div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-xs relative" onclick="event.stopPropagation()">
+				<h2 class="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 text-center">New Workflow Step</h2>
+				<div class="grid grid-cols-1 gap-2">
+					<button hx-get="/stages/add?sequence_id=%s&category=screening" hx-target="body" 
+					        class="px-4 py-3 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl text-xs font-black uppercase tracking-widest transition-colors">
+						Screening +
+					</button>
+					<button hx-get="/stages/add?sequence_id=%s&category=tech" hx-target="body"
+					        class="px-4 py-3 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-xl text-xs font-black uppercase tracking-widest transition-colors">
+						Technical +
+					</button>
+					<button hx-get="/stages/add?sequence_id=%s&category=final" hx-target="body"
+					        class="px-4 py-3 bg-pink-50 text-pink-700 hover:bg-pink-100 rounded-xl text-xs font-black uppercase tracking-widest transition-colors">
+						Final Interview +
+					</button>
+					<button hx-get="/stages/add?sequence_id=%s&category=offer" hx-target="body"
+					        class="px-4 py-3 bg-yellow-50 text-yellow-700 hover:bg-yellow-100 rounded-xl text-xs font-black uppercase tracking-widest transition-colors">
+						Offer +
+					</button>
+				</div>
+				<button onclick="htmx.remove('#modal')" class="w-full mt-6 py-2 text-[9px] font-black text-gray-400 hover:text-gray-600 uppercase tracking-widest">Close</button>
+			</div>
+		</div>
+	`, seqID, seqID, seqID, seqID)
 }
 
 func handleCreateSequence(w http.ResponseWriter, r *http.Request) {

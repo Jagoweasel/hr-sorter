@@ -180,21 +180,12 @@
                                         {{ end }}
 
                                         <!-- Add Brand New Stage -->
-                                        <div class="relative group/add shrink-0">
-                                            <button class="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:border-blue-500 hover:bg-white transition-all shadow-sm">
+                                        <div class="shrink-0 pl-4">
+                                            <button hx-get="/sequences/add-stage-modal?sequence_id={{ .ID }}"
+                                                    hx-target="#modal-container"
+                                                    class="w-10 h-10 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:border-blue-500 hover:bg-white transition-all shadow-sm">
                                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"></path></svg>
                                             </button>
-                                            
-                                            <!-- Simple Popover for adding stage -->
-                                            <div class="absolute left-0 top-12 hidden group-hover/add:block z-50 bg-white border rounded-xl shadow-xl p-3 min-w-[180px]">
-                                                <p class="text-[9px] font-black text-gray-400 uppercase mb-2">New Stage Category</p>
-                                                <div class="grid grid-cols-1 gap-1">
-                                                    <a href="/stages/add?sequence_id={{ .ID }}&category=screening" class="px-3 py-1.5 hover:bg-blue-50 rounded-md text-[10px] font-black text-gray-700 flex items-center justify-between">Screening <span class="text-blue-500">+</span></a>
-                                                    <a href="/stages/add?sequence_id={{ .ID }}&category=tech" class="px-3 py-1.5 hover:bg-blue-50 rounded-md text-[10px] font-black text-gray-700 flex items-center justify-between">Technical <span class="text-blue-500">+</span></a>
-                                                    <a href="/stages/add?sequence_id={{ .ID }}&category=final" class="px-3 py-1.5 hover:bg-blue-50 rounded-md text-[10px] font-black text-gray-700 flex items-center justify-between">Final <span class="text-blue-500">+</span></a>
-                                                    <a href="/stages/add?sequence_id={{ .ID }}&category=offer" class="px-3 py-1.5 hover:bg-blue-50 rounded-md text-[10px] font-black text-gray-700 flex items-center justify-between">Offer <span class="text-blue-500">+</span></a>
-                                                </div>
-                                            </div>
                                         </div>
                                     {{ end }}
 
