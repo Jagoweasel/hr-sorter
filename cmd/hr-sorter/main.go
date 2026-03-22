@@ -18,16 +18,23 @@ import (
 )
 
 func main() {
+	log.Println("[Main] Starting application...")
 	_ = godotenv.Load()
 
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
 		dbPath = "hr-sorter.db"
 	}
+	log.Printf("[Main] Initializing database at %s...", dbPath)
 	database.InitDB(dbPath)
+	log.Println("[Main] Database initialized successfully.")
 
 	apiIDStr := os.Getenv("API_ID")
 	apiHash := os.Getenv("API_HASH")
+
+	if apiIDStr == "" || apiHash == "" {
+		log.Fatal("[Main] API_ID or API_HASH not found in .env")
+	}
 
 	apiID, _ := strconv.Atoi(apiIDStr)
 
@@ -37,8 +44,9 @@ func main() {
 	var accounts []models.Account
 	err := database.DB.Select(&accounts, "SELECT * FROM accounts WHERE status = 'active'")
 	if err != nil {
-		log.Fatalf("failed to fetch accounts: %v", err)
+		log.Fatalf("[Main] Failed to fetch accounts: %v", err)
 	}
+	log.Printf("[Main] Found %d active accounts.", len(accounts))
 
 	// Create root context for signal handling
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -47,7 +55,7 @@ func main() {
 	for _, acc := range accounts {
 		go func(a models.Account) {
 			if err := manager.StartAccount(ctx, a); err != nil {
-				log.Printf("Account %s failed: %v", a.PhoneNumber, err)
+				log.Printf("[Main] Account %s failed: %v", a.PhoneNumber, err)
 			}
 		}(acc)
 	}
@@ -66,25 +74,27 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("Server starting on http://localhost:%s", port)
+		log.Printf("[Main] Web server starting on http://127.0.0.1:%s", port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %s\n", err)
+			log.Fatalf("[Main] Web server failed: %s\n", err)
 		}
 	}()
+
+	log.Println("[Main] Application is running. Press Ctrl+C to stop.")
 
 	// Wait for interrupt signal
 	<-ctx.Done()
 	stop()
 
-	log.Println("Shutting down gracefully...")
+	log.Println("[Main] Shutting down gracefully...")
 
 	// Shutdown HTTP server
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Printf("HTTP server Shutdown: %v", err)
+		log.Printf("[Main] HTTP server Shutdown: %v", err)
 	}
 
-	log.Println("Shutdown complete.")
+	log.Println("[Main] Shutdown complete.")
 }
