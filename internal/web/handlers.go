@@ -190,15 +190,33 @@ type SequenceWithDetails struct {
 	Stages     []models.InterviewStage
 }
 
-type PipelineColumn struct {
+type ColumnDef struct {
 	ID          string
 	Label       string
 	ColorClass  string
 	BorderClass string
-	Sequences   []SequenceWithDetails
+}
+
+type AccountGroup struct {
+	Account   *models.Account
+	Columns   []PipelineColumn
+	Sequences []SequenceWithDetails
+}
+
+type PipelineColumn struct {
+	ColumnDef
+	Sequences []SequenceWithDetails
 }
 
 func handlePipeline(w http.ResponseWriter, r *http.Request) {
+	view := r.URL.Query().Get("view")
+	if view == "" {
+		view = "kanban"
+	}
+
+	var allAccounts []models.Account
+	database.DB.Select(&allAccounts, "SELECT * FROM accounts ORDER BY phone_number")
+
 	var sequences []models.Sequence
 	err := database.DB.Select(&sequences, "SELECT * FROM sequences ORDER BY created_at DESC")
 	if err != nil {
@@ -225,7 +243,7 @@ func handlePipeline(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	columns := []PipelineColumn{
+	columnDefs := []ColumnDef{
 		{ID: "initial", Label: "Initial", ColorClass: "bg-blue-50", BorderClass: "border-blue-200"},
 		{ID: "screening", Label: "Screening", ColorClass: "bg-indigo-50", BorderClass: "border-indigo-200"},
 		{ID: "tech", Label: "Technical", ColorClass: "bg-purple-50", BorderClass: "border-purple-200"},
@@ -235,19 +253,62 @@ func handlePipeline(w http.ResponseWriter, r *http.Request) {
 		{ID: "rejected", Label: "Rejected", ColorClass: "bg-red-50", BorderClass: "border-red-200"},
 	}
 
-	// Distribute sequences into columns
-	for i := range columns {
-		for _, s := range detailedSeqs {
-			if s.Status == columns[i].ID {
-				columns[i].Sequences = append(columns[i].Sequences, s)
+	// Create account groups
+	var groups []AccountGroup
+
+	// Group for sequences without an account
+	orphanGroup := AccountGroup{
+		Account: nil,
+	}
+	for _, def := range columnDefs {
+		orphanGroup.Columns = append(orphanGroup.Columns, PipelineColumn{ColumnDef: def})
+	}
+
+	// Groups for each account
+	accountMap := make(map[int64]*AccountGroup)
+	for i := range allAccounts {
+		acc := allAccounts[i]
+		group := AccountGroup{
+			Account: &acc,
+		}
+		for _, def := range columnDefs {
+			group.Columns = append(group.Columns, PipelineColumn{ColumnDef: def})
+		}
+		groups = append(groups, group)
+		accountMap[acc.ID] = &groups[len(groups)-1]
+	}
+
+	// Distribute sequences
+	for _, s := range detailedSeqs {
+		var targetGroup *AccountGroup
+		if s.AccountID != nil {
+			targetGroup = accountMap[*s.AccountID]
+		}
+		if targetGroup == nil {
+			targetGroup = &orphanGroup
+		}
+
+		targetGroup.Sequences = append(targetGroup.Sequences, s)
+		for i := range targetGroup.Columns {
+			if s.Status == targetGroup.Columns[i].ID {
+				targetGroup.Columns[i].Sequences = append(targetGroup.Columns[i].Sequences, s)
 			}
 		}
 	}
 
+	// Only add orphan group if it has sequences
+	if len(orphanGroup.Sequences) > 0 {
+		groups = append(groups, orphanGroup)
+	}
+
 	data := struct {
-		Columns []PipelineColumn
+		View       string
+		Groups     []AccountGroup
+		ColumnDefs []ColumnDef
 	}{
-		Columns: columns,
+		View:       view,
+		Groups:     groups,
+		ColumnDefs: columnDefs,
 	}
 
 	tmpl := template.New("layout.html").Funcs(template.FuncMap{
@@ -577,6 +638,53 @@ func handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 
 	database.DB.Exec("UPDATE sequences SET status = ? WHERE id = ?", status, seqID)
 	log.Printf("Pipeline: Sequence ID %s manually moved to status '%s'", seqID, status)
+
+	// Sync stages
+	var stages []models.InterviewStage
+	database.DB.Select(&stages, "SELECT * FROM interview_stages WHERE sequence_id = ? ORDER BY order_index ASC", seqID)
+
+	if status == "accepted" {
+		database.DB.Exec("UPDATE interview_stages SET is_completed = 1 WHERE sequence_id = ?", seqID)
+	} else if status == "rejected" {
+		// Mark the first incomplete stage as completed (this will be the "rejected" stage in the UI)
+		database.DB.Exec("UPDATE interview_stages SET is_completed = 1 WHERE id = (SELECT id FROM interview_stages WHERE sequence_id = ? AND is_completed = 0 ORDER BY order_index ASC LIMIT 1)", seqID)
+	} else {
+		targetOrder := 0
+		switch status {
+		case "initial":
+			targetOrder = 0
+		case "screening":
+			targetOrder = 1
+		case "tech":
+			targetOrder = 2
+		case "final":
+			for _, s := range stages {
+				if strings.Contains(strings.ToLower(s.Name), "final") {
+					targetOrder = s.OrderIndex
+					break
+				}
+			}
+			if targetOrder == 0 {
+				targetOrder = 3
+			}
+		case "offer":
+			for _, s := range stages {
+				if strings.Contains(strings.ToLower(s.Name), "offer") {
+					targetOrder = s.OrderIndex
+					break
+				}
+			}
+			if targetOrder == 0 {
+				targetOrder = 4
+			}
+		}
+
+		// Mark stages up to target as completed
+		database.DB.Exec("UPDATE interview_stages SET is_completed = 1 WHERE sequence_id = ? AND order_index <= ?", seqID, targetOrder)
+		// Mark stages after target as NOT completed
+		database.DB.Exec("UPDATE interview_stages SET is_completed = 0 WHERE sequence_id = ? AND order_index > ?", seqID, targetOrder)
+	}
+
 	http.Redirect(w, r, "/pipeline", 303)
 }
 

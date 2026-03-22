@@ -2,74 +2,186 @@
 <div class="flex flex-col space-y-6">
     <div class="flex justify-between items-center">
         <h1 class="text-3xl font-bold text-gray-800">Recruitment Pipeline</h1>
+        
+        <!-- View Toggle -->
+        <div class="bg-gray-200 p-1 rounded-lg flex space-x-1">
+            <a href="/pipeline?view=kanban" 
+               class="px-4 py-1.5 rounded-md text-sm font-bold transition-all {{ if eq .View "kanban" }}bg-white text-blue-600 shadow-sm{{ else }}text-gray-500 hover:text-gray-700{{ end }}">
+                Kanban
+            </a>
+            <a href="/pipeline?view=timeline" 
+               class="px-4 py-1.5 rounded-md text-sm font-bold transition-all {{ if eq .View "timeline" }}bg-white text-blue-600 shadow-sm{{ else }}text-gray-500 hover:text-gray-700{{ end }}">
+                Timeline
+            </a>
+        </div>
     </div>
 
-    <!-- Kanban Board -->
-    <div class="flex space-x-4 overflow-x-auto pb-4 min-h-[70vh]">
-        
-        {{ range .Columns }}
-        <div class="flex-shrink-0 w-80 rounded-xl border {{ .BorderClass }} {{ .ColorClass }} flex flex-col">
-            <div class="p-4 border-b {{ .BorderClass }} flex justify-between items-center">
-                <h2 class="font-bold text-gray-700 uppercase tracking-wider text-xs">{{ .Label }}</h2>
-                <span class="bg-white px-2 py-1 rounded text-xs font-bold shadow-sm border border-gray-100">
-                    {{ len .Sequences }}
-                </span>
+    {{ if eq .View "kanban" }}
+    <!-- Kanban Header (Floating or Top) -->
+    <div class="flex space-x-4 overflow-x-auto pb-2 sticky top-0 z-10 bg-gray-100">
+        <div class="flex-shrink-0 w-48 font-bold text-gray-400 text-xs uppercase tracking-widest flex items-center px-4">Account</div>
+        {{ range .ColumnDefs }}
+        <div class="flex-shrink-0 w-80 font-bold text-gray-600 text-xs uppercase tracking-widest px-4 py-2 border-b-2 {{ .BorderClass }}">
+            {{ .Label }}
+        </div>
+        {{ end }}
+    </div>
+
+    <!-- Grouped Kanban Rows -->
+    <div class="space-y-8 pb-12">
+        {{ range .Groups }}
+        <div class="flex flex-col space-y-2">
+            <!-- Row Label -->
+            <div class="bg-white p-3 rounded-lg shadow-sm border border-gray-200 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-xs">
+                        {{ if .Account }}{{ slice .Account.PhoneNumber 0 1 }}{{ else }}?{{ end }}
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-gray-800">{{ if .Account }}{{ .Account.PhoneNumber }}{{ else }}General / Orphan Sequences{{ end }}</h3>
+                        <p class="text-[10px] text-gray-400 uppercase font-bold">{{ len .Sequences }} Active Sequences</p>
+                    </div>
+                </div>
             </div>
-            
-            <div class="p-3 space-y-3 flex-1 overflow-y-auto">
+
+            <!-- Columns for this account -->
+            <div class="flex space-x-4 overflow-x-auto min-h-[150px]">
+                <div class="flex-shrink-0 w-48"></div> <!-- Spacer for Account name alignment -->
+                {{ range .Columns }}
+                {{ $colID := .ID }}
+                <div class="flex-shrink-0 w-80 rounded-xl border-dashed border-2 {{ .BorderClass }} {{ .ColorClass }} p-3 space-y-3">
+                    {{ range .Sequences }}
+                    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 group relative hover:shadow-md transition-shadow">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <h3 class="font-bold text-gray-900 leading-tight">{{ .CompanyName }}</h3>
+                                <p class="text-xs text-gray-500">{{ .VacancyName }}</p>
+                            </div>
+                            <div class="flex -space-x-2">
+                                {{ range .Recruiters }}
+                                <div class="w-6 h-6 rounded-full bg-blue-100 border border-white flex items-center justify-center text-[8px] font-bold text-blue-600" title="{{ .FirstName }}">
+                                    {{ slice .FirstName 0 1 }}
+                                </div>
+                                {{ end }}
+                            </div>
+                        </div>
+
+                        <!-- Mini Stage List -->
+                        <div class="mt-2 text-[10px] text-gray-400">
+                             {{ $done := 0 }}{{ range .Stages }}{{ if .IsCompleted }}{{ $done = add $done 1 }}{{ end }}{{ end }}
+                             Progress: {{ $done }} / {{ len .Stages }} stages
+                        </div>
+
+                        <!-- Quick Actions -->
+                        <div class="mt-4 pt-3 border-t flex justify-between items-center">
+                            <select class="text-[10px] bg-gray-50 border border-gray-200 p-1 rounded cursor-pointer hover:bg-gray-100"
+                                    onchange="if(this.value) location.href='/sequences/move?id={{ .ID }}&status=' + this.value">
+                                <option value="">Move...</option>
+                                {{ range $.ColumnDefs }}
+                                <option value="{{ .ID }}" {{ if eq .ID $colID }}selected{{ end }}>{{ .Label }}</option>
+                                {{ end }}
+                            </select>
+                            <button class="text-[10px] text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    hx-get="/sequences/delete?id={{ .ID }}"
+                                    hx-confirm="Are you sure you want to delete this sequence?"
+                                    hx-target="body">Delete</button>
+                        </div>
+                    </div>
+                    {{ end }}
+                    {{ if eq (len .Sequences) 0 }}
+                    <div class="h-12 flex items-center justify-center text-gray-300 text-[10px] uppercase font-bold tracking-widest">Empty</div>
+                    {{ end }}
+                </div>
+                {{ end }}
+            </div>
+        </div>
+        {{ end }}
+    </div>
+
+    {{ else }}
+    <!-- Timeline View -->
+    <div class="space-y-12 pb-12">
+        {{ range .Groups }}
+        <div class="space-y-4">
+            <h3 class="font-bold text-lg text-gray-700 border-b pb-2 flex items-center space-x-2">
+                <span class="w-2 h-6 bg-blue-600 rounded"></span>
+                <span>{{ if .Account }}{{ .Account.PhoneNumber }}{{ else }}General{{ end }}</span>
+            </h3>
+
+            <div class="space-y-6">
                 {{ range .Sequences }}
-                <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 group relative hover:shadow-md transition-shadow">
-                    <div class="flex justify-between items-start mb-2">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
                         <div>
-                            <h3 class="font-bold text-gray-900 leading-tight">{{ .CompanyName }}</h3>
+                            <h4 class="font-bold text-gray-900">{{ .CompanyName }}</h4>
                             <p class="text-xs text-gray-500">{{ .VacancyName }}</p>
                         </div>
-                        <div class="flex -space-x-2">
-                            {{ range .Recruiters }}
-                            <div class="w-6 h-6 rounded-full bg-blue-100 border border-white flex items-center justify-center text-[8px] font-bold text-blue-600" title="{{ .FirstName }}">
-                                {{ slice .FirstName 0 1 }}
+                        <div class="flex items-center space-x-4">
+                            <span class="text-[10px] font-bold uppercase px-2 py-1 rounded-full {{ if eq .Status "rejected" }}bg-red-100 text-red-600 border border-red-200{{ else if eq .Status "accepted" }}bg-green-100 text-green-600 border border-green-200{{ else }}bg-blue-100 text-blue-600 border border-blue-200{{ end }}">
+                                Status: {{ .Status }}
+                            </span>
+                            <button class="text-[10px] text-gray-400 hover:text-red-500" hx-get="/sequences/delete?id={{ .ID }}" hx-confirm="Delete sequence?" hx-target="body">Delete</button>
+                        </div>
+                    </div>
+                    
+                    <div class="p-6 overflow-x-auto">
+                        <div class="flex items-start min-w-max relative pt-4">
+                            <!-- Horizontal Line Connecting Stages -->
+                            <div class="absolute top-[3.25rem] left-0 right-0 h-0.5 bg-gray-200 z-0 mx-12"></div>
+                            
+                            {{ $lastCompletedIdx := -1 }}
+                            {{ range $idx, $stage := .Stages }}{{ if .IsCompleted }}{{ $lastCompletedIdx = $idx }}{{ end }}{{ end }}
+
+                            {{ range $idx, $stage := .Stages }}
+                            <div class="flex flex-col items-center w-48 px-2 relative z-10">
+                                <!-- Stage Icon/Checkbox -->
+                                <div class="w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm border-2 
+                                            {{ if .IsCompleted }}
+                                                {{ if and (eq $.Status "rejected") (eq $idx $lastCompletedIdx) }}
+                                                    bg-red-500 border-red-600 text-white
+                                                {{ else }}
+                                                    bg-green-500 border-green-600 text-white
+                                                {{ end }}
+                                            {{ else }}
+                                                bg-white border-gray-300 text-gray-400
+                                            {{ end }}">
+                                    {{ if .IsCompleted }}
+                                        {{ if and (eq $.Status "rejected") (eq $idx $lastCompletedIdx) }}
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                        {{ else }}
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+                                        </svg>
+                                        {{ end }}
+                                    {{ else }}
+                                    <span class="font-bold text-xs">{{ add .OrderIndex 1 }}</span>
+                                    {{ end }}
+                                </div>
+                                
+                                <!-- Stage Name -->
+                                <div class="mt-3 text-center">
+                                    <p class="text-xs font-bold {{ if .IsCompleted }}text-gray-900{{ else }}text-gray-400{{ end }}">{{ .Name }}</p>
+                                    {{ if .StageType }}
+                                    <p class="text-[9px] text-gray-400 uppercase italic">{{ .StageType }}</p>
+                                    {{ end }}
+                                    
+                                    <div class="mt-2">
+                                        <input type="checkbox" 
+                                               {{ if .IsCompleted }}checked{{ end }}
+                                               hx-get="/stages/update?id={{ .ID }}&completed={{ if .IsCompleted }}false{{ else }}true{{ end }}"
+                                               hx-target="body"
+                                               class="w-4 h-4 text-blue-600 rounded border-gray-300 cursor-pointer">
+                                    </div>
+                                    
+                                    {{ if .ScheduledAt }}
+                                    <p class="mt-1 text-[8px] text-blue-600 font-bold">{{ .ScheduledAt.Format "Jan 02, 15:04" }}</p>
+                                    {{ end }}
+                                </div>
                             </div>
                             {{ end }}
                         </div>
-                    </div>
-
-                    <!-- Stages List -->
-                    <div class="mt-4 space-y-2">
-                        {{ range .Stages }}
-                        <div class="flex items-center space-x-2 group/stage">
-                            <input type="checkbox" 
-                                   {{ if .IsCompleted }}checked{{ end }}
-                                   hx-get="/stages/update?id={{ .ID }}&completed={{ if .IsCompleted }}false{{ else }}true{{ end }}"
-                                   hx-target="body"
-                                   class="w-3 h-3 text-blue-600 rounded cursor-pointer">
-                            <span class="text-[10px] {{ if .IsCompleted }}line-through text-gray-400 font-medium{{ else }}text-gray-700{{ end }} flex-1">
-                                {{ .Name }}
-                                {{ if .StageType }} <span class="text-gray-400 italic">({{ .StageType }})</span>{{ end }}
-                            </span>
-                            {{ if .ScheduledAt }}
-                            <span class="text-[8px] text-gray-400">{{ .ScheduledAt.Format "Jan 02" }}</span>
-                            {{ end }}
-                        </div>
-                        {{ end }}
-                    </div>
-
-                    <!-- Quick Actions -->
-                    <div class="mt-4 pt-3 border-t flex justify-between items-center">
-                        <select class="text-[10px] bg-gray-50 border border-gray-200 p-1 rounded cursor-pointer hover:bg-gray-100"
-                                onchange="if(this.value) location.href='/sequences/move?id={{ .ID }}&status=' + this.value">
-                            <option value="">Move to...</option>
-                            <option value="initial">Initial</option>
-                            <option value="screening">Screening</option>
-                            <option value="tech">Technical</option>
-                            <option value="final">Final Interview</option>
-                            <option value="offer">Offer</option>
-                            <option value="accepted">Accepted</option>
-                            <option value="rejected">Rejected</option>
-                        </select>
-                        <button class="text-[10px] text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                                hx-get="/sequences/delete?id={{ .ID }}"
-                                hx-confirm="Are you sure you want to delete this sequence?"
-                                hx-target="body">Delete</button>
                     </div>
                 </div>
                 {{ end }}
@@ -77,20 +189,32 @@
         </div>
         {{ end }}
     </div>
+    {{ end }}
 </div>
 
 <style>
-    /* Horizontal Scrollbar */
-    .overflow-x-auto::-webkit-scrollbar {
+    /* Custom Scrollbar for a cleaner look */
+    ::-webkit-scrollbar {
         height: 8px;
+        width: 6px;
     }
-    .overflow-x-auto::-webkit-scrollbar-track {
-        background: #f1f5f9;
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #e2e8f0;
         border-radius: 10px;
     }
-    .overflow-x-auto::-webkit-scrollbar-thumb {
+    ::-webkit-scrollbar-thumb:hover {
         background: #cbd5e1;
-        border-radius: 10px;
+    }
+    
+    /* Animation for stage icons */
+    .sequence-timeline .stage-card {
+        transition: transform 0.2s ease;
+    }
+    .sequence-timeline .stage-card:hover {
+        transform: translateY(-2px);
     }
 </style>
 {{ end }}
