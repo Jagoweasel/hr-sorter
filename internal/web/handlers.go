@@ -411,7 +411,15 @@ func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	techNames := r.Form["tech_stage_name[]"]
 	techTypes := r.Form["tech_stage_type[]"]
 
-	res, err := database.DB.Exec("INSERT INTO sequences (company_name, vacancy_name, status) VALUES (?, ?, ?)", company, vacancy, "initial")
+	// Find the account associated with this contact
+	var accountID int64
+	err = database.DB.Get(&accountID, "SELECT account_id FROM messages WHERE contact_id = ? LIMIT 1", contactID)
+	if err != nil {
+		log.Printf("Pipeline: Warning - could not find associated account for contact %s, using first active account", contactID)
+		database.DB.Get(&accountID, "SELECT id FROM accounts WHERE status = 'active' LIMIT 1")
+	}
+
+	res, err := database.DB.Exec("INSERT INTO sequences (account_id, company_name, vacancy_name, status) VALUES (?, ?, ?, ?)", accountID, company, vacancy, "initial")
 	if err != nil {
 		log.Printf("Pipeline: Error creating sequence: %v", err)
 		http.Error(w, err.Error(), 500)

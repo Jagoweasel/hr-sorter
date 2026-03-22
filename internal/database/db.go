@@ -57,10 +57,12 @@ func InitDB(path string) {
 
 	CREATE TABLE IF NOT EXISTS sequences (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		account_id INTEGER,
 		company_name TEXT NOT NULL,
 		vacancy_name TEXT NOT NULL,
 		status TEXT DEFAULT 'initial',
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (account_id) REFERENCES accounts(id)
 	);
 
 	CREATE TABLE IF NOT EXISTS sequence_contacts (
@@ -94,6 +96,14 @@ func InitDB(path string) {
 		log.Println("[DB] Migrating database: adding tg_message_id to messages table...")
 		DB.MustExec("ALTER TABLE messages ADD COLUMN tg_message_id INTEGER")
 		DB.MustExec("CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_unique_sync ON messages(account_id, contact_id, tg_message_id)")
+		log.Println("[DB] Migration finished.")
+	}
+
+	// Migration: Add account_id to sequences if it doesn't exist
+	err = DB.Get(&hasColumn, "SELECT COUNT(*) FROM pragma_table_info('sequences') WHERE name='account_id'")
+	if err == nil && !hasColumn {
+		log.Println("[DB] Migrating database: adding account_id to sequences table...")
+		DB.MustExec("ALTER TABLE sequences ADD COLUMN account_id INTEGER REFERENCES accounts(id)")
 		log.Println("[DB] Migration finished.")
 	}
 }

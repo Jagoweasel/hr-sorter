@@ -34,6 +34,7 @@ type Message struct {
 
 type Sequence struct {
 	ID          int64     `db:"id" json:"id"`
+	AccountID   *int64    `db:"account_id" json:"account_id"`
 	CompanyName string    `db:"company_name" json:"company_name"`
 	VacancyName string    `db:"vacancy_name" json:"vacancy_name"`
 	Status      string    `db:"status" json:"status"` // initial, screening, tech, final, offer, accepted, rejected
