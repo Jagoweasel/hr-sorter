@@ -29,3 +29,7 @@ Currently, adding accounts is planned via a CLI helper or an internal web form.
 - **Backend:** Go, `gotd/td` (MTProto), `sqlx`.
 - **Database:** SQLite (pure Go driver).
 - **Frontend:** HTMX, Tailwind CSS, Go Templates.
+
+## Termination
+
+fuser -k 8080/tcp

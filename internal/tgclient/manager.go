@@ -30,6 +30,7 @@ func NewManager(appID int, appHash string) *Manager {
 }
 
 func (m *Manager) StartAccount(ctx context.Context, acc models.Account) error {
+	log.Printf("[Account %s] [STARTING] (ID: %d, Path: %s)", acc.PhoneNumber, acc.ID, acc.SessionPath)
 	if acc.SessionPath == "" {
 		return fmt.Errorf("no session path for account %s", acc.PhoneNumber)
 	}
@@ -48,19 +49,22 @@ func (m *Manager) StartAccount(ctx context.Context, acc models.Account) error {
 		return m.HandleNewMessage(ctx, api, u, e.Users, acc.ID)
 	})
 
-	log.Printf("[Account %s] Starting client...", acc.PhoneNumber)
+	log.Printf("[Account %s] [INIT] Client setup complete, starting run...", acc.PhoneNumber)
 
 	return client.Run(ctx, func(ctx context.Context) error {
-		log.Printf("[Account %s] Logged in and running.", acc.PhoneNumber)
+		log.Printf("[Account %s] [RUNNING] Logged in successfully.", acc.PhoneNumber)
 
 		// Trigger initial sync in background
 		go func() {
+			log.Printf("[Account %s] [SYNC] Triggering background initial sync in 2 seconds...", acc.PhoneNumber)
+			time.Sleep(2 * time.Second) // Small delay to ensure client is fully ready
 			if err := m.InitialSync(ctx, api, acc.ID); err != nil {
-				log.Printf("[Account %s] Initial sync failed: %v", acc.PhoneNumber, err)
+				log.Printf("[Account %s] [ERROR] Initial sync failed: %v", acc.PhoneNumber, err)
 			}
 		}()
 
 		<-ctx.Done()
+		log.Printf("[Account %s] [STOP] Shutdown signal received.", acc.PhoneNumber)
 		return ctx.Err()
 	})
 }
@@ -78,62 +82,110 @@ func (m *Manager) getOrCreateContact(ctx context.Context, user *tg.User) (int64,
 }
 
 func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, accountID int64) error {
-	log.Printf("[Acc ID %d] Starting initial sync (fetching dialogs)...", accountID)
-
-	res, err := api.MessagesGetDialogs(ctx, &tg.MessagesGetDialogsRequest{
-		OffsetPeer: &tg.InputPeerEmpty{},
-		Limit:      100,
-	})
+	// Verify session first
+	me, err := api.UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUserSelf{}})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to verify session: %w", err)
 	}
-
-	var users map[int64]*tg.User = make(map[int64]*tg.User)
-	var dialogs []tg.DialogClass
-
-	switch d := res.(type) {
-	case *tg.MessagesDialogs:
-		dialogs = d.Dialogs
-		for _, uClass := range d.Users {
-			if u, ok := uClass.(*tg.User); ok {
-				users[u.ID] = u
-			}
-		}
-	case *tg.MessagesDialogsSlice:
-		dialogs = d.Dialogs
-		for _, uClass := range d.Users {
-			if u, ok := uClass.(*tg.User); ok {
-				users[u.ID] = u
-			}
+	if len(me) > 0 {
+		if u, ok := me[0].(*tg.User); ok {
+			log.Printf("[Acc ID %d] Session verified as @%s (%s %s)", accountID, u.Username, u.FirstName, u.LastName)
 		}
 	}
 
-	log.Printf("[Acc ID %d] Found %d dialogs", accountID, len(dialogs))
-
-	for _, dClass := range dialogs {
-		d, ok := dClass.(*tg.Dialog)
-		if !ok {
-			continue
+	// Sync both main inbox (Folder 0) and archive (Folder 1)
+	folders := []int{0, 1}
+	for _, folderID := range folders {
+		folderName := "Inbox"
+		if folderID == 1 {
+			folderName = "Archive"
 		}
+		log.Printf("[Acc ID %d] Scanning %s (fetching up to 500 dialogs)...", accountID, folderName)
 
-		peer, ok := d.Peer.(*tg.PeerUser)
-		if !ok {
-			continue // Skip groups/channels for now
-		}
-
-		user, ok := users[peer.UserID]
-		if !ok || user.Bot {
-			continue
-		}
-
-		contactID, err := m.getOrCreateContact(ctx, user)
+		res, err := api.MessagesGetDialogs(ctx, &tg.MessagesGetDialogsRequest{
+			OffsetPeer: &tg.InputPeerEmpty{},
+			Limit:      500,
+			FolderID:   folderID,
+		})
 		if err != nil {
-			log.Printf("[Acc ID %d] Failed to ensure contact @%s: %v", accountID, user.Username, err)
+			log.Printf("[Acc ID %d] Failed to fetch %s dialogs: %v", accountID, folderName, err)
 			continue
 		}
 
-		if err := m.SyncHistory(ctx, api, user, contactID, accountID); err != nil {
-			log.Printf("[Acc ID %d] Failed to sync history for @%s: %v", accountID, user.Username, err)
+		var users map[int64]*tg.User = make(map[int64]*tg.User)
+		var dialogs []tg.DialogClass
+
+		switch d := res.(type) {
+		case *tg.MessagesDialogs:
+			dialogs = d.Dialogs
+			for _, uClass := range d.Users {
+				if u, ok := uClass.(*tg.User); ok {
+					users[u.ID] = u
+				}
+			}
+		case *tg.MessagesDialogsSlice:
+			dialogs = d.Dialogs
+			for _, uClass := range d.Users {
+				if u, ok := uClass.(*tg.User); ok {
+					users[u.ID] = u
+				}
+			}
+		}
+
+		log.Printf("[Acc ID %d] Found %d total dialogs in %s", accountID, len(dialogs), folderName)
+
+		if len(dialogs) == 0 {
+			log.Printf("[Acc ID %d] WARNING: No dialogs returned for folder %s", accountID, folderName)
+		}
+
+		for _, dClass := range dialogs {
+			d, ok := dClass.(*tg.Dialog)
+			if !ok {
+				continue
+			}
+
+			// Trace log for discovery
+			peerType := "Unknown"
+			peerName := "Unknown"
+			var targetUser *tg.User
+
+			switch p := d.Peer.(type) {
+			case *tg.PeerUser:
+				peerType = "User"
+				if u, ok := users[p.UserID]; ok {
+					targetUser = u
+					peerName = fmt.Sprintf("@%s (%s %s)", u.Username, u.FirstName, u.LastName)
+				} else {
+					peerName = fmt.Sprintf("ID:%d", p.UserID)
+				}
+			case *tg.PeerChat:
+				peerType = "Chat"
+				peerName = fmt.Sprintf("ID:%d", p.ChatID)
+			case *tg.PeerChannel:
+				peerType = "Channel"
+				peerName = fmt.Sprintf("ID:%d", p.ChannelID)
+			}
+
+			if targetUser != nil {
+				// It's a private chat
+				if targetUser.Bot {
+					log.Printf("[Trace] Skipping bot: %s", peerName)
+					continue
+				}
+
+				log.Printf("[Trace] Syncing private chat: %s", peerName)
+				contactID, err := m.getOrCreateContact(ctx, targetUser)
+				if err != nil {
+					log.Printf("[Acc ID %d] Failed to ensure contact %s: %v", accountID, peerName, err)
+					continue
+				}
+
+				if err := m.SyncHistory(ctx, api, targetUser, contactID, accountID); err != nil {
+					log.Printf("[Acc ID %d] Failed to sync history for %s: %v", accountID, peerName, err)
+				}
+			} else {
+				log.Printf("[Trace] Skipping %s: %s", peerType, peerName)
+			}
 		}
 	}
 

@@ -82,7 +82,7 @@ func main() {
 
 		// Save account to DB
 		_, err := database.DB.Exec("INSERT OR IGNORE INTO accounts (phone_number, status, session_path) VALUES (?, ?, ?)",
-			phone, "active", sessionFile)
+			phone, "active", filepath.ToSlash(sessionFile))
 		if err != nil {
 			return err
 		}

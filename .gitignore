@@ -1,3 +1,4 @@
 .env.example
 hr-sorter.db
 sessions/**
+.env
