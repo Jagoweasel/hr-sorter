@@ -87,4 +87,30 @@ func main() {
 		fmt.Printf("%s ", col.Name)
 	}
 	fmt.Println()
+
+	columns = nil
+	db.Select(&columns, "PRAGMA table_info(interview_stages)")
+	fmt.Printf("InterviewStages columns: ")
+	for _, col := range columns {
+		fmt.Printf("%s ", col.Name)
+	}
+	fmt.Println()
+
+	var stagesCount int
+	err = db.Get(&stagesCount, "SELECT count(*) FROM interview_stages")
+	fmt.Printf("InterviewStages: %d (err: %v)\n", stagesCount, err)
+
+	type Stage struct {
+		ID          int64  `db:"id"`
+		SequenceID  int64  `db:"sequence_id"`
+		Name        string `db:"name"`
+		IsCompleted bool   `db:"is_completed"`
+	}
+	var stages_list []Stage
+	err = db.Select(&stages_list, "SELECT id, sequence_id, name, is_completed FROM interview_stages LIMIT 10")
+	if err == nil {
+		for _, s := range stages_list {
+			fmt.Printf(" - Stage ID %d (Seq %d): %s (Completed: %v)\n", s.ID, s.SequenceID, s.Name, s.IsCompleted)
+		}
+	}
 }

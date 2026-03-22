@@ -188,6 +188,9 @@ type SequenceWithDetails struct {
 	models.Sequence
 	Recruiters []models.Contact
 	Stages     []models.InterviewStage
+	History    []models.InterviewStage
+	IsRejected bool
+	IsAccepted bool
 }
 
 type ColumnDef struct {
@@ -236,11 +239,22 @@ func handlePipeline(w http.ResponseWriter, r *http.Request) {
 		var stages []models.InterviewStage
 		database.DB.Select(&stages, "SELECT * FROM interview_stages WHERE sequence_id = ? ORDER BY order_index ASC", s.ID)
 
+		var history []models.InterviewStage
+		for _, st := range stages {
+			if st.IsCompleted {
+				history = append(history, st)
+			}
+		}
+
 		detailedSeqs = append(detailedSeqs, SequenceWithDetails{
 			Sequence:   s,
 			Recruiters: recruiters,
 			Stages:     stages,
+			History:    history,
+			IsRejected: s.Status == "rejected",
+			IsAccepted: s.Status == "accepted",
 		})
+		log.Printf("[Pipeline] Seq ID %d (%s): Found %d history stages (Status: %s)", s.ID, s.CompanyName, len(history), s.Status)
 	}
 
 	columnDefs := []ColumnDef{
@@ -467,14 +481,13 @@ func handleContactActions(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Web: handleCreateSequence triggered, method=%s", r.Method)
+	log.Printf("[Pipeline] handleCreateSequence: triggered")
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", 405)
 		return
 	}
 
-	err := r.ParseForm()
-	if err != nil {
+	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), 400)
 		return
 	}
@@ -486,68 +499,70 @@ func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	techNames := r.Form["tech_stage_name[]"]
 	techTypes := r.Form["tech_stage_type[]"]
 
+	log.Printf("[Pipeline] Creating sequence for Company='%s', Vacancy='%s', ContactID='%s'", company, vacancy, contactID)
+
+	tx, err := database.DB.Beginx()
+	if err != nil {
+		log.Printf("[Pipeline] Error starting transaction: %v", err)
+		http.Error(w, "Database error", 500)
+		return
+	}
+	defer tx.Rollback()
+
 	// Find the account associated with this contact
 	var accountID *int64
 	var foundID int64
-	// Try 1: Look for account_id in previous messages
-	err = database.DB.Get(&foundID, "SELECT account_id FROM messages WHERE contact_id = ? AND account_id IS NOT NULL LIMIT 1", contactID)
+	err = tx.Get(&foundID, "SELECT account_id FROM messages WHERE contact_id = ? AND account_id IS NOT NULL LIMIT 1", contactID)
 	if err == nil {
 		accountID = &foundID
+		log.Printf("[Pipeline] Found account ID %d from previous messages", foundID)
 	} else {
-		// Try 2: Look for an active account
-		err = database.DB.Get(&foundID, "SELECT id FROM accounts WHERE status = 'active' LIMIT 1")
+		err = tx.Get(&foundID, "SELECT id FROM accounts WHERE status = 'active' LIMIT 1")
 		if err == nil {
 			accountID = &foundID
+			log.Printf("[Pipeline] Using first active account ID %d", foundID)
 		} else {
-			// Try 3: Look for any account
-			err = database.DB.Get(&foundID, "SELECT id FROM accounts LIMIT 1")
+			err = tx.Get(&foundID, "SELECT id FROM accounts LIMIT 1")
 			if err == nil {
 				accountID = &foundID
+				log.Printf("[Pipeline] Fallback to any account ID %d", foundID)
 			}
 		}
 	}
 
-	if accountID == nil {
-		log.Printf("Pipeline: Warning - no accounts found in database. Sequence will be created with account_id=NULL")
-	}
-
-	res, err := database.DB.Exec("INSERT INTO sequences (account_id, company_name, vacancy_name, status) VALUES (?, ?, ?, ?)", accountID, company, vacancy, "initial")
+	res, err := tx.Exec("INSERT INTO sequences (account_id, company_name, vacancy_name, status) VALUES (?, ?, ?, ?)", accountID, company, vacancy, "initial")
 	if err != nil {
-		log.Printf("Pipeline: DB Error creating sequence: %v", err)
-		http.Error(w, "Failed to create sequence: "+err.Error(), 500)
+		log.Printf("[Pipeline] Error inserting sequence: %v", err)
 		return
 	}
 
-	seqID, err := res.LastInsertId()
-	if err != nil {
-		log.Printf("Pipeline: Error getting last insert ID: %v", err)
-		http.Error(w, "Failed to retrieve sequence ID", 500)
-		return
-	}
-	log.Printf("Pipeline: Created sequence ID %d for %s (%s)", seqID, company, vacancy)
+	seqID, _ := res.LastInsertId()
+	log.Printf("[Pipeline] Sequence created with ID %d", seqID)
 
 	if contactID != "" {
-		_, err = database.DB.Exec("INSERT INTO sequence_contacts (sequence_id, contact_id) VALUES (?, ?)", seqID, contactID)
+		_, err = tx.Exec("INSERT INTO sequence_contacts (sequence_id, contact_id) VALUES (?, ?)", seqID, contactID)
 		if err != nil {
-			log.Printf("Pipeline: Error linking recruiter %s to sequence %d: %v", contactID, seqID, err)
-		} else {
-			log.Printf("Pipeline: Linked recruiter ID %s to sequence ID %d", contactID, seqID)
+			log.Printf("[Pipeline] Error linking contact: %v", err)
 		}
 	}
 
 	// Create initial stage
 	initialDate, _ := time.Parse("2006-01-02T15:04", initialDateStr)
-	_, err = database.DB.Exec("INSERT INTO interview_stages (sequence_id, name, scheduled_at, is_completed, order_index) VALUES (?, ?, ?, ?, ?)",
+	_, err = tx.Exec("INSERT INTO interview_stages (sequence_id, name, scheduled_at, is_completed, order_index) VALUES (?, ?, ?, ?, ?)",
 		seqID, "Initial Contact", initialDate, 1, 0)
 	if err != nil {
-		log.Printf("Pipeline: Error creating initial stage for sequence %d: %v", seqID, err)
+		log.Printf("[Pipeline] Error creating initial stage: %v", err)
+	} else {
+		log.Printf("[Pipeline] Created 'Initial Contact' stage (Completed: true, Order: 0)")
 	}
 
 	// Add HR Screening
-	_, err = database.DB.Exec("INSERT INTO interview_stages (sequence_id, name, order_index) VALUES (?, ?, ?)",
+	_, err = tx.Exec("INSERT INTO interview_stages (sequence_id, name, order_index) VALUES (?, ?, ?)",
 		seqID, "HR Screening", 1)
 	if err != nil {
-		log.Printf("Pipeline: Error creating screening stage for sequence %d: %v", seqID, err)
+		log.Printf("[Pipeline] Error creating screening stage: %v", err)
+	} else {
+		log.Printf("[Pipeline] Created 'HR Screening' stage (Completed: false, Order: 1)")
 	}
 
 	// Add Technical Stages
@@ -561,19 +576,26 @@ func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 		if i < len(techTypes) {
 			tType = techTypes[i]
 		}
-		_, err = database.DB.Exec("INSERT INTO interview_stages (sequence_id, name, stage_type, order_index) VALUES (?, ?, ?, ?)",
+		_, err = tx.Exec("INSERT INTO interview_stages (sequence_id, name, stage_type, order_index) VALUES (?, ?, ?, ?)",
 			seqID, name, tType, currIdx)
-		if err != nil {
-			log.Printf("Pipeline: Error creating tech stage %d for sequence %d: %v", i, seqID, err)
+		if err == nil {
+			log.Printf("[Pipeline] Created Technical stage '%s' (Order: %d)", name, currIdx)
 		}
 		currIdx++
 	}
 
 	// Add default final stages
-	database.DB.Exec("INSERT INTO interview_stages (sequence_id, name, order_index) VALUES (?, ?, ?)",
-		seqID, "Final Interview", currIdx)
-	database.DB.Exec("INSERT INTO interview_stages (sequence_id, name, order_index) VALUES (?, ?, ?)",
-		seqID, "Offer", currIdx+1)
+	tx.Exec("INSERT INTO interview_stages (sequence_id, name, order_index) VALUES (?, ?, ?)", seqID, "Final Interview", currIdx)
+	tx.Exec("INSERT INTO interview_stages (sequence_id, name, order_index) VALUES (?, ?, ?)", seqID, "Offer", currIdx+1)
+	log.Printf("[Pipeline] Created Final and Offer stages")
+
+	if err := tx.Commit(); err != nil {
+		log.Printf("[Pipeline] Error committing transaction: %v", err)
+		http.Error(w, "Commit failed", 500)
+		return
+	}
+
+	log.Printf("[Pipeline] Transaction committed successfully for sequence %d", seqID)
 
 	if r.Header.Get("HX-Request") != "" {
 		w.Header().Set("HX-Redirect", "/pipeline")
@@ -647,19 +669,38 @@ func handleUpdateStage(w http.ResponseWriter, r *http.Request) {
 func handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 	seqID := r.URL.Query().Get("id")
 	status := r.URL.Query().Get("status")
+	log.Printf("[Pipeline] handleMoveSequence: ID=%s, TargetStatus=%s", seqID, status)
 
-	database.DB.Exec("UPDATE sequences SET status = ? WHERE id = ?", status, seqID)
-	log.Printf("Pipeline: Sequence ID %s manually moved to status '%s'", seqID, status)
+	tx, err := database.DB.Beginx()
+	if err != nil {
+		log.Printf("[Pipeline] Error starting move transaction: %v", err)
+		return
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec("UPDATE sequences SET status = ? WHERE id = ?", status, seqID)
+	if err != nil {
+		log.Printf("[Pipeline] Error updating sequence status: %v", err)
+		return
+	}
 
 	// Sync stages
 	var stages []models.InterviewStage
-	database.DB.Select(&stages, "SELECT * FROM interview_stages WHERE sequence_id = ? ORDER BY order_index ASC", seqID)
+	tx.Select(&stages, "SELECT * FROM interview_stages WHERE sequence_id = ? ORDER BY order_index ASC", seqID)
 
 	if status == "accepted" {
-		database.DB.Exec("UPDATE interview_stages SET is_completed = 1 WHERE sequence_id = ?", seqID)
+		res, _ := tx.Exec("UPDATE interview_stages SET is_completed = 1 WHERE sequence_id = ?", seqID)
+		affected, _ := res.RowsAffected()
+		log.Printf("[Pipeline] Accepted: Marked all %d stages as completed", affected)
 	} else if status == "rejected" {
-		// Mark the first incomplete stage as completed (this will be the "rejected" stage in the UI)
-		database.DB.Exec("UPDATE interview_stages SET is_completed = 1 WHERE id = (SELECT id FROM interview_stages WHERE sequence_id = ? AND is_completed = 0 ORDER BY order_index ASC LIMIT 1)", seqID)
+		var firstIncomplete models.InterviewStage
+		err := tx.Get(&firstIncomplete, "SELECT * FROM interview_stages WHERE sequence_id = ? AND is_completed = 0 ORDER BY order_index ASC LIMIT 1", seqID)
+		if err == nil {
+			tx.Exec("UPDATE interview_stages SET is_completed = 1 WHERE sequence_id = ? AND order_index <= ?", seqID, firstIncomplete.OrderIndex)
+			log.Printf("[Pipeline] Rejected: Marked stages up to index %d as completed", firstIncomplete.OrderIndex)
+		} else {
+			log.Printf("[Pipeline] Rejected: No incomplete stages found to mark as rejection point")
+		}
 	} else {
 		targetOrder := 0
 		switch status {
@@ -691,10 +732,16 @@ func handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Mark stages up to target as completed
-		database.DB.Exec("UPDATE interview_stages SET is_completed = 1 WHERE sequence_id = ? AND order_index <= ?", seqID, targetOrder)
-		// Mark stages after target as NOT completed
-		database.DB.Exec("UPDATE interview_stages SET is_completed = 0 WHERE sequence_id = ? AND order_index > ?", seqID, targetOrder)
+		resUp, _ := tx.Exec("UPDATE interview_stages SET is_completed = 1 WHERE sequence_id = ? AND order_index <= ?", seqID, targetOrder)
+		resDown, _ := tx.Exec("UPDATE interview_stages SET is_completed = 0 WHERE sequence_id = ? AND order_index > ?", seqID, targetOrder)
+		up, _ := resUp.RowsAffected()
+		down, _ := resDown.RowsAffected()
+		log.Printf("[Pipeline] Moved to %s (target order %d): %d stages completed, %d stages reset", status, targetOrder, up, down)
+	}
+
+	if err := tx.Commit(); err != nil {
+		log.Printf("[Pipeline] Error committing move transaction: %v", err)
+		return
 	}
 
 	http.Redirect(w, r, "/pipeline", 303)
