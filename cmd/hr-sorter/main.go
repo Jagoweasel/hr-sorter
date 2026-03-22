@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"net/http"
 	"os"
@@ -12,12 +13,29 @@ import (
 
 	"github.com/joho/godotenv"
 	"hr-sorter/internal/database"
+	"hr-sorter/internal/logger"
 	"hr-sorter/internal/models"
 	"hr-sorter/internal/tgclient"
 	"hr-sorter/internal/web"
 )
 
 func main() {
+	debugSync := flag.Bool("debug-sync", false, "Enable debug logs for Telegram synchronization")
+	debugAdd := flag.Bool("debug-add", false, "Enable debug logs for adding sequences")
+	debugHistory := flag.Bool("debug-history", false, "Enable debug logs for sequence history and movement")
+	debugAll := flag.Bool("debug-all", false, "Enable all debug logs")
+	flag.Parse()
+
+	if *debugAll || *debugSync {
+		logger.Enable(logger.Sync)
+	}
+	if *debugAll || *debugAdd {
+		logger.Enable(logger.AddSequence)
+	}
+	if *debugAll || *debugHistory {
+		logger.Enable(logger.History)
+	}
+
 	log.Println("[Main] Starting application...")
 	_ = godotenv.Load()
 

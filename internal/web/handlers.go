@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"hr-sorter/internal/database"
+	"hr-sorter/internal/logger"
 	"hr-sorter/internal/models"
 )
 
@@ -76,8 +77,6 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-
-	log.Printf("Web: Rendering %d contacts", len(contacts))
 
 	// Simple check for new messages to trigger browser notification
 	if len(contacts) > 0 {
@@ -240,9 +239,11 @@ func handlePipeline(w http.ResponseWriter, r *http.Request) {
 		database.DB.Select(&stages, "SELECT * FROM interview_stages WHERE sequence_id = ? ORDER BY order_index ASC", s.ID)
 
 		var history []models.InterviewStage
+		var historyNames []string
 		for _, st := range stages {
 			if st.IsCompleted {
 				history = append(history, st)
+				historyNames = append(historyNames, st.Name)
 			}
 		}
 
@@ -254,7 +255,9 @@ func handlePipeline(w http.ResponseWriter, r *http.Request) {
 			IsRejected: s.Status == "rejected",
 			IsAccepted: s.Status == "accepted",
 		})
-		log.Printf("[Pipeline] Seq ID %d (%s): Found %d history stages (Status: %s)", s.ID, s.CompanyName, len(history), s.Status)
+
+		logger.Debug(logger.History, "Seq #%d (%s): Found %d history stages (Status: %s)", s.ID, s.CompanyName, len(history), s.Status)
+		logger.LogChain(s.ID, s.CompanyName, historyNames, s.Status)
 	}
 
 	columnDefs := []ColumnDef{
@@ -481,7 +484,7 @@ func handleContactActions(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[Pipeline] handleCreateSequence: triggered")
+	logger.Debug(logger.AddSequence, "handleCreateSequence triggered")
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", 405)
 		return
@@ -499,11 +502,11 @@ func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	techNames := r.Form["tech_stage_name[]"]
 	techTypes := r.Form["tech_stage_type[]"]
 
-	log.Printf("[Pipeline] Creating sequence for Company='%s', Vacancy='%s', ContactID='%s'", company, vacancy, contactID)
+	logger.Debug(logger.AddSequence, "Creating sequence for Company='%s', Vacancy='%s', ContactID='%s'", company, vacancy, contactID)
 
 	tx, err := database.DB.Beginx()
 	if err != nil {
-		log.Printf("[Pipeline] Error starting transaction: %v", err)
+		logger.Debug(logger.AddSequence, "Error starting transaction: %v", err)
 		http.Error(w, "Database error", 500)
 		return
 	}
@@ -515,34 +518,34 @@ func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	err = tx.Get(&foundID, "SELECT account_id FROM messages WHERE contact_id = ? AND account_id IS NOT NULL LIMIT 1", contactID)
 	if err == nil {
 		accountID = &foundID
-		log.Printf("[Pipeline] Found account ID %d from previous messages", foundID)
+		logger.Debug(logger.AddSequence, "Found account ID %d from previous messages", foundID)
 	} else {
 		err = tx.Get(&foundID, "SELECT id FROM accounts WHERE status = 'active' LIMIT 1")
 		if err == nil {
 			accountID = &foundID
-			log.Printf("[Pipeline] Using first active account ID %d", foundID)
+			logger.Debug(logger.AddSequence, "Using first active account ID %d", foundID)
 		} else {
 			err = tx.Get(&foundID, "SELECT id FROM accounts LIMIT 1")
 			if err == nil {
 				accountID = &foundID
-				log.Printf("[Pipeline] Fallback to any account ID %d", foundID)
+				logger.Debug(logger.AddSequence, "Fallback to any account ID %d", foundID)
 			}
 		}
 	}
 
 	res, err := tx.Exec("INSERT INTO sequences (account_id, company_name, vacancy_name, status) VALUES (?, ?, ?, ?)", accountID, company, vacancy, "initial")
 	if err != nil {
-		log.Printf("[Pipeline] Error inserting sequence: %v", err)
+		logger.Debug(logger.AddSequence, "Error inserting sequence: %v", err)
 		return
 	}
 
 	seqID, _ := res.LastInsertId()
-	log.Printf("[Pipeline] Sequence created with ID %d", seqID)
+	logger.Debug(logger.AddSequence, "Sequence created with ID %d", seqID)
 
 	if contactID != "" {
 		_, err = tx.Exec("INSERT INTO sequence_contacts (sequence_id, contact_id) VALUES (?, ?)", seqID, contactID)
 		if err != nil {
-			log.Printf("[Pipeline] Error linking contact: %v", err)
+			logger.Debug(logger.AddSequence, "Error linking contact: %v", err)
 		}
 	}
 
@@ -551,18 +554,18 @@ func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	_, err = tx.Exec("INSERT INTO interview_stages (sequence_id, name, scheduled_at, is_completed, order_index) VALUES (?, ?, ?, ?, ?)",
 		seqID, "Initial Contact", initialDate, 1, 0)
 	if err != nil {
-		log.Printf("[Pipeline] Error creating initial stage: %v", err)
+		logger.Debug(logger.AddSequence, "Error creating initial stage: %v", err)
 	} else {
-		log.Printf("[Pipeline] Created 'Initial Contact' stage (Completed: true, Order: 0)")
+		logger.Debug(logger.AddSequence, "Created 'Initial Contact' stage (Completed: true, Order: 0)")
 	}
 
 	// Add HR Screening
 	_, err = tx.Exec("INSERT INTO interview_stages (sequence_id, name, order_index) VALUES (?, ?, ?)",
 		seqID, "HR Screening", 1)
 	if err != nil {
-		log.Printf("[Pipeline] Error creating screening stage: %v", err)
+		logger.Debug(logger.AddSequence, "Error creating screening stage: %v", err)
 	} else {
-		log.Printf("[Pipeline] Created 'HR Screening' stage (Completed: false, Order: 1)")
+		logger.Debug(logger.AddSequence, "Created 'HR Screening' stage (Completed: false, Order: 1)")
 	}
 
 	// Add Technical Stages
@@ -579,7 +582,7 @@ func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 		_, err = tx.Exec("INSERT INTO interview_stages (sequence_id, name, stage_type, order_index) VALUES (?, ?, ?, ?)",
 			seqID, name, tType, currIdx)
 		if err == nil {
-			log.Printf("[Pipeline] Created Technical stage '%s' (Order: %d)", name, currIdx)
+			logger.Debug(logger.AddSequence, "Created Technical stage '%s' (Order: %d)", name, currIdx)
 		}
 		currIdx++
 	}
@@ -587,15 +590,15 @@ func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	// Add default final stages
 	tx.Exec("INSERT INTO interview_stages (sequence_id, name, order_index) VALUES (?, ?, ?)", seqID, "Final Interview", currIdx)
 	tx.Exec("INSERT INTO interview_stages (sequence_id, name, order_index) VALUES (?, ?, ?)", seqID, "Offer", currIdx+1)
-	log.Printf("[Pipeline] Created Final and Offer stages")
+	logger.Debug(logger.AddSequence, "Created Final and Offer stages")
 
 	if err := tx.Commit(); err != nil {
-		log.Printf("[Pipeline] Error committing transaction: %v", err)
+		logger.Debug(logger.AddSequence, "Error committing transaction: %v", err)
 		http.Error(w, "Commit failed", 500)
 		return
 	}
 
-	log.Printf("[Pipeline] Transaction committed successfully for sequence %d", seqID)
+	logger.Debug(logger.AddSequence, "Transaction committed successfully for sequence %d", seqID)
 
 	if r.Header.Get("HX-Request") != "" {
 		w.Header().Set("HX-Redirect", "/pipeline")
@@ -616,12 +619,24 @@ func handleAddToSequence(w http.ResponseWriter, r *http.Request) {
 
 	_, err := database.DB.Exec("INSERT OR IGNORE INTO sequence_contacts (sequence_id, contact_id) VALUES (?, ?)", seqID, contactID)
 	if err != nil {
-		log.Printf("Pipeline: Error adding contact %s to sequence %s: %v", contactID, seqID, err)
+		logger.Debug(logger.AddSequence, "Error adding contact %s to sequence %s: %v", contactID, seqID, err)
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	log.Printf("Pipeline: Added recruiter ID %s to sequence ID %s", contactID, seqID)
+	logger.Debug(logger.AddSequence, "Added recruiter ID %s to sequence ID %s", contactID, seqID)
+
+	// Log current chain
+	var seq models.Sequence
+	database.DB.Get(&seq, "SELECT * FROM sequences WHERE id = ?", seqID)
+	var stages []models.InterviewStage
+	database.DB.Select(&stages, "SELECT * FROM interview_stages WHERE sequence_id = ? AND is_completed = 1 ORDER BY order_index ASC", seqID)
+	var names []string
+	for _, s := range stages {
+		names = append(names, s.Name)
+	}
+	logger.LogChain(seq.ID, seq.CompanyName, names, seq.Status)
+
 	if r.Header.Get("HX-Request") != "" {
 		w.Header().Set("HX-Redirect", "/")
 		w.WriteHeader(http.StatusOK)
@@ -639,7 +654,7 @@ func handleUpdateStage(w http.ResponseWriter, r *http.Request) {
 	var stage models.InterviewStage
 	database.DB.Get(&stage, "SELECT * FROM interview_stages WHERE id = ?", stageID)
 
-	log.Printf("Pipeline: Updated stage ID %s to completed=%v", stageID, completed)
+	logger.Debug(logger.History, "Updated stage ID %s to completed=%v", stageID, completed)
 
 	// Update sequence status based on the last completed stage
 	var stages []models.InterviewStage
@@ -661,7 +676,18 @@ func handleUpdateStage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	database.DB.Exec("UPDATE sequences SET status = ? WHERE id = ?", newStatus, stage.SequenceID)
-	log.Printf("Pipeline: Sequence ID %d status automatically updated to '%s'", stage.SequenceID, newStatus)
+	logger.Debug(logger.History, "Sequence ID %d status automatically updated to '%s'", stage.SequenceID, newStatus)
+
+	// Log result chain
+	var seq models.Sequence
+	database.DB.Get(&seq, "SELECT * FROM sequences WHERE id = ?", stage.SequenceID)
+	var updatedStages []models.InterviewStage
+	database.DB.Select(&updatedStages, "SELECT * FROM interview_stages WHERE sequence_id = ? AND is_completed = 1 ORDER BY order_index ASC", stage.SequenceID)
+	var names []string
+	for _, s := range updatedStages {
+		names = append(names, s.Name)
+	}
+	logger.LogChain(seq.ID, seq.CompanyName, names, seq.Status)
 
 	http.Redirect(w, r, "/pipeline", 303)
 }
@@ -669,18 +695,18 @@ func handleUpdateStage(w http.ResponseWriter, r *http.Request) {
 func handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 	seqID := r.URL.Query().Get("id")
 	status := r.URL.Query().Get("status")
-	log.Printf("[Pipeline] handleMoveSequence: ID=%s, TargetStatus=%s", seqID, status)
+	logger.Debug(logger.History, "handleMoveSequence: ID=%s, TargetStatus=%s", seqID, status)
 
 	tx, err := database.DB.Beginx()
 	if err != nil {
-		log.Printf("[Pipeline] Error starting move transaction: %v", err)
+		logger.Debug(logger.History, "Error starting move transaction: %v", err)
 		return
 	}
 	defer tx.Rollback()
 
 	_, err = tx.Exec("UPDATE sequences SET status = ? WHERE id = ?", status, seqID)
 	if err != nil {
-		log.Printf("[Pipeline] Error updating sequence status: %v", err)
+		logger.Debug(logger.History, "Error updating sequence status: %v", err)
 		return
 	}
 
@@ -691,15 +717,15 @@ func handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 	if status == "accepted" {
 		res, _ := tx.Exec("UPDATE interview_stages SET is_completed = 1 WHERE sequence_id = ?", seqID)
 		affected, _ := res.RowsAffected()
-		log.Printf("[Pipeline] Accepted: Marked all %d stages as completed", affected)
+		logger.Debug(logger.History, "Accepted: Marked all %d stages as completed", affected)
 	} else if status == "rejected" {
 		var firstIncomplete models.InterviewStage
 		err := tx.Get(&firstIncomplete, "SELECT * FROM interview_stages WHERE sequence_id = ? AND is_completed = 0 ORDER BY order_index ASC LIMIT 1", seqID)
 		if err == nil {
 			tx.Exec("UPDATE interview_stages SET is_completed = 1 WHERE sequence_id = ? AND order_index <= ?", seqID, firstIncomplete.OrderIndex)
-			log.Printf("[Pipeline] Rejected: Marked stages up to index %d as completed", firstIncomplete.OrderIndex)
+			logger.Debug(logger.History, "Rejected: Marked stages up to index %d as completed", firstIncomplete.OrderIndex)
 		} else {
-			log.Printf("[Pipeline] Rejected: No incomplete stages found to mark as rejection point")
+			logger.Debug(logger.History, "Rejected: No incomplete stages found to mark as rejection point")
 		}
 	} else {
 		targetOrder := 0
@@ -736,20 +762,36 @@ func handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 		resDown, _ := tx.Exec("UPDATE interview_stages SET is_completed = 0 WHERE sequence_id = ? AND order_index > ?", seqID, targetOrder)
 		up, _ := resUp.RowsAffected()
 		down, _ := resDown.RowsAffected()
-		log.Printf("[Pipeline] Moved to %s (target order %d): %d stages completed, %d stages reset", status, targetOrder, up, down)
+		logger.Debug(logger.History, "Moved to %s (target order %d): %d stages completed, %d stages reset", status, targetOrder, up, down)
 	}
 
 	if err := tx.Commit(); err != nil {
-		log.Printf("[Pipeline] Error committing move transaction: %v", err)
+		logger.Debug(logger.History, "Error committing move transaction: %v", err)
 		return
 	}
+
+	// Log result chain after commit
+	var seq models.Sequence
+	database.DB.Get(&seq, "SELECT * FROM sequences WHERE id = ?", seqID)
+	var updatedStages []models.InterviewStage
+	database.DB.Select(&updatedStages, "SELECT * FROM interview_stages WHERE sequence_id = ? AND is_completed = 1 ORDER BY order_index ASC", seqID)
+	var names []string
+	for _, s := range updatedStages {
+		names = append(names, s.Name)
+	}
+	logger.LogChain(seq.ID, seq.CompanyName, names, seq.Status)
 
 	http.Redirect(w, r, "/pipeline", 303)
 }
 
 func handleDeleteSequence(w http.ResponseWriter, r *http.Request) {
 	seqID := r.URL.Query().Get("id")
+
+	var seq models.Sequence
+	database.DB.Get(&seq, "SELECT * FROM sequences WHERE id = ?", seqID)
+
 	database.DB.Exec("DELETE FROM sequences WHERE id = ?", seqID)
-	log.Printf("Pipeline: Deleted sequence ID %s", seqID)
+	logger.Debug(logger.AddSequence, "Deleted sequence ID %s (%s)", seqID, seq.CompanyName)
+
 	http.Redirect(w, r, "/pipeline", 303)
 }

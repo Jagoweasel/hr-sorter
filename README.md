@@ -25,6 +25,26 @@ A simple Go application to monitor incoming Telegram messages from recruiters/HR
 Currently, adding accounts is planned via a CLI helper or an internal web form.
 (Implementation in progress).
 
+## Debugging & Logging
+The application uses a categorized logging system that is disabled by default. You can enable specific debug logs using command-line flags:
+
+```bash
+# Enable Telegram synchronization logs
+go run cmd/hr-sorter/main.go --debug-sync
+
+# Enable sequence creation logs
+go run cmd/hr-sorter/main.go --debug-add
+
+# Enable sequence history and movement logs
+go run cmd/hr-sorter/main.go --debug-history
+
+# Enable everything
+go run cmd/hr-sorter/main.go --debug-all
+```
+
+When `--debug-history` is enabled, the application will output a visual representation of recruitment chains:
+`[HISTORY] Seq #13 (Google): Initial Contact -> HR Screening -> Tech Interview 1 -> [REJECTED]`
+
 ## Tech Stack
 - **Backend:** Go, `gotd/td` (MTProto), `sqlx`.
 - **Database:** SQLite (pure Go driver).
