@@ -55,7 +55,7 @@ func (m *Manager) StartAccount(ctx context.Context, acc models.Account) error {
 
 		// Trigger initial sync in background
 		go func() {
-			if err := m.InitialSync(context.Background(), api, acc.ID); err != nil {
+			if err := m.InitialSync(ctx, api, acc.ID); err != nil {
 				log.Printf("[Account %s] Initial sync failed: %v", acc.PhoneNumber, err)
 			}
 		}()
@@ -197,7 +197,7 @@ func (m *Manager) HandleNewMessage(ctx context.Context, api *tg.Client, u *tg.Up
 
 	// Background sync history for this user to ensure we didn't miss anything
 	go func() {
-		if err := m.SyncHistory(context.Background(), api, user, contactID, accountID); err != nil {
+		if err := m.SyncHistory(ctx, api, user, contactID, accountID); err != nil {
 			log.Printf("[Acc ID %d] Background sync failed for @%s: %v", accountID, user.Username, err)
 		}
 	}()

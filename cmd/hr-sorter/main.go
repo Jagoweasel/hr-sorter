@@ -5,7 +5,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
+	"time"
 
 	"github.com/joho/godotenv"
 	"hr-sorter/internal/database"
@@ -37,7 +40,10 @@ func main() {
 		log.Fatalf("failed to fetch accounts: %v", err)
 	}
 
-	ctx := context.Background()
+	// Create root context for signal handling
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	for _, acc := range accounts {
 		go func(a models.Account) {
 			if err := manager.StartAccount(ctx, a); err != nil {
@@ -54,8 +60,31 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("Server starting on http://localhost:%s", port)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
-		log.Fatal(err)
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: mux,
 	}
+
+	go func() {
+		log.Printf("Server starting on http://localhost:%s", port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	<-ctx.Done()
+	stop()
+
+	log.Println("Shutting down gracefully...")
+
+	// Shutdown HTTP server
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("HTTP server Shutdown: %v", err)
+	}
+
+	log.Println("Shutdown complete.")
 }
