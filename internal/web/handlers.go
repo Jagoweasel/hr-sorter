@@ -230,17 +230,24 @@ func handlePipeline(w http.ResponseWriter, r *http.Request) {
 	var detailedSeqs []SequenceWithDetails
 	for _, s := range sequences {
 		var recruiters []models.Contact
-		database.DB.Select(&recruiters, `
+		err = database.DB.Select(&recruiters, `
 			SELECT c.* FROM contacts c 
 			JOIN sequence_contacts sc ON c.id = sc.contact_id 
 			WHERE sc.sequence_id = ?`, s.ID)
+		if err != nil {
+			logger.Debug(logger.History, "Error fetching recruiters for Seq #%d: %v", s.ID, err)
+		}
 
 		var stages []models.InterviewStage
-		database.DB.Select(&stages, "SELECT * FROM interview_stages WHERE sequence_id = ? ORDER BY order_index ASC", s.ID)
+		err = database.DB.Select(&stages, "SELECT * FROM interview_stages WHERE sequence_id = ? ORDER BY order_index ASC", s.ID)
+		if err != nil {
+			logger.Debug(logger.History, "Error fetching stages for Seq #%d: %v", s.ID, err)
+		}
 
 		var history []models.InterviewStage
 		var historyNames []string
 		for _, st := range stages {
+			logger.Debug(logger.History, "  - Stage: '%s', Completed: %v, Order: %d", st.Name, st.IsCompleted, st.OrderIndex)
 			if st.IsCompleted {
 				history = append(history, st)
 				historyNames = append(historyNames, st.Name)
@@ -256,7 +263,7 @@ func handlePipeline(w http.ResponseWriter, r *http.Request) {
 			IsAccepted: s.Status == "accepted",
 		})
 
-		logger.Debug(logger.History, "Seq #%d (%s): Found %d history stages (Status: %s)", s.ID, s.CompanyName, len(history), s.Status)
+		logger.Debug(logger.History, "Seq #%d (%s): Found %d total stages, %d history stages (Status: %s)", s.ID, s.CompanyName, len(stages), len(history), s.Status)
 		logger.LogChain(s.ID, s.CompanyName, historyNames, s.Status)
 	}
 
@@ -757,16 +764,26 @@ func handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 		logger.Debug(logger.History, "Error committing move transaction: %v", err)
 		return
 	}
+	logger.Debug(logger.History, "Move transaction committed successfully")
 
 	// Log result chain after commit
 	var seq models.Sequence
-	database.DB.Get(&seq, "SELECT * FROM sequences WHERE id = ?", seqID)
+	err = database.DB.Get(&seq, "SELECT * FROM sequences WHERE id = ?", seqID)
+	if err != nil {
+		logger.Debug(logger.History, "Error refetching sequence after move: %v", err)
+	}
+
 	var updatedStages []models.InterviewStage
-	database.DB.Select(&updatedStages, "SELECT * FROM interview_stages WHERE sequence_id = ? AND is_completed = 1 ORDER BY order_index ASC", seqID)
+	err = database.DB.Select(&updatedStages, "SELECT * FROM interview_stages WHERE sequence_id = ? AND is_completed = 1 ORDER BY order_index ASC", seqID)
+	if err != nil {
+		logger.Debug(logger.History, "Error fetching history stages after move: %v", err)
+	}
+
 	var names []string
 	for _, s := range updatedStages {
 		names = append(names, s.Name)
 	}
+	logger.Debug(logger.History, "Refetched %d completed stages for chain", len(updatedStages))
 	logger.LogChain(seq.ID, seq.CompanyName, names, seq.Status)
 
 	http.Redirect(w, r, "/pipeline", 303)

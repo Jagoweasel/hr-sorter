@@ -47,7 +47,7 @@ type InterviewStage struct {
 	Name        string     `db:"name" json:"name"`
 	StageType   *string    `db:"stage_type" json:"stage_type"` // Theory, Live Coding, System Design
 	ScheduledAt *time.Time `db:"scheduled_at" json:"scheduled_at"`
-	Notes       string     `db:"notes" json:"notes"`
+	Notes       *string    `db:"notes" json:"notes"`
 	IsCompleted bool       `db:"is_completed" json:"is_completed"`
 	OrderIndex  int        `db:"order_index" json:"order_index"`
 }
