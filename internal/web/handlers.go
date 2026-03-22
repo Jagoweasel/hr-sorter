@@ -426,32 +426,12 @@ func handleContactActions(w http.ResponseWriter, r *http.Request) {
 								</div>
 								<div>
 									<label class="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Vacancy</label>
-									<input type="text" name="vacancy_name" required class="block w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 focus:ring-0 transition-colors text-sm font-bold bg-gray-50" placeholder="Senior Go Dev">
+									<input type="text" name="vacancy_name" value="Senior Go Dev" required class="block w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 focus:ring-0 transition-colors text-sm font-bold bg-gray-50" placeholder="Senior Go Dev">
 								</div>
 							</div>
 							<div>
 								<label class="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Initial Contact Date</label>
 								<input type="datetime-local" name="initial_date" value="%s" class="block w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 focus:ring-0 text-sm font-bold bg-gray-50">
-							</div>
-							
-							<div class="bg-blue-50/50 rounded-2xl p-6 border-2 border-blue-100/50">
-								<p class="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] mb-4">Technical Stages</p>
-								<div id="tech-stages" class="space-y-3">
-									<div class="flex items-center space-x-3">
-										<input type="text" name="tech_stage_name[]" value="Technical Interview 1" class="flex-1 border-2 border-white rounded-xl p-2.5 text-sm font-bold shadow-sm">
-										<select name="tech_stage_type[]" class="border-2 border-white rounded-xl p-2.5 text-[10px] font-black bg-white shadow-sm appearance-none pr-8">
-											<option value="">GENERAL</option>
-											<option value="Theory">THEORY</option>
-											<option value="Live Coding">CODING</option>
-											<option value="System Design">DESIGN</option>
-										</select>
-									</div>
-								</div>
-								<button type="button" 
-								        onclick="const div = document.createElement('div'); div.className = 'flex items-center space-x-3 mt-3 animate-in fade-in slide-in-from-top-2 duration-200'; div.innerHTML = '<input type=\'text\' name=\'tech_stage_name[]\' value=\'Technical Interview ' + (document.querySelectorAll('#tech-stages > div').length + 1) + '\' class=\'flex-1 border-2 border-white rounded-xl p-2.5 text-sm font-bold shadow-sm\'><select name=\'tech_stage_type[]\' class=\'border-2 border-white rounded-xl p-2.5 text-[10px] font-black bg-white shadow-sm appearance-none pr-8\'><option value=\'\'>GENERAL</option><option value=\'Theory\'>THEORY</option><option value=\'Live Coding\'>CODING</option><option value=\'System Design\'>DESIGN</option></select>'; document.getElementById('tech-stages').appendChild(div)"
-										class="mt-4 text-[10px] text-blue-600 hover:text-blue-800 font-black uppercase tracking-widest flex items-center space-x-2">
-									<span>+ Add Technical Stage</span>
-								</button>
 							</div>
 						</div>
 						<div class="mt-10 flex justify-end space-x-4">
@@ -698,10 +678,35 @@ func handleUpdateStage(w http.ResponseWriter, r *http.Request) {
 	stageID := r.URL.Query().Get("id")
 	completed := r.URL.Query().Get("completed") == "true"
 
-	database.DB.Exec("UPDATE interview_stages SET is_completed = ? WHERE id = ?", completed, stageID)
-
 	var stage models.InterviewStage
-	database.DB.Get(&stage, "SELECT * FROM interview_stages WHERE id = ?", stageID)
+	err := database.DB.Get(&stage, "SELECT * FROM interview_stages WHERE id = ?", stageID)
+	if err != nil {
+		http.Error(w, "Stage not found", 404)
+		return
+	}
+
+	if !completed {
+		// If unmarking a stage, check if it's a custom stage.
+		// Standard stages are NOT deleted.
+		standard := false
+		lowerName := strings.ToLower(stage.Name)
+		standards := []string{"initial contact", "hr screening", "technical interview 1", "final interview", "offer"}
+		for _, s := range standards {
+			if lowerName == s {
+				standard = true
+				break
+			}
+		}
+
+		if !standard {
+			database.DB.Exec("DELETE FROM interview_stages WHERE id = ?", stageID)
+			logger.Debug(logger.History, "Deleted custom stage ID %s ('%s') because it was unmarked", stageID, stage.Name)
+		} else {
+			database.DB.Exec("UPDATE interview_stages SET is_completed = 0 WHERE id = ?", stageID)
+		}
+	} else {
+		database.DB.Exec("UPDATE interview_stages SET is_completed = 1 WHERE id = ?", stageID)
+	}
 
 	logger.Debug(logger.History, "Updated stage ID %s to completed=%v", stageID, completed)
 
@@ -728,6 +733,9 @@ func handleUpdateStage(w http.ResponseWriter, r *http.Request) {
 			database.DB.Exec("UPDATE sequences SET status = ? WHERE id = ?", newStatus, stage.SequenceID)
 			logger.Debug(logger.History, "Sequence ID %d status automatically updated to '%s'", stage.SequenceID, newStatus)
 		}
+	} else {
+		// No completed stages, revert to initial
+		database.DB.Exec("UPDATE sequences SET status = 'initial' WHERE id = ?", stage.SequenceID)
 	}
 
 	// Log result chain
