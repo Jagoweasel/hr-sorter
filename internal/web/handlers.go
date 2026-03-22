@@ -765,14 +765,53 @@ func handleAddStage(w http.ResponseWriter, r *http.Request) {
 		name = fmt.Sprintf("%s %d", strings.Title(label), count+1)
 	}
 
-	var maxOrder int
-	database.DB.Get(&maxOrder, "SELECT COALESCE(max(order_index), 0) FROM interview_stages WHERE sequence_id = ?", seqID)
+	// Determine insertion point based on hierarchy
+	var stages []models.InterviewStage
+	database.DB.Select(&stages, "SELECT * FROM interview_stages WHERE sequence_id = ? ORDER BY order_index ASC", seqID)
+
+	hierarchy := map[string]int{
+		"initial":   0,
+		"screening": 1,
+		"tech":      2,
+		"final":     3,
+		"offer":     4,
+	}
+	newRank := hierarchy[category]
+
+	insertAt := 0
+	if len(stages) > 0 {
+		insertAt = stages[len(stages)-1].OrderIndex + 1
+		for _, s := range stages {
+			sName := strings.ToLower(s.Name)
+			sRank := 0
+			if strings.Contains(sName, "offer") {
+				sRank = 4
+			} else if strings.Contains(sName, "final") {
+				sRank = 3
+			} else if strings.Contains(sName, "tech") {
+				sRank = 2
+			} else if strings.Contains(sName, "screen") {
+				sRank = 1
+			}
+
+			if sRank <= newRank {
+				insertAt = s.OrderIndex + 1
+			} else {
+				// We found a stage that should come after the new one
+				insertAt = s.OrderIndex
+				break
+			}
+		}
+	}
+
+	// Shift subsequent stages
+	database.DB.Exec("UPDATE interview_stages SET order_index = order_index + 1 WHERE sequence_id = ? AND order_index >= ?", seqID, insertAt)
 
 	_, err := database.DB.Exec("INSERT INTO interview_stages (sequence_id, name, is_completed, order_index) VALUES (?, ?, 1, ?)",
-		seqID, name, maxOrder+1)
+		seqID, name, insertAt)
 
 	if err == nil {
-		logger.Debug(logger.History, "Manually added stage '%s' to sequence %s", name, seqID)
+		logger.Debug(logger.History, "Manually added stage '%s' to sequence %s at index %d", name, seqID, insertAt)
 		// Update sequence status
 		status := category
 		if category == "initial" {
