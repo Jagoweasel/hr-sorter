@@ -99,6 +99,14 @@ func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, accountID int
 		}
 	}
 
+	// Map to track peers across folders to avoid duplicate syncs
+	type peerInfo struct {
+		user     *tg.User
+		name     string
+		peerType string
+	}
+	uniquePeers := make(map[int64]peerInfo)
+
 	// Sync both main inbox (Folder 0) and archive (Folder 1)
 	folders := []int{0, 1}
 	for _, folderID := range folders {
@@ -118,7 +126,7 @@ func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, accountID int
 			continue
 		}
 
-		var users map[int64]*tg.User = make(map[int64]*tg.User)
+		var users = make(map[int64]*tg.User)
 		var dialogs []tg.DialogClass
 
 		switch d := res.(type) {
@@ -140,58 +148,44 @@ func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, accountID int
 
 		log.Printf("[Acc ID %d] Found %d total dialogs in %s", accountID, len(dialogs), folderName)
 
-		if len(dialogs) == 0 {
-			log.Printf("[Acc ID %d] WARNING: No dialogs returned for folder %s", accountID, folderName)
-		}
-
 		for _, dClass := range dialogs {
 			d, ok := dClass.(*tg.Dialog)
 			if !ok {
 				continue
 			}
 
-			// Trace log for discovery
-			peerType := "Unknown"
-			peerName := "Unknown"
-			var targetUser *tg.User
-
 			switch p := d.Peer.(type) {
 			case *tg.PeerUser:
-				peerType = "User"
 				if u, ok := users[p.UserID]; ok {
-					targetUser = u
-					peerName = fmt.Sprintf("@%s (%s %s)", u.Username, u.FirstName, u.LastName)
-				} else {
-					peerName = fmt.Sprintf("ID:%d", p.UserID)
+					if _, exists := uniquePeers[u.ID]; !exists {
+						uniquePeers[u.ID] = peerInfo{
+							user:     u,
+							name:     fmt.Sprintf("@%s (%s %s)", u.Username, u.FirstName, u.LastName),
+							peerType: "User",
+						}
+					}
 				}
-			case *tg.PeerChat:
-				peerType = "Chat"
-				peerName = fmt.Sprintf("ID:%d", p.ChatID)
-			case *tg.PeerChannel:
-				peerType = "Channel"
-				peerName = fmt.Sprintf("ID:%d", p.ChannelID)
 			}
+		}
+	}
 
-			if targetUser != nil {
-				// It's a private chat
-				if targetUser.Bot {
-					log.Printf("[Trace] Skipping bot: %s", peerName)
-					continue
-				}
+	log.Printf("[Acc ID %d] Found %d unique private chats across folders", accountID, len(uniquePeers))
 
-				log.Printf("[Trace] Syncing private chat: %s", peerName)
-				contactID, err := m.getOrCreateContact(ctx, targetUser)
-				if err != nil {
-					log.Printf("[Acc ID %d] Failed to ensure contact %s: %v", accountID, peerName, err)
-					continue
-				}
+	for _, info := range uniquePeers {
+		if info.user.Bot {
+			log.Printf("[Trace] Skipping bot: %s", info.name)
+			continue
+		}
 
-				if err := m.SyncHistory(ctx, api, targetUser, contactID, accountID); err != nil {
-					log.Printf("[Acc ID %d] Failed to sync history for %s: %v", accountID, peerName, err)
-				}
-			} else {
-				log.Printf("[Trace] Skipping %s: %s", peerType, peerName)
-			}
+		log.Printf("[Trace] Syncing private chat: %s", info.name)
+		contactID, err := m.getOrCreateContact(ctx, info.user)
+		if err != nil {
+			log.Printf("[Acc ID %d] Failed to ensure contact %s: %v", accountID, info.name, err)
+			continue
+		}
+
+		if err := m.SyncHistory(ctx, api, info.user, contactID, accountID); err != nil {
+			log.Printf("[Acc ID %d] Failed to sync history for %s: %v", accountID, info.name, err)
 		}
 	}
 
@@ -244,8 +238,8 @@ func (m *Manager) HandleNewMessage(ctx context.Context, api *tg.Client, u *tg.Up
 	}
 
 	// Save message
-	_, err = database.DB.Exec("INSERT OR IGNORE INTO messages (account_id, contact_id, text, is_incoming, timestamp) VALUES (?, ?, ?, ?, ?)",
-		accountID, contactID, text, !msg.Out, time.Unix(int64(msg.Date), 0))
+	_, err = database.DB.Exec("INSERT OR IGNORE INTO messages (account_id, contact_id, tg_message_id, text, is_incoming, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+		accountID, contactID, msg.ID, text, !msg.Out, time.Unix(int64(msg.Date), 0))
 	if err != nil {
 		log.Printf("[Acc ID %d] DB Error saving message: %v", accountID, err)
 		return err
@@ -294,8 +288,8 @@ func (m *Manager) SyncHistory(ctx context.Context, api *tg.Client, user *tg.User
 		}
 
 		// Use INSERT OR IGNORE to avoid duplicates if message was already captured live
-		res, err := database.DB.Exec("INSERT OR IGNORE INTO messages (account_id, contact_id, text, is_incoming, timestamp) VALUES (?, ?, ?, ?, ?)",
-			accountID, contactID, msg.Message, !msg.Out, time.Unix(int64(msg.Date), 0))
+		res, err := database.DB.Exec("INSERT OR IGNORE INTO messages (account_id, contact_id, tg_message_id, text, is_incoming, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+			accountID, contactID, msg.ID, msg.Message, !msg.Out, time.Unix(int64(msg.Date), 0))
 		if err != nil {
 			log.Printf("[Acc ID %d] DB Error during sync for @%s: %v", accountID, user.Username, err)
 			continue

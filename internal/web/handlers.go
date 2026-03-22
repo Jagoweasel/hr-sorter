@@ -110,9 +110,12 @@ func handleMessages(w http.ResponseWriter, r *http.Request) {
 	var messages []models.Message
 	err := database.DB.Select(&messages, "SELECT * FROM messages WHERE contact_id = ? ORDER BY timestamp ASC", id)
 	if err != nil {
+		log.Printf("Web: Error fetching messages for contact %s: %v", id, err)
 		http.Error(w, err.Error(), 500)
 		return
 	}
+
+	log.Printf("Web: Rendering %d messages for contact %s", len(messages), id)
 
 	if len(messages) == 0 {
 		w.Write([]byte(`<p class="text-gray-500 italic p-4">No messages yet</p>`))

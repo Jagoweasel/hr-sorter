@@ -20,10 +20,11 @@ type Contact struct {
 }
 
 type Message struct {
-	ID         int64     `db:"id" json:"id"`
-	AccountID  int64     `db:"account_id" json:"account_id"`
-	ContactID  int64     `db:"contact_id" json:"contact_id"`
-	Text       string    `db:"text" json:"text"`
-	IsIncoming bool      `db:"is_incoming" json:"is_incoming"`
-	Timestamp  time.Time `db:"timestamp" json:"timestamp"`
+	ID          int64     `db:"id" json:"id"`
+	AccountID   int64     `db:"account_id" json:"account_id"`
+	ContactID   int64     `db:"contact_id" json:"contact_id"`
+	TGMessageID *int      `db:"tg_message_id" json:"tg_message_id"`
+	Text        string    `db:"text" json:"text"`
+	IsIncoming  bool      `db:"is_incoming" json:"is_incoming"`
+	Timestamp   time.Time `db:"timestamp" json:"timestamp"`
 }

@@ -44,13 +44,25 @@ func InitDB(path string) {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		account_id INTEGER,
 		contact_id INTEGER,
+		tg_message_id INTEGER,
 		text TEXT,
 		is_incoming BOOLEAN,
 		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(contact_id, text, timestamp),
+		UNIQUE(account_id, contact_id, tg_message_id),
 		FOREIGN KEY (account_id) REFERENCES accounts(id),
 		FOREIGN KEY (contact_id) REFERENCES contacts(id)
 	);`
 
 	DB.MustExec(schema)
+
+	// Migration: Add tg_message_id if it doesn't exist
+	var hasColumn bool
+	err = DB.Get(&hasColumn, "SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='tg_message_id'")
+	if err == nil && !hasColumn {
+		log.Println("Migrating database: adding tg_message_id to messages table...")
+		DB.MustExec("ALTER TABLE messages ADD COLUMN tg_message_id INTEGER")
+		// We can't easily add UNIQUE constraint via ALTER in SQLite,
+		// but we can add a UNIQUE index.
+		DB.MustExec("CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_unique_sync ON messages(account_id, contact_id, tg_message_id)")
+	}
 }
