@@ -47,11 +47,12 @@ func main() {
 	}
 
 	// Create sessions directory if it doesn't exist
-	if err := os.MkdirAll("sessions", 0755); err != nil {
+	sessionsDir, _ := filepath.Abs("sessions")
+	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
 		log.Fatalf("failed to create sessions dir: %v", err)
 	}
 
-	sessionFile := filepath.Join("sessions", phone+".json")
+	sessionFile := filepath.Join(sessionsDir, phone+".json")
 
 	// Setup logger to see what's happening
 	logger, _ := zap.NewDevelopment()
@@ -80,9 +81,10 @@ func main() {
 			return err
 		}
 
-		// Save account to DB
+		// Save account to DB with absolute path to avoid confusion
+		absSessionPath, _ := filepath.Abs(sessionFile)
 		_, err := database.DB.Exec("INSERT OR IGNORE INTO accounts (phone_number, status, session_path) VALUES (?, ?, ?)",
-			phone, "active", filepath.ToSlash(sessionFile))
+			phone, "active", filepath.ToSlash(absSessionPath))
 		if err != nil {
 			return err
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -36,9 +37,14 @@ func (m *Manager) StartAccount(ctx context.Context, acc models.Account) error {
 	}
 
 	dispatcher := tg.NewUpdateDispatcher()
+
+	// Ensure absolute path and use forward slashes for cross-platform compatibility
+	sessionPath, _ := filepath.Abs(acc.SessionPath)
+	sessionPath = filepath.ToSlash(sessionPath)
+
 	client := telegram.NewClient(m.appID, m.appHash, telegram.Options{
 		SessionStorage: &session.FileStorage{
-			Path: acc.SessionPath,
+			Path: sessionPath,
 		},
 		UpdateHandler: dispatcher,
 	})

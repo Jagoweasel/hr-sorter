@@ -2,6 +2,7 @@ package database
 
 import (
 	"log"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 	_ "modernc.org/sqlite"
@@ -11,13 +12,18 @@ var DB *sqlx.DB
 
 func InitDB(path string) {
 	var err error
-	DB, err = sqlx.Connect("sqlite", path)
+	dsn := path
+	if !strings.Contains(path, "?") {
+		dsn = path + "?_pragma=foreign_keys=1&_journal_mode=WAL"
+	}
+	DB, err = sqlx.Connect("sqlite", dsn)
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
 
 	schema := `
 	CREATE TABLE IF NOT EXISTS accounts (
+
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		phone_number TEXT UNIQUE NOT NULL,
 		status TEXT NOT NULL DEFAULT 'pending_auth',
