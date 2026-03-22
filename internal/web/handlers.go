@@ -340,6 +340,9 @@ func handlePipeline(w http.ResponseWriter, r *http.Request) {
 		"add": func(a, b int) int {
 			return a + b
 		},
+		"sub": func(a, b int) int {
+			return a - b
+		},
 		"lastStage": func(history []models.InterviewStage) string {
 			if len(history) == 0 {
 				return "None"
@@ -528,8 +531,6 @@ func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	vacancy := r.FormValue("vacancy_name")
 	contactID := r.FormValue("contact_id")
 	initialDateStr := r.FormValue("initial_date")
-	techNames := r.Form["tech_stage_name[]"]
-	techTypes := r.Form["tech_stage_type[]"]
 
 	logger.Debug(logger.AddSequence, "Creating sequence for Company='%s', Vacancy='%s', ContactID='%s'", company, vacancy, contactID)
 
@@ -597,28 +598,9 @@ func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 		logger.Debug(logger.AddSequence, "Created 'HR Screening' stage (Completed: false, Order: 1)")
 	}
 
-	// Add Technical Stages
-	currIdx := 2
-	for i, name := range techNames {
-		name = strings.TrimSpace(name)
-		if name == "" {
-			continue
-		}
-		tType := ""
-		if i < len(techTypes) {
-			tType = techTypes[i]
-		}
-		_, err = tx.Exec("INSERT INTO interview_stages (sequence_id, name, stage_type, order_index) VALUES (?, ?, ?, ?)",
-			seqID, name, tType, currIdx)
-		if err == nil {
-			logger.Debug(logger.AddSequence, "Created Technical stage '%s' (Order: %d)", name, currIdx)
-		}
-		currIdx++
-	}
-
 	// Add default final stages
-	tx.Exec("INSERT INTO interview_stages (sequence_id, name, order_index) VALUES (?, ?, ?)", seqID, "Final Interview", currIdx)
-	tx.Exec("INSERT INTO interview_stages (sequence_id, name, order_index) VALUES (?, ?, ?)", seqID, "Offer", currIdx+1)
+	tx.Exec("INSERT INTO interview_stages (sequence_id, name, order_index) VALUES (?, ?, ?)", seqID, "Final Interview", 2)
+	tx.Exec("INSERT INTO interview_stages (sequence_id, name, order_index) VALUES (?, ?, ?)", seqID, "Offer", 3)
 	logger.Debug(logger.AddSequence, "Created Final and Offer stages")
 
 	if err := tx.Commit(); err != nil {
@@ -672,6 +654,14 @@ func handleAddToSequence(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/", 303)
+}
+
+func getRedirectURL(r *http.Request) string {
+	referer := r.Header.Get("Referer")
+	if strings.Contains(referer, "view=timeline") {
+		return "/pipeline?view=timeline"
+	}
+	return "/pipeline"
 }
 
 func handleUpdateStage(w http.ResponseWriter, r *http.Request) {
@@ -749,7 +739,7 @@ func handleUpdateStage(w http.ResponseWriter, r *http.Request) {
 	}
 	logger.LogChain(seq.ID, seq.CompanyName, names, seq.Status)
 
-	http.Redirect(w, r, "/pipeline", 303)
+	http.Redirect(w, r, getRedirectURL(r), 303)
 }
 
 func handleAddStage(w http.ResponseWriter, r *http.Request) {
@@ -802,7 +792,7 @@ func handleAddStage(w http.ResponseWriter, r *http.Request) {
 		logger.LogChain(seq.ID, seq.CompanyName, names, seq.Status)
 	}
 
-	http.Redirect(w, r, "/pipeline", 303)
+	http.Redirect(w, r, getRedirectURL(r), 303)
 }
 
 func handleMoveSequence(w http.ResponseWriter, r *http.Request) {
@@ -814,7 +804,7 @@ func handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 
 	// If moving to Accepted/Rejected, we still might want some automation
 	if status == "accepted" {
-		database.DB.Exec("UPDATE interview_stages SET is_completed = 1 WHERE sequence_id = ?", seqID)
+		// Just update status, don't force mark all stages
 	} else if status == "rejected" {
 		// Mark current point of rejection
 		var firstIncomplete models.InterviewStage
@@ -835,7 +825,7 @@ func handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 	}
 	logger.LogChain(seq.ID, seq.CompanyName, names, seq.Status)
 
-	http.Redirect(w, r, "/pipeline", 303)
+	http.Redirect(w, r, getRedirectURL(r), 303)
 }
 
 func handleDeleteSequence(w http.ResponseWriter, r *http.Request) {
@@ -847,5 +837,5 @@ func handleDeleteSequence(w http.ResponseWriter, r *http.Request) {
 	database.DB.Exec("DELETE FROM sequences WHERE id = ?", seqID)
 	logger.Debug(logger.AddSequence, "Deleted sequence ID %s (%s)", seqID, seq.CompanyName)
 
-	http.Redirect(w, r, "/pipeline", 303)
+	http.Redirect(w, r, getRedirectURL(r), 303)
 }
