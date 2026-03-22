@@ -2,6 +2,8 @@ package database
 
 import (
 	"log"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
@@ -37,6 +39,8 @@ func InitDB(path string) {
 		account_id INTEGER,
 		platform TEXT NOT NULL,
 		identifier TEXT NOT NULL,
+		api_id INTEGER,
+		api_hash TEXT,
 		status TEXT NOT NULL DEFAULT 'pending_auth',
 		session_path TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -153,5 +157,22 @@ func InitDB(path string) {
 	} else {
 		DB.MustExec(schema)
 		log.Println("[DB] Schema verified.")
+	}
+
+	// Migration: Add api_id and api_hash to integrations if they don't exist
+	var hasAPIID bool
+	err = DB.Get(&hasAPIID, "SELECT COUNT(*) FROM pragma_table_info('integrations') WHERE name='api_id'")
+	if err == nil && !hasAPIID {
+		log.Println("[DB] Migrating integrations: adding api_id and api_hash columns...")
+		DB.MustExec("ALTER TABLE integrations ADD COLUMN api_id INTEGER")
+		DB.MustExec("ALTER TABLE integrations ADD COLUMN api_hash TEXT")
+
+		// Populate existing integrations with .env values as fallback
+		apiID, _ := strconv.Atoi(os.Getenv("API_ID"))
+		apiHash := os.Getenv("API_HASH")
+		if apiID != 0 && apiHash != "" {
+			DB.MustExec("UPDATE integrations SET api_id = ?, api_hash = ? WHERE platform = 'tg'", apiID, apiHash)
+		}
+		log.Println("[DB] Migration finished.")
 	}
 }

@@ -45,11 +45,11 @@
                 <div class="flex justify-between items-center mb-6">
                     <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Platform Integrations</h3>
                     <div class="flex space-x-2">
-                        <button onclick="document.getElementById('acc-id-input').value='{{ .ID }}'; document.getElementById('platform-input').value='tg'; document.getElementById('new-int-modal').classList.remove('hidden')" 
+                        <button onclick="openIntModal('{{ .ID }}', 'tg')" 
                                 class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-blue-100 transition-colors border border-blue-100">
                             + Add Telegram
                         </button>
-                        <button onclick="document.getElementById('acc-id-input').value='{{ .ID }}'; document.getElementById('platform-input').value='hh'; document.getElementById('new-int-modal').classList.remove('hidden')" 
+                        <button onclick="openIntModal('{{ .ID }}', 'hh')" 
                                 class="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-red-100 transition-colors border border-red-100">
                             + Add HeadHunter
                         </button>
@@ -118,18 +118,44 @@
 <div id="new-int-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-[200]" onclick="if(event.target === this) this.classList.add('hidden')">
     <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm relative" onclick="event.stopPropagation()">
         <h2 class="text-xl font-black text-gray-900 tracking-tight mb-6">Add Integration</h2>
-        <form action="/integrations/create" method="POST" class="space-y-6">
+        <form action="/integrations/create" method="POST" class="space-y-4">
             <input type="hidden" name="account_id" id="acc-id-input">
             <input type="hidden" name="platform" id="platform-input">
             <div>
-                <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Phone Number</label>
+                <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Identifier (Phone)</label>
                 <input type="text" name="identifier" required class="block w-full border-2 border-gray-100 rounded-xl p-3 text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none transition-colors" placeholder="+79991234567">
             </div>
-            <div class="flex justify-end space-x-3">
+            <div id="tg-creds" class="space-y-4 hidden">
+                <div>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Telegram API ID</label>
+                    <input type="number" name="api_id" class="block w-full border-2 border-gray-100 rounded-xl p-3 text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none transition-colors" placeholder="12345678">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Telegram API Hash</label>
+                    <input type="text" name="api_hash" class="block w-full border-2 border-gray-100 rounded-xl p-3 text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none transition-colors" placeholder="abcdef0123456789...">
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 pt-4">
                 <button type="button" onclick="document.getElementById('new-int-modal').classList.add('hidden')" class="px-4 py-2 text-[10px] font-black text-gray-400 uppercase">Cancel</button>
                 <button type="submit" class="px-6 py-2 bg-gray-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg">Link</button>
             </div>
         </form>
     </div>
 </div>
+
+<script>
+    function openIntModal(accID, platform) {
+        document.getElementById('acc-id-input').value = accID;
+        document.getElementById('platform-input').value = platform;
+        const tgCreds = document.getElementById('tg-creds');
+        if (platform === 'tg') {
+            tgCreds.classList.remove('hidden');
+            tgCreds.querySelectorAll('input').forEach(i => i.required = true);
+        } else {
+            tgCreds.classList.add('hidden');
+            tgCreds.querySelectorAll('input').forEach(i => i.required = false);
+        }
+        document.getElementById('new-int-modal').classList.remove('hidden');
+    }
+</script>
 {{ end }}

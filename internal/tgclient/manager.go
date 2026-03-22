@@ -19,15 +19,11 @@ import (
 type Manager struct {
 	clients map[int64]*telegram.Client
 	mu      sync.RWMutex
-	appID   int
-	appHash string
 }
 
-func NewManager(appID int, appHash string) *Manager {
+func NewManager() *Manager {
 	return &Manager{
 		clients: make(map[int64]*telegram.Client),
-		appID:   appID,
-		appHash: appHash,
 	}
 }
 
@@ -37,13 +33,17 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 		return fmt.Errorf("no session path for integration %s", integration.Identifier)
 	}
 
+	if integration.APIID == 0 || integration.APIHash == "" {
+		return fmt.Errorf("missing API credentials for integration %s", integration.Identifier)
+	}
+
 	dispatcher := tg.NewUpdateDispatcher()
 
 	// Ensure absolute path and use forward slashes for cross-platform compatibility
 	sessionPath, _ := filepath.Abs(integration.SessionPath)
 	sessionPath = filepath.ToSlash(sessionPath)
 
-	client := telegram.NewClient(m.appID, m.appHash, telegram.Options{
+	client := telegram.NewClient(integration.APIID, integration.APIHash, telegram.Options{
 		SessionStorage: &session.FileStorage{
 			Path: sessionPath,
 		},

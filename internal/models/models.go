@@ -14,6 +14,8 @@ type Integration struct {
 	AccountID   int64     `db:"account_id" json:"account_id"`
 	Platform    string    `db:"platform" json:"platform"` // "tg", "hh"
 	Identifier  string    `db:"identifier" json:"identifier"`
+	APIID       int       `db:"api_id" json:"api_id"`
+	APIHash     string    `db:"api_hash" json:"api_hash"`
 	Status      string    `db:"status" json:"status"` // "active", "pending_auth", "inactive"
 	SessionPath string    `db:"session_path" json:"session_path"`
 	CreatedAt   time.Time `db:"created_at" json:"created_at"`

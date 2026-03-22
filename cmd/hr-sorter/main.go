@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -47,16 +46,7 @@ func main() {
 	database.InitDB(dbPath)
 	log.Println("[Main] Database initialized successfully.")
 
-	apiIDStr := os.Getenv("API_ID")
-	apiHash := os.Getenv("API_HASH")
-
-	if apiIDStr == "" || apiHash == "" {
-		log.Fatal("[Main] API_ID or API_HASH not found in .env")
-	}
-
-	apiID, _ := strconv.Atoi(apiIDStr)
-
-	manager := tgclient.NewManager(apiID, apiHash)
+	manager := tgclient.NewManager()
 
 	// Fetch active TG integrations from active accounts
 	var integrations []models.Integration

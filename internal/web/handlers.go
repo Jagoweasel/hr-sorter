@@ -110,19 +110,21 @@ func handleCreateIntegration(w http.ResponseWriter, r *http.Request) {
 	accID := r.FormValue("account_id")
 	platform := r.FormValue("platform")
 	identifier := r.FormValue("identifier")
+	apiID := r.FormValue("api_id")
+	apiHash := r.FormValue("api_hash")
 
 	status := "pending_auth"
 	sessionPath := ""
 	if platform == "tg" {
 		// Create session directory if it doesn't exist
 		sessionDir := "sessions"
-		sessionPath = fmt.Sprintf("%s/%s.session", sessionDir, identifier)
+		sessionPath = fmt.Sprintf("%s/%s.json", sessionDir, identifier)
 	} else if platform == "hh" {
 		status = "inactive" // HH unimplemented
 	}
 
-	database.DB.MustExec("INSERT INTO integrations (account_id, platform, identifier, status, session_path) VALUES (?, ?, ?, ?, ?)",
-		accID, platform, identifier, status, sessionPath)
+	database.DB.MustExec("INSERT INTO integrations (account_id, platform, identifier, api_id, api_hash, status, session_path) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		accID, platform, identifier, apiID, apiHash, status, sessionPath)
 
 	http.Redirect(w, r, "/accounts", 303)
 }

@@ -94,8 +94,8 @@ func main() {
 
 		// 2. Save integration to DB
 		absSessionPath, _ := filepath.Abs(sessionFile)
-		_, err = database.DB.Exec("INSERT OR IGNORE INTO integrations (account_id, platform, identifier, status, session_path) VALUES (?, 'tg', ?, 'active', ?)",
-			accountID, phone, filepath.ToSlash(absSessionPath))
+		_, err = database.DB.Exec("INSERT OR IGNORE INTO integrations (account_id, platform, identifier, api_id, api_hash, status, session_path) VALUES (?, 'tg', ?, ?, ?, 'active', ?)",
+			accountID, phone, apiID, apiHash, filepath.ToSlash(absSessionPath))
 		if err != nil {
 			return err
 		}
