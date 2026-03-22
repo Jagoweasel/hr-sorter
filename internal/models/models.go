@@ -3,33 +3,44 @@ package models
 import "time"
 
 type Account struct {
+	ID        int64     `db:"id" json:"id"`
+	Name      string    `db:"name" json:"name"`
+	Status    string    `db:"status" json:"status"` // "active", "inactive"
+	CreatedAt time.Time `db:"created_at" json:"created_at"`
+}
+
+type Integration struct {
 	ID          int64     `db:"id" json:"id"`
-	PhoneNumber string    `db:"phone_number" json:"phone_number"`
-	Status      string    `db:"status" json:"status"` // "active", "pending_auth"
+	AccountID   int64     `db:"account_id" json:"account_id"`
+	Platform    string    `db:"platform" json:"platform"` // "tg", "hh"
+	Identifier  string    `db:"identifier" json:"identifier"`
+	Status      string    `db:"status" json:"status"` // "active", "pending_auth", "inactive"
 	SessionPath string    `db:"session_path" json:"session_path"`
 	CreatedAt   time.Time `db:"created_at" json:"created_at"`
 }
 
 type Contact struct {
-	ID        int64     `db:"id" json:"id"`
-	TGUserID  int64     `db:"tg_user_id" json:"tg_user_id"`
-	FirstName string    `db:"first_name" json:"first_name"`
-	LastName  string    `db:"last_name" json:"last_name"`
-	Username  string    `db:"username" json:"username"`
-	CreatedAt time.Time `db:"created_at" json:"created_at"`
+	ID            int64     `db:"id" json:"id"`
+	IntegrationID int64     `db:"integration_id" json:"integration_id"`
+	Platform      string    `db:"platform" json:"platform"` // "tg", "hh"
+	ExternalID    string    `db:"external_id" json:"external_id"`
+	FirstName     string    `db:"first_name" json:"first_name"`
+	LastName      string    `db:"last_name" json:"last_name"`
+	Username      string    `db:"username" json:"username"`
+	CreatedAt     time.Time `db:"created_at" json:"created_at"`
 	// UI fields
 	InSequence bool   `db:"in_sequence" json:"in_sequence"`
-	SeqStatus  string `db:"seq_status" json:"seq_status"` // Status of the sequence this recruiter is in
+	SeqStatus  string `db:"seq_status" json:"seq_status"`
 }
 
 type Message struct {
-	ID          int64     `db:"id" json:"id"`
-	AccountID   *int64    `db:"account_id" json:"account_id"`
-	ContactID   int64     `db:"contact_id" json:"contact_id"`
-	TGMessageID *int      `db:"tg_message_id" json:"tg_message_id"`
-	Text        string    `db:"text" json:"text"`
-	IsIncoming  bool      `db:"is_incoming" json:"is_incoming"`
-	Timestamp   time.Time `db:"timestamp" json:"timestamp"`
+	ID            int64     `db:"id" json:"id"`
+	IntegrationID int64     `db:"integration_id" json:"integration_id"`
+	ContactID     int64     `db:"contact_id" json:"contact_id"`
+	ExternalID    *string   `db:"external_id" json:"external_id"`
+	Text          string    `db:"text" json:"text"`
+	IsIncoming    bool      `db:"is_incoming" json:"is_incoming"`
+	Timestamp     time.Time `db:"timestamp" json:"timestamp"`
 }
 
 type Sequence struct {

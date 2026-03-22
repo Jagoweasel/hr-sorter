@@ -31,16 +31,16 @@ func NewManager(appID int, appHash string) *Manager {
 	}
 }
 
-func (m *Manager) StartAccount(ctx context.Context, acc models.Account) error {
-	log.Printf("[Account %s] [STARTING] (ID: %d, Path: %s)", acc.PhoneNumber, acc.ID, acc.SessionPath)
-	if acc.SessionPath == "" {
-		return fmt.Errorf("no session path for account %s", acc.PhoneNumber)
+func (m *Manager) StartIntegration(ctx context.Context, integration models.Integration) error {
+	log.Printf("[Integration %s] [STARTING] (ID: %d, Path: %s)", integration.Identifier, integration.ID, integration.SessionPath)
+	if integration.SessionPath == "" {
+		return fmt.Errorf("no session path for integration %s", integration.Identifier)
 	}
 
 	dispatcher := tg.NewUpdateDispatcher()
 
 	// Ensure absolute path and use forward slashes for cross-platform compatibility
-	sessionPath, _ := filepath.Abs(acc.SessionPath)
+	sessionPath, _ := filepath.Abs(integration.SessionPath)
 	sessionPath = filepath.ToSlash(sessionPath)
 
 	client := telegram.NewClient(m.appID, m.appHash, telegram.Options{
@@ -53,42 +53,43 @@ func (m *Manager) StartAccount(ctx context.Context, acc models.Account) error {
 	api := tg.NewClient(client)
 
 	dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, u *tg.UpdateNewMessage) error {
-		return m.HandleNewMessage(ctx, api, u, e.Users, acc.ID)
+		return m.HandleNewMessage(ctx, api, u, e.Users, integration.ID)
 	})
 
-	log.Printf("[Account %s] [INIT] Client setup complete, starting run...", acc.PhoneNumber)
+	log.Printf("[Integration %s] [INIT] Client setup complete, starting run...", integration.Identifier)
 
 	return client.Run(ctx, func(ctx context.Context) error {
-		log.Printf("[Account %s] [RUNNING] Logged in successfully.", acc.PhoneNumber)
+		log.Printf("[Integration %s] [RUNNING] Logged in successfully.", integration.Identifier)
 
 		// Trigger initial sync in background
 		go func() {
-			logger.Debug(logger.Sync, "[Account %s] Triggering background initial sync in 2 seconds...", acc.PhoneNumber)
+			logger.Debug(logger.Sync, "[Integration %s] Triggering background initial sync in 2 seconds...", integration.Identifier)
 			time.Sleep(2 * time.Second) // Small delay to ensure client is fully ready
-			if err := m.InitialSync(ctx, api, acc.ID); err != nil {
-				log.Printf("[Account %s] [ERROR] Initial sync failed: %v", acc.PhoneNumber, err)
+			if err := m.InitialSync(ctx, api, integration.ID); err != nil {
+				log.Printf("[Integration %s] [ERROR] Initial sync failed: %v", integration.Identifier, err)
 			}
 		}()
 
 		<-ctx.Done()
-		log.Printf("[Account %s] [STOP] Shutdown signal received.", acc.PhoneNumber)
+		log.Printf("[Integration %s] [STOP] Shutdown signal received.", integration.Identifier)
 		return ctx.Err()
 	})
 }
 
-func (m *Manager) getOrCreateContact(ctx context.Context, user *tg.User) (int64, error) {
-	_, err := database.DB.Exec("INSERT OR IGNORE INTO contacts (tg_user_id, first_name, last_name, username) VALUES (?, ?, ?, ?)",
-		user.ID, user.FirstName, user.LastName, user.Username)
+func (m *Manager) getOrCreateContact(ctx context.Context, user *tg.User, integrationID int64) (int64, error) {
+	externalID := fmt.Sprintf("%d", user.ID)
+	_, err := database.DB.Exec("INSERT OR IGNORE INTO contacts (integration_id, platform, external_id, first_name, last_name, username) VALUES (?, 'tg', ?, ?, ?, ?)",
+		integrationID, externalID, user.FirstName, user.LastName, user.Username)
 	if err != nil {
 		return 0, err
 	}
 
 	var contactID int64
-	err = database.DB.Get(&contactID, "SELECT id FROM contacts WHERE tg_user_id = ?", user.ID)
+	err = database.DB.Get(&contactID, "SELECT id FROM contacts WHERE platform = 'tg' AND external_id = ?", externalID)
 	return contactID, err
 }
 
-func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, accountID int64) error {
+func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, integrationID int64) error {
 	// Verify session first
 	me, err := api.UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUserSelf{}})
 	if err != nil {
@@ -96,7 +97,7 @@ func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, accountID int
 	}
 	if len(me) > 0 {
 		if u, ok := me[0].(*tg.User); ok {
-			logger.Debug(logger.Sync, "[Acc ID %d] Session verified as @%s (%s %s)", accountID, u.Username, u.FirstName, u.LastName)
+			logger.Debug(logger.Sync, "[Int ID %d] Session verified as @%s (%s %s)", integrationID, u.Username, u.FirstName, u.LastName)
 		}
 	}
 
@@ -115,7 +116,7 @@ func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, accountID int
 		if folderID == 1 {
 			folderName = "Archive"
 		}
-		logger.Debug(logger.Sync, "[Acc ID %d] Scanning %s (fetching up to 500 dialogs)...", accountID, folderName)
+		logger.Debug(logger.Sync, "[Int ID %d] Scanning %s (fetching up to 500 dialogs)...", integrationID, folderName)
 
 		res, err := api.MessagesGetDialogs(ctx, &tg.MessagesGetDialogsRequest{
 			OffsetPeer: &tg.InputPeerEmpty{},
@@ -123,7 +124,7 @@ func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, accountID int
 			FolderID:   folderID,
 		})
 		if err != nil {
-			logger.Debug(logger.Sync, "[Acc ID %d] Failed to fetch %s dialogs: %v", accountID, folderName, err)
+			logger.Debug(logger.Sync, "[Int ID %d] Failed to fetch %s dialogs: %v", integrationID, folderName, err)
 			continue
 		}
 
@@ -147,7 +148,7 @@ func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, accountID int
 			}
 		}
 
-		logger.Debug(logger.Sync, "[Acc ID %d] Found %d total dialogs in %s", accountID, len(dialogs), folderName)
+		logger.Debug(logger.Sync, "[Int ID %d] Found %d total dialogs in %s", integrationID, len(dialogs), folderName)
 
 		for _, dClass := range dialogs {
 			d, ok := dClass.(*tg.Dialog)
@@ -170,7 +171,7 @@ func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, accountID int
 		}
 	}
 
-	logger.Debug(logger.Sync, "[Acc ID %d] Found %d unique private chats across folders", accountID, len(uniquePeers))
+	logger.Debug(logger.Sync, "[Int ID %d] Found %d unique private chats across folders", integrationID, len(uniquePeers))
 
 	for _, info := range uniquePeers {
 		if info.user.Bot {
@@ -179,22 +180,22 @@ func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, accountID int
 		}
 
 		logger.Debug(logger.Sync, "[Trace] Syncing private chat: %s", info.name)
-		contactID, err := m.getOrCreateContact(ctx, info.user)
+		contactID, err := m.getOrCreateContact(ctx, info.user, integrationID)
 		if err != nil {
-			logger.Debug(logger.Sync, "[Acc ID %d] Failed to ensure contact %s: %v", accountID, info.name, err)
+			logger.Debug(logger.Sync, "[Int ID %d] Failed to ensure contact %s: %v", integrationID, info.name, err)
 			continue
 		}
 
-		if err := m.SyncHistory(ctx, api, info.user, contactID, accountID); err != nil {
-			logger.Debug(logger.Sync, "[Acc ID %d] Failed to sync history for %s: %v", accountID, info.name, err)
+		if err := m.SyncHistory(ctx, api, info.user, contactID, integrationID); err != nil {
+			logger.Debug(logger.Sync, "[Int ID %d] Failed to sync history for %s: %v", integrationID, info.name, err)
 		}
 	}
 
-	logger.Debug(logger.Sync, "[Acc ID %d] Initial sync finished", accountID)
+	logger.Debug(logger.Sync, "[Int ID %d] Initial sync finished", integrationID)
 	return nil
 }
 
-func (m *Manager) HandleNewMessage(ctx context.Context, api *tg.Client, u *tg.UpdateNewMessage, users map[int64]*tg.User, accountID int64) error {
+func (m *Manager) HandleNewMessage(ctx context.Context, api *tg.Client, u *tg.UpdateNewMessage, users map[int64]*tg.User, integrationID int64) error {
 	msg, ok := u.Message.(*tg.Message)
 	if !ok {
 		return nil
@@ -211,12 +212,12 @@ func (m *Manager) HandleNewMessage(ctx context.Context, api *tg.Client, u *tg.Up
 	var user *tg.User
 	user, ok = users[userID]
 	if !ok {
-		logger.Debug(logger.Sync, "[Acc ID %d] Fetching missing user info for %d...", accountID, userID)
+		logger.Debug(logger.Sync, "[Int ID %d] Fetching missing user info for %d...", integrationID, userID)
 		usersRes, err := api.UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUser{
 			UserID: userID,
 		}})
 		if err != nil {
-			logger.Debug(logger.Sync, "[Acc ID %d] Failed to fetch user %d: %v", accountID, userID, err)
+			logger.Debug(logger.Sync, "[Int ID %d] Failed to fetch user %d: %v", integrationID, userID, err)
 			return nil
 		}
 
@@ -228,38 +229,39 @@ func (m *Manager) HandleNewMessage(ctx context.Context, api *tg.Client, u *tg.Up
 	}
 
 	if user == nil {
-		logger.Debug(logger.Sync, "[Acc ID %d] Could not resolve user %d", accountID, userID)
+		logger.Debug(logger.Sync, "[Int ID %d] Could not resolve user %d", integrationID, userID)
 		return nil
 	}
 
-	contactID, err := m.getOrCreateContact(ctx, user)
+	contactID, err := m.getOrCreateContact(ctx, user, integrationID)
 	if err != nil {
-		logger.Debug(logger.Sync, "[Acc ID %d] DB Error handling contact: %v", accountID, err)
+		logger.Debug(logger.Sync, "[Int ID %d] DB Error handling contact: %v", integrationID, err)
 		return err
 	}
 
 	// Save message
-	_, err = database.DB.Exec("INSERT OR IGNORE INTO messages (account_id, contact_id, tg_message_id, text, is_incoming, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-		accountID, contactID, msg.ID, text, !msg.Out, time.Unix(int64(msg.Date), 0))
+	externalID := fmt.Sprintf("%d", msg.ID)
+	_, err = database.DB.Exec("INSERT OR IGNORE INTO messages (integration_id, contact_id, external_id, text, is_incoming, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+		integrationID, contactID, externalID, text, !msg.Out, time.Unix(int64(msg.Date), 0))
 	if err != nil {
-		logger.Debug(logger.Sync, "[Acc ID %d] DB Error saving message: %v", accountID, err)
+		logger.Debug(logger.Sync, "[Int ID %d] DB Error saving message: %v", integrationID, err)
 		return err
 	}
 
-	logger.Debug(logger.Sync, "[Acc ID %d] Captured message from @%s", accountID, user.Username)
+	logger.Debug(logger.Sync, "[Int ID %d] Captured message from @%s", integrationID, user.Username)
 
 	// Background sync history for this user to ensure we didn't miss anything
 	go func() {
-		if err := m.SyncHistory(ctx, api, user, contactID, accountID); err != nil {
-			logger.Debug(logger.Sync, "[Acc ID %d] Background sync failed for @%s: %v", accountID, user.Username, err)
+		if err := m.SyncHistory(ctx, api, user, contactID, integrationID); err != nil {
+			logger.Debug(logger.Sync, "[Int ID %d] Background sync failed for @%s: %v", integrationID, user.Username, err)
 		}
 	}()
 
 	return nil
 }
 
-func (m *Manager) SyncHistory(ctx context.Context, api *tg.Client, user *tg.User, contactID, accountID int64) error {
-	logger.Debug(logger.Sync, "[Acc ID %d] Syncing history for @%s...", accountID, user.Username)
+func (m *Manager) SyncHistory(ctx context.Context, api *tg.Client, user *tg.User, contactID, integrationID int64) error {
+	logger.Debug(logger.Sync, "[Int ID %d] Syncing history for @%s...", integrationID, user.Username)
 
 	// Telegram might return different types of message lists
 	var messages []tg.MessageClass
@@ -289,10 +291,11 @@ func (m *Manager) SyncHistory(ctx context.Context, api *tg.Client, user *tg.User
 		}
 
 		// Use INSERT OR IGNORE to avoid duplicates if message was already captured live
-		res, err := database.DB.Exec("INSERT OR IGNORE INTO messages (account_id, contact_id, tg_message_id, text, is_incoming, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-			accountID, contactID, msg.ID, msg.Message, !msg.Out, time.Unix(int64(msg.Date), 0))
+		externalID := fmt.Sprintf("%d", msg.ID)
+		res, err := database.DB.Exec("INSERT OR IGNORE INTO messages (integration_id, contact_id, external_id, text, is_incoming, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+			integrationID, contactID, externalID, msg.Message, !msg.Out, time.Unix(int64(msg.Date), 0))
 		if err != nil {
-			logger.Debug(logger.Sync, "[Acc ID %d] DB Error during sync for @%s: %v", accountID, user.Username, err)
+			logger.Debug(logger.Sync, "[Int ID %d] DB Error during sync for @%s: %v", integrationID, user.Username, err)
 			continue
 		}
 
@@ -303,7 +306,7 @@ func (m *Manager) SyncHistory(ctx context.Context, api *tg.Client, user *tg.User
 	}
 
 	if newMsgs > 0 {
-		logger.Debug(logger.Sync, "[Acc ID %d] Finished sync for @%s: saved %d new messages", accountID, user.Username, newMsgs)
+		logger.Debug(logger.Sync, "[Int ID %d] Finished sync for @%s: saved %d new messages", integrationID, user.Username, newMsgs)
 	}
 	return nil
 }

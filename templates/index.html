@@ -1,46 +1,84 @@
 {{ define "content" }}
-<div class="grid grid-cols-12 gap-8 h-[calc(100vh-140px)]">
-    <!-- Left: Recruiter/Contact List -->
-    <div class="col-span-12 lg:col-span-4 bg-white rounded-xl shadow-lg flex flex-col overflow-hidden border border-gray-200">
-        <div class="p-5 border-b bg-gray-50 flex justify-between items-center">
-            <h2 class="text-xl font-bold text-gray-800">Recruiters</h2>
-            <span class="bg-blue-600 text-white text-[10px] px-2 py-1 rounded-full animate-pulse uppercase font-bold tracking-widest">LIVE</span>
-        </div>
-        
-        <div id="contact-list" 
-             hx-get="/contacts" 
-             hx-trigger="load, every 10s" 
-             hx-swap="innerHTML" 
-             class="flex-1 overflow-y-auto divide-y divide-gray-100">
-            <div class="flex flex-col items-center justify-center h-full text-gray-400 p-8 space-y-4">
-                <svg class="w-12 h-12 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <p class="italic text-sm">Scanning for recruiters...</p>
+<div class="flex flex-col space-y-4 h-[calc(100vh-140px)]">
+    <!-- Top Filter Bar -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
+        <div class="flex items-center space-x-6">
+            <div class="flex flex-col">
+                <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Active Account</label>
+                <select name="account_id" 
+                        class="bg-gray-50 border-2 border-gray-100 rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
+                        hx-get="/contacts"
+                        hx-target="#contact-list"
+                        hx-include="[name='platform']">
+                    <option value="">All Accounts</option>
+                    {{ range . }}
+                    <option value="{{ .ID }}">{{ .Name }}</option>
+                    {{ end }}
+                </select>
             </div>
+
+            <div class="flex flex-col">
+                <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Platform Filter</label>
+                <div class="flex items-center space-x-2" id="plat-filters">
+                    <button class="px-3 py-2 rounded-lg border-2 border-blue-500 bg-blue-50 transition-colors plat-btn active"
+                            hx-get="/contacts" hx-target="#contact-list" hx-include="[name='account_id']" hx-vals='{"platform": ""}'
+                            onclick="document.querySelectorAll('.plat-btn').forEach(b => b.classList.remove('border-blue-500', 'bg-blue-50')); this.classList.add('border-blue-500', 'bg-blue-50')">
+                        <span class="text-[10px] font-black uppercase">All</span>
+                    </button>
+                    <button class="p-2 rounded-lg border-2 border-gray-100 hover:border-blue-500 transition-colors flex items-center space-x-2 plat-btn"
+                            hx-get="/contacts" hx-target="#contact-list" hx-include="[name='account_id']" hx-vals='{"platform": "tg"}'
+                            onclick="document.querySelectorAll('.plat-btn').forEach(b => b.classList.remove('border-blue-500', 'bg-blue-50')); this.classList.add('border-blue-500', 'bg-blue-50')">
+                        <svg class="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.02-1.96 1.25-5.54 3.69-.52.35-.97.52-1.35.51-.42-.01-1.24-.24-1.84-.44-.74-.24-1.33-.37-1.28-.79.03-.22.33-.44.89-.67 3.49-1.52 5.82-2.52 6.99-3.01 3.32-1.39 4.02-1.63 4.47-1.63.1 0 .32.02.46.14.12.1.15.23.16.33.01.07.02.21.01.35z"/></svg>
+                        <span class="text-[10px] font-black uppercase">TG</span>
+                    </button>
+                    <button class="p-2 rounded-lg border-2 border-gray-100 hover:border-blue-500 transition-colors flex items-center space-x-2 plat-btn"
+                            hx-get="/contacts" hx-target="#contact-list" hx-include="[name='account_id']" hx-vals='{"platform": "hh"}'
+                            onclick="document.querySelectorAll('.plat-btn').forEach(b => b.classList.remove('border-blue-500', 'bg-blue-50')); this.classList.add('border-blue-500', 'bg-blue-50')">
+                        <span class="text-red-500 font-black text-xs">HH</span>
+                        <span class="text-[10px] font-black uppercase">HH</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+            <span class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Sync Active</span>
         </div>
     </div>
 
-    <!-- Right: Message History -->
-    <div class="col-span-12 lg:col-span-8 bg-white rounded-xl shadow-lg flex flex-col overflow-hidden border border-gray-200">
-        <div class="p-5 border-b bg-gray-50">
-            <h2 class="text-xl font-bold text-gray-800">Conversation</h2>
-        </div>
-        
-        <div id="chat-history" 
-             hx-trigger="every 5s"
-             data-current-contact=""
-             class="flex-1 overflow-y-auto bg-slate-50 relative">
-            <div class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 space-y-4">
-                <div class="p-6 bg-white rounded-full shadow-sm border border-gray-100">
-                    <svg class="w-16 h-16 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+    <div class="grid grid-cols-12 gap-6 flex-1 overflow-hidden">
+        <!-- Left: Recruiter/Contact List -->
+        <div class="col-span-12 lg:col-span-4 bg-white rounded-xl shadow-lg flex flex-col overflow-hidden border border-gray-200">
+            <div id="contact-list" 
+                 hx-get="/contacts" 
+                 hx-trigger="load, every 15s" 
+                 hx-swap="innerHTML" 
+                 hx-include="[name='account_id'], [name='platform']"
+                 class="flex-1 overflow-y-auto divide-y divide-gray-100">
+                <div class="flex flex-col items-center justify-center h-full text-gray-400 p-8 space-y-4">
+                    <svg class="w-12 h-12 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
+                    <p class="italic text-sm">Scanning recruiters...</p>
                 </div>
-                <div class="text-center">
-                    <p class="font-medium text-gray-500">No contact selected</p>
-                    <p class="text-sm">Pick a recruiter from the list to see your history.</p>
+            </div>
+        </div>
+
+        <!-- Right: Message History -->
+        <div class="col-span-12 lg:col-span-8 bg-white rounded-xl shadow-lg flex flex-col overflow-hidden border border-gray-200">
+            <div id="chat-history" 
+                 class="flex-1 overflow-y-auto bg-slate-50 relative">
+                <div class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 space-y-4">
+                    <div class="p-6 bg-white rounded-full shadow-sm border border-gray-100">
+                        <svg class="w-16 h-16 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                        </svg>
+                    </div>
+                    <div class="text-center">
+                        <p class="font-medium text-gray-500">Select contact</p>
+                    </div>
                 </div>
             </div>
         </div>

@@ -19,6 +19,12 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/contacts", handleContacts)
 	mux.HandleFunc("/messages/", handleMessages)
 	mux.HandleFunc("/accounts", handleAccounts)
+	mux.HandleFunc("/accounts/create", handleCreateAccount)
+	mux.HandleFunc("/accounts/toggle", handleToggleAccount)
+	mux.HandleFunc("/accounts/delete", handleDeleteAccount)
+	mux.HandleFunc("/integrations/create", handleCreateIntegration)
+	mux.HandleFunc("/integrations/toggle", handleToggleIntegration)
+	mux.HandleFunc("/integrations/delete", handleDeleteIntegration)
 	mux.HandleFunc("/pipeline", handlePipeline)
 	mux.HandleFunc("/contacts/", handleContactActions) // Catch-all for /contacts/{id}/actions etc
 	mux.HandleFunc("/sequences/create", handleCreateSequence)
@@ -35,11 +41,15 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+
+	var accounts []models.Account
+	database.DB.Select(&accounts, "SELECT * FROM accounts WHERE status = 'active' ORDER BY name")
+
 	tmpl := template.Must(template.ParseFiles(
 		"templates/layout.html",
 		"templates/index.html",
 	))
-	tmpl.ExecuteTemplate(w, "layout.html", nil)
+	tmpl.ExecuteTemplate(w, "layout.html", accounts)
 }
 
 func handleAccounts(w http.ResponseWriter, r *http.Request) {
@@ -50,20 +60,95 @@ func handleAccounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	type AccountWithIntegrations struct {
+		models.Account
+		Integrations []models.Integration
+	}
+	var data []AccountWithIntegrations
+	for _, acc := range accounts {
+		var ints []models.Integration
+		database.DB.Select(&ints, "SELECT * FROM integrations WHERE account_id = ?", acc.ID)
+		data = append(data, AccountWithIntegrations{acc, ints})
+	}
+
 	tmpl := template.Must(template.ParseFiles(
 		"templates/layout.html",
 		"templates/accounts.html",
 	))
-	tmpl.ExecuteTemplate(w, "layout.html", accounts)
+	tmpl.ExecuteTemplate(w, "layout.html", data)
+}
+
+func handleCreateAccount(w http.ResponseWriter, r *http.Request) {
+	name := r.FormValue("name")
+	if name == "" {
+		http.Error(w, "Name required", 400)
+		return
+	}
+	database.DB.MustExec("INSERT INTO accounts (name, status) VALUES (?, 'active')", name)
+	http.Redirect(w, r, "/accounts", 303)
+}
+
+func handleToggleAccount(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	var status string
+	database.DB.Get(&status, "SELECT status FROM accounts WHERE id = ?", id)
+	newStatus := "active"
+	if status == "active" {
+		newStatus = "inactive"
+	}
+	database.DB.MustExec("UPDATE accounts SET status = ? WHERE id = ?", newStatus, id)
+	http.Redirect(w, r, "/accounts", 303)
+}
+
+func handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	database.DB.MustExec("DELETE FROM accounts WHERE id = ?", id)
+	http.Redirect(w, r, "/accounts", 303)
+}
+
+func handleCreateIntegration(w http.ResponseWriter, r *http.Request) {
+	accID := r.FormValue("account_id")
+	platform := r.FormValue("platform")
+	identifier := r.FormValue("identifier")
+
+	status := "pending_auth"
+	sessionPath := ""
+	if platform == "tg" {
+		// Create session directory if it doesn't exist
+		sessionDir := "sessions"
+		sessionPath = fmt.Sprintf("%s/%s.session", sessionDir, identifier)
+	} else if platform == "hh" {
+		status = "inactive" // HH unimplemented
+	}
+
+	database.DB.MustExec("INSERT INTO integrations (account_id, platform, identifier, status, session_path) VALUES (?, ?, ?, ?, ?)",
+		accID, platform, identifier, status, sessionPath)
+
+	http.Redirect(w, r, "/accounts", 303)
+}
+
+func handleToggleIntegration(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	var status string
+	database.DB.Get(&status, "SELECT status FROM integrations WHERE id = ?", id)
+	newStatus := "active"
+	if status == "active" {
+		newStatus = "inactive"
+	}
+	database.DB.MustExec("UPDATE integrations SET status = ? WHERE id = ?", newStatus, id)
+	http.Redirect(w, r, "/accounts", 303)
+}
+
+func handleDeleteIntegration(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	database.DB.MustExec("DELETE FROM integrations WHERE id = ?", id)
+	http.Redirect(w, r, "/accounts", 303)
 }
 
 func handleContacts(w http.ResponseWriter, r *http.Request) {
-	type ContactWithLastMsg struct {
-		models.Contact
-		LastMessage string `db:"last_message"`
-		LastTime    string `db:"last_time"`
-	}
-	var contacts []ContactWithLastMsg
+	activeAccountID := r.URL.Query().Get("account_id")
+	platformFilter := r.URL.Query().Get("platform") // "tg", "hh", or empty for both
+
 	query := `
 		SELECT c.*, 
 		       COALESCE((SELECT text FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1), 'No messages yet') as last_message,
@@ -71,28 +156,31 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 			   EXISTS(SELECT 1 FROM sequence_contacts WHERE contact_id = c.id) as in_sequence,
 			   COALESCE((SELECT s.status FROM sequences s JOIN sequence_contacts sc ON s.id = sc.sequence_id WHERE sc.contact_id = c.id LIMIT 1), '') as seq_status
 		FROM contacts c
-		ORDER BY last_time DESC`
+		JOIN integrations i ON c.integration_id = i.id
+		WHERE 1=1`
 
-	err := database.DB.Select(&contacts, query)
+	args := []interface{}{}
+	if activeAccountID != "" {
+		query += " AND i.account_id = ?"
+		args = append(args, activeAccountID)
+	}
+	if platformFilter != "" {
+		query += " AND c.platform = ?"
+		args = append(args, platformFilter)
+	}
+	query += " ORDER BY last_time DESC"
+
+	type ContactWithLastMsg struct {
+		models.Contact
+		LastMessage string `db:"last_message"`
+		LastTime    string `db:"last_time"`
+	}
+	var contacts []ContactWithLastMsg
+	err := database.DB.Select(&contacts, query, args...)
 	if err != nil {
 		log.Printf("Web: Error fetching contacts: %v", err)
 		http.Error(w, err.Error(), 500)
 		return
-	}
-
-	// Simple check for new messages to trigger browser notification
-	if len(contacts) > 0 {
-		lt, _ := time.Parse("2006-01-02 15:04:05", contacts[0].LastTime)
-		if time.Since(lt).Seconds() < 15 {
-			// Only trigger if it's an incoming message
-			var isIncoming bool
-			database.DB.Get(&isIncoming, "SELECT is_incoming FROM messages WHERE contact_id = ? ORDER BY timestamp DESC LIMIT 1", contacts[0].ID)
-
-			if isIncoming {
-				w.Header().Set("HX-Trigger", fmt.Sprintf(`{"new-message": {"sender": "%s", "text": "%s"}}`,
-					contacts[0].FirstName, strings.ReplaceAll(contacts[0].LastMessage, `"`, `'`)))
-			}
-		}
 	}
 
 	for _, c := range contacts {
@@ -114,36 +202,39 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 			default:
 				color = "bg-blue-500"
 			}
-			statusIndicator = fmt.Sprintf(`<span class="w-2 h-2 rounded-full %s ml-2" title="Sequence: %s"></span>`, color, c.SeqStatus)
+			statusIndicator = fmt.Sprintf(`<span class="w-2 h-2 rounded-full %s ml-2"></span>`, color)
+		}
+
+		platformIcon := `<span class="text-blue-400" title="Telegram">
+			<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.02-1.96 1.25-5.54 3.69-.52.35-.97.52-1.35.51-.42-.01-1.24-.24-1.84-.44-.74-.24-1.33-.37-1.28-.79.03-.22.33-.44.89-.67 3.49-1.52 5.82-2.52 6.99-3.01 3.32-1.39 4.02-1.63 4.47-1.63.1 0 .32.02.46.14.12.1.15.23.16.33.01.07.02.21.01.35z"/></svg>
+		</span>`
+		if c.Platform == "hh" {
+			platformIcon = `<span class="text-red-500 font-black text-[10px]" title="HeadHunter">HH</span>`
 		}
 
 		fmt.Fprintf(w, `
 			<div class="p-3 border-b cursor-pointer hover:bg-blue-50 transition-colors contact-item group relative" 
 			     hx-get="/messages/%d" 
 				 hx-target="#chat-history"
-				 hx-on:htmx:after-request="htmx.find('#chat-history').setAttribute('hx-get', '/messages/%d')"
 				 onclick="document.querySelectorAll('.contact-item').forEach(el => el.classList.remove('bg-blue-100')); this.classList.add('bg-blue-100')">
 				<div class="flex justify-between items-start">
-					<div class="flex items-center">
-						<p class="font-bold text-blue-800">%s %s</p>
+					<div class="flex items-center space-x-2">
+						%s
+						<p class="font-bold text-blue-800 text-sm">%s %s</p>
 						%s
 					</div>
 					<span class="text-[10px] text-gray-400">@%s</span>
 				</div>
-				<p class="text-xs text-gray-600 truncate">%s</p>
+				<p class="text-[11px] text-gray-600 truncate mt-1">%s</p>
 				
-				<!-- Action menu button (dots) -->
 				<button class="absolute right-2 bottom-2 opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded transition-opacity"
 				        hx-get="/contacts/%d/actions"
 						hx-target="#modal-container"
-						hx-swap="innerHTML"
 						onclick="event.stopPropagation()">
-					<svg class="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
-						<path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
-					</svg>
+					<svg class="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg>
 				</button>
 			</div>
-		`, c.ID, c.ID, c.FirstName, c.LastName, statusIndicator, c.Username, html.EscapeString(lastMsg), c.ID)
+		`, c.ID, platformIcon, c.FirstName, c.LastName, statusIndicator, c.Username, html.EscapeString(lastMsg), c.ID)
 	}
 }
 
@@ -217,11 +308,21 @@ func handlePipeline(w http.ResponseWriter, r *http.Request) {
 		view = "kanban"
 	}
 
+	activeAccountID := r.URL.Query().Get("account_id")
+
 	var allAccounts []models.Account
-	database.DB.Select(&allAccounts, "SELECT * FROM accounts ORDER BY phone_number")
+	database.DB.Select(&allAccounts, "SELECT * FROM accounts ORDER BY name")
 
 	var sequences []models.Sequence
-	err := database.DB.Select(&sequences, "SELECT * FROM sequences ORDER BY created_at DESC")
+	query := "SELECT * FROM sequences"
+	args := []interface{}{}
+	if activeAccountID != "" {
+		query += " WHERE account_id = ?"
+		args = append(args, activeAccountID)
+	}
+	query += " ORDER BY created_at DESC"
+
+	err := database.DB.Select(&sequences, query, args...)
 	if err != nil {
 		log.Printf("Web: Error fetching sequences: %v", err)
 		http.Error(w, err.Error(), 500)
@@ -545,7 +646,11 @@ func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	// Find the account associated with this contact
 	var accountID *int64
 	var foundID int64
-	err = tx.Get(&foundID, "SELECT account_id FROM messages WHERE contact_id = ? AND account_id IS NOT NULL LIMIT 1", contactID)
+	err = tx.Get(&foundID, `
+		SELECT i.account_id FROM messages m 
+		JOIN integrations i ON m.integration_id = i.id 
+		WHERE m.contact_id = ? AND i.account_id IS NOT NULL LIMIT 1
+	`, contactID)
 	if err == nil {
 		accountID = &foundID
 		logger.Debug(logger.AddSequence, "Found account ID %d from previous messages", foundID)

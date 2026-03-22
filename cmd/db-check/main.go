@@ -46,13 +46,32 @@ func main() {
 
 	type Acc struct {
 		ID     int64  `db:"id"`
+		Name   string `db:"name"`
 		Status string `db:"status"`
 	}
 	var accs []Acc
-	err = db.Select(&accs, "SELECT id, status FROM accounts")
+	err = db.Select(&accs, "SELECT id, name, status FROM accounts")
 	if err == nil {
 		for _, a := range accs {
-			fmt.Printf(" - Acc ID %d: %s\n", a.ID, a.Status)
+			fmt.Printf(" - Acc ID %d: %s (%s)\n", a.ID, a.Name, a.Status)
+		}
+	}
+
+	var intCount int
+	err = db.Get(&intCount, "SELECT count(*) FROM integrations")
+	fmt.Printf("Integrations: %d (err: %v)\n", intCount, err)
+
+	type Integration struct {
+		ID         int64  `db:"id"`
+		AccountID  int64  `db:"account_id"`
+		Platform   string `db:"platform"`
+		Identifier string `db:"identifier"`
+	}
+	var ints []Integration
+	err = db.Select(&ints, "SELECT id, account_id, platform, identifier FROM integrations")
+	if err == nil {
+		for _, i := range ints {
+			fmt.Printf(" - Int ID %d: %s (%s) -> Acc %d\n", i.ID, i.Identifier, i.Platform, i.AccountID)
 		}
 	}
 

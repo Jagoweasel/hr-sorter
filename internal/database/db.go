@@ -27,32 +27,46 @@ func InitDB(path string) {
 	schema := `
 	CREATE TABLE IF NOT EXISTS accounts (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		phone_number TEXT UNIQUE NOT NULL,
+		name TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'active',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS integrations (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		account_id INTEGER,
+		platform TEXT NOT NULL,
+		identifier TEXT NOT NULL,
 		status TEXT NOT NULL DEFAULT 'pending_auth',
 		session_path TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+		UNIQUE(platform, identifier)
 	);
 
 	CREATE TABLE IF NOT EXISTS contacts (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		tg_user_id INTEGER UNIQUE NOT NULL,
+		integration_id INTEGER,
+		platform TEXT NOT NULL DEFAULT 'tg',
+		external_id TEXT UNIQUE NOT NULL,
 		first_name TEXT,
 		last_name TEXT,
 		username TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (integration_id) REFERENCES integrations(id) ON DELETE CASCADE
 	);
 
 	CREATE TABLE IF NOT EXISTS messages (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		account_id INTEGER,
+		integration_id INTEGER,
 		contact_id INTEGER,
-		tg_message_id INTEGER,
+		external_id TEXT,
 		text TEXT,
 		is_incoming BOOLEAN,
 		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(account_id, contact_id, tg_message_id),
-		FOREIGN KEY (account_id) REFERENCES accounts(id),
-		FOREIGN KEY (contact_id) REFERENCES contacts(id)
+		UNIQUE(integration_id, contact_id, external_id),
+		FOREIGN KEY (integration_id) REFERENCES integrations(id) ON DELETE CASCADE,
+		FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE
 	);
 
 	CREATE TABLE IF NOT EXISTS sequences (
@@ -62,7 +76,7 @@ func InitDB(path string) {
 		vacancy_name TEXT NOT NULL,
 		status TEXT DEFAULT 'initial',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (account_id) REFERENCES accounts(id)
+		FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
 	);
 
 	CREATE TABLE IF NOT EXISTS sequence_contacts (
@@ -86,24 +100,58 @@ func InitDB(path string) {
 	);`
 
 	log.Println("[DB] Verifying schema...")
-	DB.MustExec(schema)
-	log.Println("[DB] Schema verified.")
 
-	// Migration: Add tg_message_id if it doesn't exist
-	var hasColumn bool
-	err = DB.Get(&hasColumn, "SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='tg_message_id'")
-	if err == nil && !hasColumn {
-		log.Println("[DB] Migrating database: adding tg_message_id to messages table...")
-		DB.MustExec("ALTER TABLE messages ADD COLUMN tg_message_id INTEGER")
-		DB.MustExec("CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_unique_sync ON messages(account_id, contact_id, tg_message_id)")
-		log.Println("[DB] Migration finished.")
-	}
+	// Check if we need to migrate from old accounts table
+	var hasIntegrations bool
+	err = DB.Get(&hasIntegrations, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='integrations'")
+	if err == nil && !hasIntegrations {
+		log.Println("[DB] Old schema detected. Starting migration...")
 
-	// Migration: Add account_id to sequences if it doesn't exist
-	err = DB.Get(&hasColumn, "SELECT COUNT(*) FROM pragma_table_info('sequences') WHERE name='account_id'")
-	if err == nil && !hasColumn {
-		log.Println("[DB] Migrating database: adding account_id to sequences table...")
-		DB.MustExec("ALTER TABLE sequences ADD COLUMN account_id INTEGER REFERENCES accounts(id)")
+		// 1. Rename old tables
+		DB.MustExec("ALTER TABLE accounts RENAME TO accounts_old")
+		DB.MustExec("ALTER TABLE contacts RENAME TO contacts_old")
+		DB.MustExec("ALTER TABLE messages RENAME TO messages_old")
+
+		// 2. Create new schema
+		DB.MustExec(schema)
+
+		// 3. Create a default account
+		var accountID int64
+		res := DB.MustExec("INSERT INTO accounts (name, status) VALUES ('Default Account', 'active')")
+		accountID, _ = res.LastInsertId()
+
+		// 4. Migrate integrations
+		DB.MustExec(`
+			INSERT INTO integrations (account_id, platform, identifier, status, session_path, created_at)
+			SELECT ?, 'tg', phone_number, status, session_path, created_at FROM accounts_old
+		`, accountID)
+
+		// 5. Migrate contacts
+		// We need to link contacts to their respective integration.
+		// Since we only had one account type before, we just link to the first integration of 'tg' type.
+		var integrationID int64
+		DB.Get(&integrationID, "SELECT id FROM integrations WHERE platform = 'tg' LIMIT 1")
+
+		DB.MustExec(`
+			INSERT INTO contacts (integration_id, platform, external_id, first_name, last_name, username, created_at)
+			SELECT ?, 'tg', CAST(tg_user_id AS TEXT), first_name, last_name, username, created_at FROM contacts_old
+		`, integrationID)
+
+		// 6. Migrate messages
+		// We map contacts_old ids to new contacts ids.
+		DB.MustExec(`
+			INSERT INTO messages (integration_id, contact_id, external_id, text, is_incoming, timestamp)
+			SELECT ?, n.id, CAST(o.tg_message_id AS TEXT), o.text, o.is_incoming, o.timestamp
+			FROM messages_old o
+			JOIN contacts n ON CAST(o.contact_id AS TEXT) = n.external_id
+		`, integrationID)
+
+		// 7. Update sequences
+		DB.MustExec("UPDATE sequences SET account_id = ?", accountID)
+
 		log.Println("[DB] Migration finished.")
+	} else {
+		DB.MustExec(schema)
+		log.Println("[DB] Schema verified.")
 	}
 }

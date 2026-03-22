@@ -58,24 +58,28 @@ func main() {
 
 	manager := tgclient.NewManager(apiID, apiHash)
 
-	// Fetch active accounts from DB
-	var accounts []models.Account
-	err := database.DB.Select(&accounts, "SELECT * FROM accounts WHERE status = 'active'")
+	// Fetch active TG integrations from active accounts
+	var integrations []models.Integration
+	err := database.DB.Select(&integrations, `
+		SELECT i.* FROM integrations i
+		JOIN accounts a ON i.account_id = a.id
+		WHERE i.platform = 'tg' AND i.status = 'active' AND a.status = 'active'
+	`)
 	if err != nil {
-		log.Fatalf("[Main] Failed to fetch accounts: %v", err)
+		log.Fatalf("[Main] Failed to fetch integrations: %v", err)
 	}
-	log.Printf("[Main] Found %d active accounts.", len(accounts))
+	log.Printf("[Main] Found %d active TG integrations.", len(integrations))
 
 	// Create root context for signal handling
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	for _, acc := range accounts {
-		go func(a models.Account) {
-			if err := manager.StartAccount(ctx, a); err != nil {
-				log.Printf("[Main] Account %s failed: %v", a.PhoneNumber, err)
+	for _, integration := range integrations {
+		go func(i models.Integration) {
+			if err := manager.StartIntegration(ctx, i); err != nil {
+				log.Printf("[Main] Integration %s failed: %v", i.Identifier, err)
 			}
-		}(acc)
+		}(integration)
 	}
 
 	mux := http.NewServeMux()

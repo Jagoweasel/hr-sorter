@@ -1,42 +1,135 @@
 {{ define "content" }}
-<div class="max-w-4xl mx-auto bg-white p-6 rounded shadow">
-    <div class="flex justify-between items-center mb-6 border-b pb-4">
-        <h2 class="text-2xl font-bold text-gray-800">Linked Accounts</h2>
-        <a href="/" class="text-blue-600 hover:underline">Back to Dashboard</a>
+<div class="max-w-5xl mx-auto space-y-8 pb-20">
+    <div class="flex justify-between items-end border-b pb-6">
+        <div>
+            <h1 class="text-3xl font-black text-gray-900 tracking-tight">Account Management</h1>
+            <p class="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Manage platform integrations</p>
+        </div>
+        <button onclick="document.getElementById('new-account-modal').classList.remove('hidden')" 
+                class="px-6 py-2.5 bg-gray-900 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all shadow-xl">
+            + New Account
+        </button>
     </div>
 
-    <table class="w-full text-left border-collapse">
-        <thead>
-            <tr class="bg-gray-100">
-                <th class="p-3 border">Phone Number</th>
-                <th class="p-3 border">Status</th>
-                <th class="p-3 border">Added On</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{ range . }}
-            <tr class="hover:bg-gray-50">
-                <td class="p-3 border font-mono">{{ .PhoneNumber }}</td>
-                <td class="p-3 border text-center">
-                    {{ if eq .Status "active" }}
-                    <span class="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded border border-green-400">ACTIVE</span>
-                    {{ else }}
-                    <span class="bg-yellow-100 text-yellow-800 text-xs font-semibold px-2.5 py-0.5 rounded border border-yellow-400">{{ .Status }}</span>
-                    {{ end }}
-                </td>
-                <td class="p-3 border text-sm text-gray-600">{{ .CreatedAt.Format "Jan 02, 2006" }}</td>
-            </tr>
-            {{ else }}
-            <tr>
-                <td colspan="3" class="p-8 text-center text-gray-500 italic">No accounts linked yet.</td>
-            </tr>
-            {{ end }}
-        </tbody>
-    </table>
+    <!-- Accounts List -->
+    <div class="grid grid-cols-1 gap-8">
+        {{ range . }}
+        <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="px-8 py-6 bg-gray-50/50 border-b flex justify-between items-center">
+                <div class="flex items-center space-x-4">
+                    <div class="w-12 h-12 rounded-2xl bg-gray-900 text-white flex items-center justify-center font-black text-lg shadow-lg">
+                        {{ slice .Name 0 1 }}
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-black text-gray-900">{{ .Name }}</h2>
+                        <div class="flex items-center space-x-2 mt-1">
+                            <span class="text-[10px] font-black uppercase tracking-tighter px-2 py-0.5 rounded {{ if eq .Status "active" }}bg-green-100 text-green-700{{ else }}bg-gray-100 text-gray-500{{ end }}">
+                                {{ .Status }}
+                            </span>
+                            <span class="text-[10px] text-gray-400 font-bold uppercase">Added {{ .CreatedAt.Format "Jan 02, 2006" }}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <a href="/accounts/toggle?id={{ .ID }}" class="px-4 py-2 bg-white border border-gray-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-50 transition-colors">
+                        {{ if eq .Status "active" }}Deactivate{{ else }}Activate{{ end }}
+                    </a>
+                    <a href="/accounts/delete?id={{ .ID }}" onclick="return confirm('Delete account and all its integrations?')" class="p-2 text-gray-300 hover:text-red-500 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </a>
+                </div>
+            </div>
 
-    <div class="mt-8 p-4 bg-blue-50 border border-blue-200 rounded">
-        <h3 class="font-bold text-blue-800 mb-2">How to add more?</h3>
-        <p class="text-sm text-blue-700">Use the CLI helper: <code>go run cmd/add-account/main.go</code></p>
+            <!-- Integrations in this account -->
+            <div class="p-8">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Platform Integrations</h3>
+                    <div class="flex space-x-2">
+                        <button onclick="document.getElementById('acc-id-input').value='{{ .ID }}'; document.getElementById('platform-input').value='tg'; document.getElementById('new-int-modal').classList.remove('hidden')" 
+                                class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-blue-100 transition-colors border border-blue-100">
+                            + Add Telegram
+                        </button>
+                        <button onclick="document.getElementById('acc-id-input').value='{{ .ID }}'; document.getElementById('platform-input').value='hh'; document.getElementById('new-int-modal').classList.remove('hidden')" 
+                                class="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-red-100 transition-colors border border-red-100">
+                            + Add HeadHunter
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {{ range .Integrations }}
+                    <div class="p-4 rounded-2xl border-2 border-gray-50 flex items-center justify-between group hover:border-blue-100 transition-colors">
+                        <div class="flex items-center space-x-4">
+                            <div class="w-10 h-10 rounded-xl {{ if eq .Platform "tg" }}bg-blue-500{{ else }}bg-red-500{{ end }} text-white flex items-center justify-center font-black text-xs shadow-sm">
+                                {{ if eq .Platform "tg" }}TG{{ else }}HH{{ end }}
+                            </div>
+                            <div>
+                                <p class="text-sm font-black text-gray-900">{{ .Identifier }}</p>
+                                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{{ .Status }}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <a href="/integrations/toggle?id={{ .ID }}" class="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400" title="Toggle Active">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+                            </a>
+                            <a href="/integrations/delete?id={{ .ID }}" onclick="return confirm('Remove integration?')" class="p-1.5 hover:bg-red-50 rounded-lg text-gray-300 hover:text-red-500" title="Delete">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </a>
+                        </div>
+                    </div>
+                    {{ else }}
+                    <div class="col-span-2 py-8 text-center border-2 border-dashed border-gray-100 rounded-2xl">
+                        <p class="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em]">No Integrations Linked</p>
+                    </div>
+                    {{ end }}
+                </div>
+            </div>
+        </div>
+        {{ else }}
+        <div class="py-20 text-center">
+            <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg class="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <h2 class="text-xl font-black text-gray-900">No accounts created yet</h2>
+            <p class="text-sm text-gray-400 mt-2">Start by creating your first named workspace account.</p>
+        </div>
+        {{ end }}
+    </div>
+</div>
+
+<!-- Modal: New Account -->
+<div id="new-account-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-[200]" onclick="if(event.target === this) this.classList.add('hidden')">
+    <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm relative" onclick="event.stopPropagation()">
+        <h2 class="text-xl font-black text-gray-900 tracking-tight mb-6">Create Account</h2>
+        <form action="/accounts/create" method="POST" class="space-y-6">
+            <div>
+                <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Account Name</label>
+                <input type="text" name="name" required class="block w-full border-2 border-gray-100 rounded-xl p-3 text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none transition-colors" placeholder="e.g. Personal, Work, Agency">
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button type="button" onclick="document.getElementById('new-account-modal').classList.add('hidden')" class="px-4 py-2 text-[10px] font-black text-gray-400 uppercase">Cancel</button>
+                <button type="submit" class="px-6 py-2 bg-gray-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg">Create</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: New Integration -->
+<div id="new-int-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-[200]" onclick="if(event.target === this) this.classList.add('hidden')">
+    <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm relative" onclick="event.stopPropagation()">
+        <h2 class="text-xl font-black text-gray-900 tracking-tight mb-6">Add Integration</h2>
+        <form action="/integrations/create" method="POST" class="space-y-6">
+            <input type="hidden" name="account_id" id="acc-id-input">
+            <input type="hidden" name="platform" id="platform-input">
+            <div>
+                <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Phone Number</label>
+                <input type="text" name="identifier" required class="block w-full border-2 border-gray-100 rounded-xl p-3 text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none transition-colors" placeholder="+79991234567">
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button type="button" onclick="document.getElementById('new-int-modal').classList.add('hidden')" class="px-4 py-2 text-[10px] font-black text-gray-400 uppercase">Cancel</button>
+                <button type="submit" class="px-6 py-2 bg-gray-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg">Link</button>
+            </div>
+        </form>
     </div>
 </div>
 {{ end }}

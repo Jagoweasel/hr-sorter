@@ -38,12 +38,16 @@ func main() {
 	apiID, _ := strconv.Atoi(apiIDStr)
 
 	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("Enter account name (e.g. Work): ")
+	accName, _ := reader.ReadString('\n')
+	accName = strings.TrimSpace(accName)
+
 	fmt.Print("Enter phone number (+123456789): ")
 	phone, _ := reader.ReadString('\n')
 	phone = strings.TrimSpace(phone)
 
-	if phone == "" {
-		log.Fatal("Phone number cannot be empty")
+	if phone == "" || accName == "" {
+		log.Fatal("Account name and phone number cannot be empty")
 	}
 
 	// Create sessions directory if it doesn't exist
@@ -81,15 +85,22 @@ func main() {
 			return err
 		}
 
-		// Save account to DB with absolute path to avoid confusion
+		// 1. Create Account
+		res, err := database.DB.Exec("INSERT INTO accounts (name, status) VALUES (?, 'active')", accName)
+		if err != nil {
+			return err
+		}
+		accountID, _ := res.LastInsertId()
+
+		// 2. Save integration to DB
 		absSessionPath, _ := filepath.Abs(sessionFile)
-		_, err := database.DB.Exec("INSERT OR IGNORE INTO accounts (phone_number, status, session_path) VALUES (?, ?, ?)",
-			phone, "active", filepath.ToSlash(absSessionPath))
+		_, err = database.DB.Exec("INSERT OR IGNORE INTO integrations (account_id, platform, identifier, status, session_path) VALUES (?, 'tg', ?, 'active', ?)",
+			accountID, phone, filepath.ToSlash(absSessionPath))
 		if err != nil {
 			return err
 		}
 
-		fmt.Println("\nSuccess! Account added.")
+		fmt.Println("\nSuccess! Account and Integration added.")
 		return nil
 	}); err != nil {
 		log.Fatal(err)
