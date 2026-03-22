@@ -2,6 +2,7 @@ package web
 
 import (
 	"fmt"
+	"html"
 	"html/template"
 	"log"
 	"net/http"
@@ -85,7 +86,7 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, c := range contacts {
-		lastMsg := c.LastMessage
+		lastMsg := strings.ReplaceAll(c.LastMessage, "\n", " ")
 		if len(lastMsg) > 30 {
 			lastMsg = lastMsg[:27] + "..."
 		}
@@ -101,7 +102,7 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 				</div>
 				<p class="text-xs text-gray-600 truncate">%s</p>
 			</div>
-		`, c.ID, c.ID, c.FirstName, c.LastName, c.Username, lastMsg)
+		`, c.ID, c.ID, c.FirstName, c.LastName, c.Username, html.EscapeString(lastMsg))
 	}
 }
 
@@ -133,11 +134,11 @@ func handleMessages(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, `
 			<div class="flex flex-col %s">
 				<div class="%s p-3 rounded-lg max-w-[85%%] shadow-sm">
-					<p class="text-sm text-gray-800">%s</p>
+					<p class="text-sm text-gray-800 whitespace-pre-wrap">%s</p>
 					<p class="text-[9px] text-gray-500 mt-1 text-right">%s</p>
 				</div>
 			</div>
-		`, align, bgColor, m.Text, m.Timestamp.Format("Jan 02, 15:04"))
+		`, align, bgColor, html.EscapeString(m.Text), m.Timestamp.Format("Jan 02, 15:04"))
 	}
 	fmt.Fprint(w, `</div>`)
 }
