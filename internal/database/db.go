@@ -41,6 +41,7 @@ func InitDB(path string) {
 		text TEXT,
 		is_incoming BOOLEAN,
 		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(contact_id, text, timestamp),
 		FOREIGN KEY (account_id) REFERENCES accounts(id),
 		FOREIGN KEY (contact_id) REFERENCES contacts(id)
 	);`

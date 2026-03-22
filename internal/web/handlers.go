@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
+	"time"
 
 	"hr-sorter/internal/database"
 	"hr-sorter/internal/models"
@@ -47,18 +48,35 @@ func handleAccounts(w http.ResponseWriter, r *http.Request) {
 func handleContacts(w http.ResponseWriter, r *http.Request) {
 	type ContactWithLastMsg struct {
 		models.Contact
-		LastMessage string `db:"last_message"`
+		LastMessage string    `db:"last_message"`
+		LastTime    time.Time `db:"last_time"`
 	}
 	var contacts []ContactWithLastMsg
 	query := `
-		SELECT c.*, COALESCE((SELECT text FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1), 'No messages yet') as last_message
+		SELECT c.*, 
+		       COALESCE((SELECT text FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1), 'No messages yet') as last_message,
+			   COALESCE((SELECT timestamp FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1), c.created_at) as last_time
 		FROM contacts c
-		ORDER BY (SELECT timestamp FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1) DESC`
+		ORDER BY last_time DESC`
 
 	err := database.DB.Select(&contacts, query)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+
+	// Simple check for new messages to trigger browser notification
+	// (Comparing with a cookie or session would be better, but this is a start)
+	// We'll just check if the last message in the list was within the last 15 seconds
+	if len(contacts) > 0 && time.Since(contacts[0].LastTime).Seconds() < 15 {
+		// Only trigger if it's an incoming message
+		var isIncoming bool
+		database.DB.Get(&isIncoming, "SELECT is_incoming FROM messages WHERE contact_id = ? ORDER BY timestamp DESC LIMIT 1", contacts[0].ID)
+
+		if isIncoming {
+			w.Header().Set("HX-Trigger", fmt.Sprintf(`{"new-message": {"sender": "%s", "text": "%s"}}`,
+				contacts[0].FirstName, strings.ReplaceAll(contacts[0].LastMessage, `"`, `'`)))
+		}
 	}
 
 	for _, c := range contacts {
