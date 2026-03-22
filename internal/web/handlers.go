@@ -332,18 +332,6 @@ func handlePipeline(w http.ResponseWriter, r *http.Request) {
 		"add": func(a, b int) int {
 			return a + b
 		},
-		"mul": func(a, b float64) float64 {
-			return a * b
-		},
-		"div": func(a, b float64) float64 {
-			if b == 0 {
-				return 0
-			}
-			return a / b
-		},
-		"float64": func(a int) float64 {
-			return float64(a)
-		},
 		"slice": func(s string, start, end int) string {
 			if len(s) < end {
 				return s[start:]

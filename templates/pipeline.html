@@ -1,175 +1,165 @@
 {{ define "content" }}
-<div class="flex flex-col space-y-6 h-screen overflow-hidden">
-    <div class="flex justify-between items-center px-4 pt-4 shrink-0">
-        <h1 class="text-3xl font-bold text-gray-800 tracking-tight">Recruitment Pipeline</h1>
+<div class="flex flex-col space-y-4 h-screen overflow-hidden bg-gray-50">
+    <!-- Header Area -->
+    <div class="flex justify-between items-center px-6 pt-6 shrink-0">
+        <div>
+            <h1 class="text-3xl font-black text-gray-900 tracking-tight">Pipeline</h1>
+            <p class="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Manage recruitment workflows</p>
+        </div>
         
         <!-- View Toggle -->
         <div class="bg-gray-200 p-1 rounded-xl flex space-x-1 shadow-inner border border-gray-300">
             <a href="/pipeline?view=kanban" 
-               class="px-5 py-2 rounded-lg text-sm font-bold transition-all duration-200 {{ if eq .View "kanban" }}bg-white text-blue-600 shadow-md scale-105{{ else }}text-gray-500 hover:text-gray-700{{ end }}">
+               class="px-5 py-2 rounded-lg text-sm font-bold transition-all duration-200 {{ if eq .View "kanban" }}bg-white text-blue-600 shadow-md{{ else }}text-gray-500 hover:text-gray-700{{ end }}">
                 Kanban
             </a>
             <a href="/pipeline?view=timeline" 
-               class="px-5 py-2 rounded-lg text-sm font-bold transition-all duration-200 {{ if eq .View "timeline" }}bg-white text-blue-600 shadow-md scale-105{{ else }}text-gray-500 hover:text-gray-700{{ end }}">
+               class="px-5 py-2 rounded-lg text-sm font-bold transition-all duration-200 {{ if eq .View "timeline" }}bg-white text-blue-600 shadow-md{{ else }}text-gray-500 hover:text-gray-700{{ end }}">
                 Timeline
             </a>
         </div>
     </div>
 
-    <div class="flex-1 overflow-auto px-4 pb-8">
+    <!-- Main Content Area -->
+    <div class="flex-1 overflow-hidden">
         {{ if eq .View "kanban" }}
-        <!-- Unified Horizontal Scroll Container for Kanban -->
-        <div class="inline-flex flex-col min-w-full">
-            <!-- Kanban Header Row (Sticky Top) -->
-            <div class="flex space-x-4 sticky top-0 z-30 bg-gray-100/95 backdrop-blur-sm py-3 border-b-2 border-gray-200 mb-6">
-                <div class="flex-shrink-0 w-64 font-black text-gray-400 text-xs uppercase tracking-[0.2em] flex items-center px-6 sticky left-0 bg-gray-100 z-40 border-r-2 border-gray-200 shadow-[10px_0_15px_-5px_rgba(0,0,0,0.05)]">
-                    Recruiter Account
+        <!-- Kanban Scrollable Container -->
+        <div class="h-full overflow-auto px-6 pb-12">
+            <div class="inline-flex flex-col min-w-full">
+                
+                <!-- Kanban Header -->
+                <div class="flex flex-nowrap space-x-6 sticky top-0 z-30 bg-gray-50/95 backdrop-blur-md py-4 border-b border-gray-200">
+                    <!-- Account Header Spacer -->
+                    <div class="w-64 shrink-0 font-black text-gray-400 text-[10px] uppercase tracking-[0.2em] flex items-center px-4 sticky left-0 bg-gray-50 z-40 border-r border-gray-200">
+                        Recruiters
+                    </div>
+                    <!-- Status Headers -->
+                    {{ range .ColumnDefs }}
+                    <div class="w-80 shrink-0">
+                        <div class="flex items-center justify-between px-2">
+                            <span class="font-black text-gray-700 text-xs uppercase tracking-widest">{{ .Label }}</span>
+                            <div class="h-1.5 w-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div>
+                        </div>
+                        <div class="mt-3 h-1 w-full rounded-full border-b-4 {{ .BorderClass }}"></div>
+                    </div>
+                    {{ end }}
                 </div>
-                {{ range .ColumnDefs }}
-                <div class="flex-shrink-0 w-80 font-black text-gray-700 text-xs uppercase tracking-widest px-6 py-2 border-b-4 {{ .BorderClass }} flex items-center justify-between group">
-                    <span>{{ .Label }}</span>
-                    <div class="h-2 w-2 rounded-full bg-gray-300 group-hover:animate-ping"></div>
-                </div>
-                {{ end }}
-            </div>
 
-            <!-- Kanban Body Groups (Account Rows) -->
-            <div class="space-y-16">
-                {{ range .Groups }}
-                <div class="flex space-x-4 group/row">
-                    <!-- Sticky Account Sidebar -->
-                    <div class="flex-shrink-0 w-64 sticky left-0 z-20 bg-gray-100 pr-6 border-r-2 border-gray-200 shadow-[10px_0_15px_-5px_rgba(0,0,0,0.05)] transition-colors group-hover/row:bg-white/50">
-                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 h-full flex flex-col justify-center relative overflow-hidden group/acc">
-                            <div class="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-bl-full -mr-12 -mt-12 transition-transform group-hover/acc:scale-125 duration-500"></div>
-                            <div class="flex items-center space-x-4 relative z-10">
-                                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-bold shadow-xl ring-4 ring-white">
-                                    {{ if .Account }}{{ slice .Account.PhoneNumber 0 1 }}{{ else }}?{{ end }}
-                                </div>
-                                <div class="overflow-hidden">
-                                    <h3 class="font-black text-gray-900 text-sm truncate tracking-tight">{{ if .Account }}{{ .Account.PhoneNumber }}{{ else }}General{{ end }}</h3>
-                                    <p class="text-[10px] text-blue-500 font-black uppercase tracking-widest mt-0.5">{{ len .Sequences }} ACTIVE</p>
+                <!-- Account Rows -->
+                <div class="mt-8 space-y-12">
+                    {{ range .Groups }}
+                    <div class="flex flex-nowrap space-x-6 group/row">
+                        <!-- Sticky Account Label -->
+                        <div class="w-64 shrink-0 sticky left-0 z-20 bg-gray-50 pr-6">
+                            <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm h-full flex flex-col justify-center transition-all group-hover/row:border-blue-200 group-hover/row:shadow-md">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-700 to-black flex items-center justify-center text-white font-bold shadow-lg">
+                                        {{ if .Account }}{{ slice .Account.PhoneNumber 0 1 }}{{ else }}?{{ end }}
+                                    </div>
+                                    <div class="overflow-hidden">
+                                        <h3 class="font-black text-gray-900 text-sm truncate">{{ if .Account }}{{ .Account.PhoneNumber }}{{ else }}General{{ end }}</h3>
+                                        <p class="text-[9px] text-gray-400 font-black uppercase tracking-tighter">{{ len .Sequences }} TOTAL</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Status Columns -->
-                    {{ range .Columns }}
-                    {{ $colDef := .ColumnDef }}
-                    <div class="flex-shrink-0 w-80 rounded-[2rem] border-4 border-dashed border-gray-200/60 {{ .ColorClass }} p-4 space-y-5 min-h-[500px] transition-colors hover:border-gray-300">
-                        {{ range .Sequences }}
-                        <div class="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 group/card relative hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 ring-1 ring-black/5">
-                            <div class="flex justify-between items-start mb-4">
-                                <div>
-                                    <h3 class="font-black text-gray-900 leading-tight text-base">{{ .CompanyName }}</h3>
-                                    <p class="text-[11px] text-gray-400 font-black uppercase tracking-wider mt-1">{{ .VacancyName }}</p>
-                                </div>
-                                <div class="flex -space-x-3">
-                                    {{ range .Recruiters }}
-                                    <div class="w-8 h-8 rounded-full bg-indigo-50 border-2 border-white flex items-center justify-center text-[11px] font-black text-indigo-600 shadow-md ring-1 ring-black/5" title="{{ .FirstName }}">
-                                        {{ slice .FirstName 0 1 }}
+                        <!-- Columns -->
+                        {{ range .Columns }}
+                        {{ $colDef := .ColumnDef }}
+                        <div class="w-80 shrink-0 rounded-2xl border-2 border-dashed border-gray-200/50 p-4 space-y-4 min-h-[300px] transition-colors hover:border-gray-200 {{ .ColorClass }}">
+                            {{ range .Sequences }}
+                            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 group/card relative hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col h-fit">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div class="overflow-hidden">
+                                        <h3 class="font-black text-gray-900 leading-tight text-sm truncate">{{ .CompanyName }}</h3>
+                                        <p class="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-1 truncate">{{ .VacancyName }}</p>
                                     </div>
-                                    {{ end }}
+                                    <div class="flex -space-x-2 shrink-0 ml-2">
+                                        {{ range .Recruiters }}
+                                        <div class="w-6 h-6 rounded-full bg-blue-50 border border-white flex items-center justify-center text-[9px] font-black text-blue-600 shadow-sm" title="{{ .FirstName }}">
+                                            {{ slice .FirstName 0 1 }}
+                                        </div>
+                                        {{ end }}
+                                    </div>
                                 </div>
-                            </div>
 
-                            <!-- Progress Indicator -->
-                            <div class="space-y-2 mb-6">
-                                {{ $total := len .Stages }}{{ $done := len .History }}
-                                <div class="flex justify-between items-center text-[10px] font-black uppercase text-gray-400">
-                                    <span class="tracking-tighter">Workflow Progress</span>
-                                    <span class="text-blue-600">{{ $done }}/{{ $total }}</span>
-                                </div>
-                                <div class="w-full bg-gray-100 rounded-full h-2 shadow-inner overflow-hidden">
-                                    <div class="bg-gradient-to-r from-blue-500 to-indigo-600 h-full transition-all duration-700 rounded-full shadow-sm" 
-                                         style="width: {{ if gt $total 0 }}{{ mul (div (float64 $done) (float64 $total)) 100.0 }}{{ else }}0{{ end }}%"></div>
+                                <!-- Card Actions (Merged into card body) -->
+                                <div class="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between space-x-2">
+                                    <div class="relative flex-1">
+                                        <select class="w-full text-[10px] bg-gray-50 border border-gray-200 px-2 py-1.5 rounded-lg cursor-pointer font-black text-gray-500 appearance-none hover:bg-gray-100 transition-colors focus:ring-2 focus:ring-blue-500/10 outline-none"
+                                                onchange="if(this.value) location.href='/sequences/move?id={{ .ID }}&status=' + this.value">
+                                            <option value="">Status...</option>
+                                            {{ range $.ColumnDefs }}
+                                            <option value="{{ .ID }}" {{ if eq .ID $colDef.ID }}selected{{ end }}>{{ .Label }}</option>
+                                            {{ end }}
+                                        </select>
+                                    </div>
+                                    <button class="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover/card:opacity-100"
+                                            hx-get="/sequences/delete?id={{ .ID }}"
+                                            hx-confirm="Delete this sequence?"
+                                            hx-target="body">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                    </button>
                                 </div>
                             </div>
-                                <div class="w-full bg-gray-100 rounded-full h-2 shadow-inner overflow-hidden">
-                                    <div class="bg-gradient-to-r from-blue-500 to-indigo-600 h-full transition-all duration-700 rounded-full shadow-sm" 
-                                         style="width: {{ if gt $total 0 }}{{ mul (div (float64 $done) (float64 $total)) 100.0 }}{{ else }}0{{ end }}%"></div>
-                                </div>
-                            </div>
-
-                            <!-- Footer Actions -->
-                            <div class="pt-4 border-t border-gray-50 flex justify-between items-center">
-                                <select class="text-[11px] bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-xl cursor-pointer font-black text-gray-500 appearance-none hover:bg-gray-100 transition-colors focus:ring-2 focus:ring-blue-500/20 outline-none"
-                                        onchange="if(this.value) location.href='/sequences/move?id={{ .ID }}&status=' + this.value">
-                                    <option value="">Status...</option>
-                                    {{ range $.ColumnDefs }}
-                                    <option value="{{ .ID }}" {{ if eq .ID $colDef.ID }}selected{{ end }}>{{ .Label }}</option>
-                                    {{ end }}
-                                </select>
-                                <button class="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover/card:opacity-100 scale-90 hover:scale-110"
-                                        hx-get="/sequences/delete?id={{ .ID }}"
-                                        hx-confirm="Delete this sequence history?"
-                                        hx-target="body">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                </button>
-                            </div>
+                            {{ end }}
                         </div>
                         {{ end }}
                     </div>
                     {{ end }}
                 </div>
-                {{ end }}
             </div>
         </div>
 
         {{ else }}
-        <!-- Sequence History (True Chain of Cards View) -->
-        <div class="space-y-16">
-            {{ range .Groups }}
-            <div class="space-y-8">
-                <div class="flex items-center space-x-4 border-b-2 border-gray-100 pb-4">
-                    <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-lg font-black">
-                        {{ if .Account }}{{ slice .Account.PhoneNumber 0 1 }}{{ else }}?{{ end }}
-                    </div>
-                    <div>
-                        <h2 class="font-black text-xl text-gray-800 tracking-tight">{{ if .Account }}{{ .Account.PhoneNumber }}{{ else }}Unassigned Sequences{{ end }}</h2>
-                        <p class="text-xs text-gray-400 font-bold uppercase tracking-[0.2em]">Recruitment History Chain</p>
-                    </div>
-                </div>
-
-                <div class="space-y-12">
-                    {{ range .Sequences }}
-                    <div class="relative group">
-                        <!-- Horizontal Row Header -->
-                        <div class="flex items-center space-x-4 mb-4">
-                            <div class="px-4 py-1.5 bg-gray-900 text-white rounded-full text-[11px] font-black uppercase tracking-widest shadow-xl">
-                                {{ .CompanyName }}
-                            </div>
-                            <div class="text-gray-300 font-black text-xs uppercase tracking-widest">
-                                {{ .VacancyName }}
-                            </div>
+        <!-- Timeline Content (Refined) -->
+        <div class="h-full overflow-auto px-6 pb-12">
+            <div class="space-y-16">
+                {{ range .Groups }}
+                <div class="space-y-6">
+                    <div class="flex items-center space-x-4 border-b-2 border-gray-200 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-lg font-black">
+                            {{ if .Account }}{{ slice .Account.PhoneNumber 0 1 }}{{ else }}?{{ end }}
                         </div>
+                        <div>
+                            <h2 class="font-black text-xl text-gray-900 tracking-tight">{{ if .Account }}{{ .Account.PhoneNumber }}{{ else }}General Sequences{{ end }}</h2>
+                            <p class="text-[10px] text-gray-400 font-black uppercase tracking-widest">Historical Workflow Chain</p>
+                        </div>
+                    </div>
 
-                        <!-- The Chain -->
-                        <div class="overflow-x-auto pb-4 custom-scrollbar">
-                            <div class="inline-flex items-center min-w-full space-x-0">
-                                {{ $seq := . }}
-                                {{ $historyCount := len .History }}
-                                
-                                {{ range $idx, $stage := .History }}
+                    <div class="space-y-10 pl-4">
+                        {{ range .Sequences }}
+                        {{ $seq := . }}
+                        {{ $historyLen := len .History }}
+                        <div class="group">
+                            <div class="flex items-center space-x-3 mb-4">
+                                <span class="px-3 py-1 bg-gray-900 text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-md">{{ .CompanyName }}</span>
+                                <span class="text-gray-300 font-black text-[10px] uppercase tracking-widest">— {{ .VacancyName }}</span>
+                            </div>
+
+                            <div class="overflow-x-auto pb-4 custom-scrollbar">
+                                <div class="inline-flex items-center space-x-0 min-w-full">
+                                    {{ range $idx, $stage := .History }}
                                     {{ $current := add $idx 1 }}
                                     
-                                    <!-- Card Node -->
-                                    <div class="flex flex-col items-center shrink-0">
+                                    <!-- History Card -->
+                                    <div class="flex-shrink-0">
                                         <div class="relative px-6 py-4 rounded-2xl border-2 shadow-sm min-w-[200px] transition-all group/node
-                                            {{ if and $seq.IsRejected (eq $current $historyCount) }}
+                                            {{ if and $seq.IsRejected (eq $current $historyLen) }}
                                                 bg-red-50 border-red-500 ring-4 ring-red-100
                                             {{ else }}
                                                 bg-white border-green-500 hover:border-blue-500
                                             {{ end }}">
                                             
                                             <div class="flex justify-between items-start mb-2">
-                                                <span class="text-[9px] font-black text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full uppercase tracking-tighter">Stage {{ $current }}</span>
+                                                <span class="text-[8px] font-black text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full uppercase tracking-tighter">Step {{ $current }}</span>
                                                 {{ if .ScheduledAt }}
-                                                    <span class="text-[9px] font-black text-blue-600">{{ .ScheduledAt.Format "02 Jan" }}</span>
+                                                    <span class="text-[9px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{{ .ScheduledAt.Format "02 Jan" }}</span>
                                                 {{ end }}
                                             </div>
 
-                                            <p class="text-sm font-black tracking-tight {{ if and $seq.IsRejected (eq $current $historyCount) }}text-red-800{{ else }}text-gray-900{{ end }}">
+                                            <p class="text-sm font-black tracking-tight {{ if and $seq.IsRejected (eq $current $historyLen) }}text-red-800{{ else }}text-gray-900{{ end }}">
                                                 {{ .Name }}
                                             </p>
                                             
@@ -177,60 +167,59 @@
                                                 <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{{ .StageType }}</p>
                                             {{ end }}
 
-                                            {{ if and $seq.IsRejected (eq $current $historyCount) }}
-                                                <div class="mt-3 pt-3 border-t border-red-200 flex items-center space-x-2">
-                                                    <svg class="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>
-                                                    <span class="text-[10px] font-black uppercase text-red-600">Rejected Here</span>
+                                            {{ if and $seq.IsRejected (eq $current $historyLen) }}
+                                                <div class="mt-3 pt-3 border-t border-red-100 flex items-center space-x-2">
+                                                    <div class="w-1.5 h-1.5 rounded-full bg-red-500"></div>
+                                                    <span class="text-[9px] font-black uppercase text-red-600">PROCESS TERMINATED</span>
                                                 </div>
                                             {{ end }}
                                             
-                                            <!-- Tiny Actions -->
+                                            <!-- Action -->
                                             <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover/node:opacity-100 transition-opacity">
                                                 <button hx-get="/stages/update?id={{ .ID }}&completed=false" hx-target="body" 
-                                                        class="bg-white border shadow-md text-[9px] font-black px-3 py-1 rounded-full text-gray-500 hover:text-red-500">
-                                                    UNMARK
+                                                        class="bg-white border shadow-md text-[8px] font-black px-3 py-1 rounded-full text-gray-400 hover:text-red-500 uppercase tracking-widest">
+                                                    Remove
                                                 </button>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <!-- Connection Arrow -->
-                                    {{ if or (lt $current $historyCount) $seq.IsAccepted }}
-                                        <div class="shrink-0 px-4 flex flex-col items-center">
-                                            <div class="h-1 w-12 rounded-full {{ if and $seq.IsRejected (eq $current $historyCount) }}bg-red-200{{ else }}bg-green-200{{ end }}"></div>
-                                            <svg class="w-6 h-6 -mt-2.5 {{ if and $seq.IsRejected (eq $current $historyCount) }}text-red-300{{ else }}text-green-400{{ end }}" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
-                                            </svg>
-                                        </div>
+                                    <!-- Connector -->
+                                    {{ if or (lt $current $historyLen) $seq.IsAccepted }}
+                                    <div class="shrink-0 px-4 flex items-center">
+                                        <div class="w-12 h-1 {{ if and $seq.IsRejected (eq $current $historyLen) }}bg-red-200{{ else }}bg-green-200{{ end }} rounded-full"></div>
+                                        <div class="w-2 h-2 rounded-full {{ if and $seq.IsRejected (eq $current $historyLen) }}bg-red-300{{ else }}bg-green-400{{ end }} -ml-1"></div>
+                                    </div>
                                     {{ end }}
-                                {{ end }}
+                                    {{ end }}
 
-                                {{ if .IsAccepted }}
-                                    <div class="flex-shrink-0">
-                                        <div class="px-8 py-6 rounded-[2rem] border-4 border-double bg-green-50 border-green-600 shadow-2xl shadow-green-200 text-center min-w-[200px] relative overflow-hidden ring-4 ring-green-100">
+                                    {{ if .IsAccepted }}
+                                    <div class="flex-shrink-0 pl-2">
+                                        <div class="px-8 py-6 rounded-3xl border-4 border-double bg-green-50 border-green-600 shadow-xl text-center min-w-[200px] relative overflow-hidden ring-4 ring-green-100">
                                             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white to-transparent opacity-50 animate-[shimmer_2s_infinite]"></div>
-                                            <div class="w-12 h-12 bg-green-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-3 shadow-lg rotate-3">
-                                                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M5 13l4 4L19 7"></path></svg>
+                                            <div class="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center text-white mx-auto mb-3 shadow-lg">
+                                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M5 13l4 4L19 7"></path></svg>
                                             </div>
                                             <p class="text-sm font-black text-green-900 uppercase tracking-tighter">Accepted</p>
-                                            <p class="text-[10px] font-bold text-green-600 uppercase mt-1">Hire Success</p>
+                                            <p class="text-[10px] font-bold text-green-600 uppercase mt-1 tracking-widest">Hire Successful</p>
                                         </div>
                                     </div>
-                                {{ end }}
+                                    {{ end }}
 
-                                {{ if eq $historyCount 0 }}
-                                    <div class="px-8 py-10 rounded-2xl border-4 border-dashed border-gray-100 flex items-center space-x-4">
-                                        <div class="w-10 h-10 rounded-full border-4 border-gray-100 animate-pulse"></div>
-                                        <p class="text-gray-300 font-black uppercase text-xs tracking-widest">Awaiting Initial Contact...</p>
+                                    {{ if eq $historyLen 0 }}
+                                    <div class="px-8 py-10 rounded-2xl border-2 border-dashed border-gray-200 flex items-center space-x-4 bg-white/50">
+                                        <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+                                        <p class="text-gray-400 font-black uppercase text-[10px] tracking-[0.2em]">Awaiting initial contact...</p>
                                     </div>
-                                {{ end }}
+                                    {{ end }}
+                                </div>
                             </div>
                         </div>
+                        {{ end }}
                     </div>
-                    {{ end }}
                 </div>
+                {{ end }}
             </div>
-            {{ end }}
         </div>
         {{ end }}
     </div>
@@ -242,9 +231,9 @@
         100% { transform: translateX(100%); }
     }
 
-    /* Custom Scrollbar for a cleaner look */
+    /* Custom Scrollbar */
     ::-webkit-scrollbar {
-        height: 8px;
+        height: 10px;
         width: 6px;
     }
     ::-webkit-scrollbar-track {
@@ -262,6 +251,11 @@
 
     .custom-scrollbar::-webkit-scrollbar {
         height: 6px;
+    }
+    
+    /* Ensure flex headers and columns align perfectly */
+    .flex-nowrap {
+        flex-wrap: nowrap !important;
     }
 </style>
 {{ end }}
