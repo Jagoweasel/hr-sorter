@@ -24,6 +24,7 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/sequences/create", handleCreateSequence)
 	mux.HandleFunc("/sequences/add-contact", handleAddToSequence)
 	mux.HandleFunc("/stages/update", handleUpdateStage)
+	mux.HandleFunc("/stages/add", handleAddStage)
 	mux.HandleFunc("/sequences/move", handleMoveSequence)
 	mux.HandleFunc("/sequences/delete", handleDeleteSequence)
 }
@@ -338,6 +339,12 @@ func handlePipeline(w http.ResponseWriter, r *http.Request) {
 	tmpl := template.New("layout.html").Funcs(template.FuncMap{
 		"add": func(a, b int) int {
 			return a + b
+		},
+		"lastStage": func(history []models.InterviewStage) string {
+			if len(history) == 0 {
+				return "None"
+			}
+			return history[len(history)-1].Name
 		},
 		"slice": func(s string, start, end int) string {
 			if len(s) < end {
@@ -655,10 +662,10 @@ func handleUpdateStage(w http.ResponseWriter, r *http.Request) {
 	var stages []models.InterviewStage
 	database.DB.Select(&stages, "SELECT * FROM interview_stages WHERE sequence_id = ? AND is_completed = 1 ORDER BY order_index DESC LIMIT 1", stage.SequenceID)
 
-	newStatus := "initial"
 	if len(stages) > 0 {
 		s := stages[0]
 		name := strings.ToLower(s.Name)
+		newStatus := ""
 		if strings.Contains(name, "offer") {
 			newStatus = "offer"
 		} else if strings.Contains(name, "final") {
@@ -667,11 +674,14 @@ func handleUpdateStage(w http.ResponseWriter, r *http.Request) {
 			newStatus = "tech"
 		} else if strings.Contains(name, "screen") {
 			newStatus = "screening"
+		} else {
+			newStatus = "initial"
+		}
+		if newStatus != "" {
+			database.DB.Exec("UPDATE sequences SET status = ? WHERE id = ?", newStatus, stage.SequenceID)
+			logger.Debug(logger.History, "Sequence ID %d status automatically updated to '%s'", stage.SequenceID, newStatus)
 		}
 	}
-
-	database.DB.Exec("UPDATE sequences SET status = ? WHERE id = ?", newStatus, stage.SequenceID)
-	logger.Debug(logger.History, "Sequence ID %d status automatically updated to '%s'", stage.SequenceID, newStatus)
 
 	// Log result chain
 	var seq models.Sequence
@@ -687,103 +697,87 @@ func handleUpdateStage(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/pipeline", 303)
 }
 
+func handleAddStage(w http.ResponseWriter, r *http.Request) {
+	seqID := r.URL.Query().Get("sequence_id")
+	category := r.URL.Query().Get("category") // screening, tech, final, offer
+	name := r.URL.Query().Get("name")
+
+	if name == "" {
+		label := category
+		if category == "tech" {
+			label = "Technical Interview"
+		} else if category == "screening" {
+			label = "HR Screening"
+		} else if category == "final" {
+			label = "Final Interview"
+		} else if category == "offer" {
+			label = "Offer"
+		}
+
+		var count int
+		database.DB.Get(&count, "SELECT count(*) FROM interview_stages WHERE sequence_id = ? AND (name LIKE ? OR name LIKE ?)",
+			seqID, label+"%", strings.Title(category)+"%")
+		name = fmt.Sprintf("%s %d", strings.Title(label), count+1)
+	}
+
+	var maxOrder int
+	database.DB.Get(&maxOrder, "SELECT COALESCE(max(order_index), 0) FROM interview_stages WHERE sequence_id = ?", seqID)
+
+	_, err := database.DB.Exec("INSERT INTO interview_stages (sequence_id, name, is_completed, order_index) VALUES (?, ?, 1, ?)",
+		seqID, name, maxOrder+1)
+
+	if err == nil {
+		logger.Debug(logger.History, "Manually added stage '%s' to sequence %s", name, seqID)
+		// Update sequence status
+		status := category
+		if category == "initial" {
+			status = "initial"
+		}
+		database.DB.Exec("UPDATE sequences SET status = ? WHERE id = ?", status, seqID)
+
+		// Log result chain
+		var seq models.Sequence
+		database.DB.Get(&seq, "SELECT * FROM sequences WHERE id = ?", seqID)
+		var updatedStages []models.InterviewStage
+		database.DB.Select(&updatedStages, "SELECT * FROM interview_stages WHERE sequence_id = ? AND is_completed = 1 ORDER BY order_index ASC", seqID)
+		var names []string
+		for _, s := range updatedStages {
+			names = append(names, s.Name)
+		}
+		logger.LogChain(seq.ID, seq.CompanyName, names, seq.Status)
+	}
+
+	http.Redirect(w, r, "/pipeline", 303)
+}
+
 func handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 	seqID := r.URL.Query().Get("id")
 	status := r.URL.Query().Get("status")
-	logger.Debug(logger.History, "handleMoveSequence: ID=%s, TargetStatus=%s", seqID, status)
+	logger.Debug(logger.History, "handleMoveSequence: ID=%s, TargetStatus=%s (SURGICAL MOVE)", seqID, status)
 
-	tx, err := database.DB.Beginx()
-	if err != nil {
-		logger.Debug(logger.History, "Error starting move transaction: %v", err)
-		return
-	}
-	defer tx.Rollback()
+	database.DB.Exec("UPDATE sequences SET status = ? WHERE id = ?", status, seqID)
 
-	_, err = tx.Exec("UPDATE sequences SET status = ? WHERE id = ?", status, seqID)
-	if err != nil {
-		logger.Debug(logger.History, "Error updating sequence status: %v", err)
-		return
-	}
-
-	// Sync stages
-	var stages []models.InterviewStage
-	tx.Select(&stages, "SELECT * FROM interview_stages WHERE sequence_id = ? ORDER BY order_index ASC", seqID)
-
+	// If moving to Accepted/Rejected, we still might want some automation
 	if status == "accepted" {
-		res, _ := tx.Exec("UPDATE interview_stages SET is_completed = 1 WHERE sequence_id = ?", seqID)
-		affected, _ := res.RowsAffected()
-		logger.Debug(logger.History, "Accepted: Marked all %d stages as completed", affected)
+		database.DB.Exec("UPDATE interview_stages SET is_completed = 1 WHERE sequence_id = ?", seqID)
 	} else if status == "rejected" {
+		// Mark current point of rejection
 		var firstIncomplete models.InterviewStage
-		err := tx.Get(&firstIncomplete, "SELECT * FROM interview_stages WHERE sequence_id = ? AND is_completed = 0 ORDER BY order_index ASC LIMIT 1", seqID)
+		err := database.DB.Get(&firstIncomplete, "SELECT * FROM interview_stages WHERE sequence_id = ? AND is_completed = 0 ORDER BY order_index ASC LIMIT 1", seqID)
 		if err == nil {
-			tx.Exec("UPDATE interview_stages SET is_completed = 1 WHERE sequence_id = ? AND order_index <= ?", seqID, firstIncomplete.OrderIndex)
-			logger.Debug(logger.History, "Rejected: Marked stages up to index %d as completed", firstIncomplete.OrderIndex)
-		} else {
-			logger.Debug(logger.History, "Rejected: No incomplete stages found to mark as rejection point")
+			database.DB.Exec("UPDATE interview_stages SET is_completed = 1 WHERE id = ?", firstIncomplete.ID)
 		}
-	} else {
-		targetOrder := 0
-		switch status {
-		case "initial":
-			targetOrder = 0
-		case "screening":
-			targetOrder = 1
-		case "tech":
-			targetOrder = 2
-		case "final":
-			for _, s := range stages {
-				if strings.Contains(strings.ToLower(s.Name), "final") {
-					targetOrder = s.OrderIndex
-					break
-				}
-			}
-			if targetOrder == 0 {
-				targetOrder = 3
-			}
-		case "offer":
-			for _, s := range stages {
-				if strings.Contains(strings.ToLower(s.Name), "offer") {
-					targetOrder = s.OrderIndex
-					break
-				}
-			}
-			if targetOrder == 0 {
-				targetOrder = 4
-			}
-		}
-
-		resUp, _ := tx.Exec("UPDATE interview_stages SET is_completed = 1 WHERE sequence_id = ? AND order_index <= ?", seqID, targetOrder)
-		resDown, _ := tx.Exec("UPDATE interview_stages SET is_completed = 0 WHERE sequence_id = ? AND order_index > ?", seqID, targetOrder)
-		up, _ := resUp.RowsAffected()
-		down, _ := resDown.RowsAffected()
-		logger.Debug(logger.History, "Moved to %s (target order %d): %d stages completed, %d stages reset", status, targetOrder, up, down)
 	}
 
-	if err := tx.Commit(); err != nil {
-		logger.Debug(logger.History, "Error committing move transaction: %v", err)
-		return
-	}
-	logger.Debug(logger.History, "Move transaction committed successfully")
-
-	// Log result chain after commit
+	// Log result chain
 	var seq models.Sequence
-	err = database.DB.Get(&seq, "SELECT * FROM sequences WHERE id = ?", seqID)
-	if err != nil {
-		logger.Debug(logger.History, "Error refetching sequence after move: %v", err)
-	}
-
+	database.DB.Get(&seq, "SELECT * FROM sequences WHERE id = ?", seqID)
 	var updatedStages []models.InterviewStage
-	err = database.DB.Select(&updatedStages, "SELECT * FROM interview_stages WHERE sequence_id = ? AND is_completed = 1 ORDER BY order_index ASC", seqID)
-	if err != nil {
-		logger.Debug(logger.History, "Error fetching history stages after move: %v", err)
-	}
-
+	database.DB.Select(&updatedStages, "SELECT * FROM interview_stages WHERE sequence_id = ? AND is_completed = 1 ORDER BY order_index ASC", seqID)
 	var names []string
 	for _, s := range updatedStages {
 		names = append(names, s.Name)
 	}
-	logger.Debug(logger.History, "Refetched %d completed stages for chain", len(updatedStages))
 	logger.LogChain(seq.ID, seq.CompanyName, names, seq.Status)
 
 	http.Redirect(w, r, "/pipeline", 303)
