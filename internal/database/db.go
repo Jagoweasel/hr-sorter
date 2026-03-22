@@ -15,7 +15,7 @@ func InitDB(path string) {
 	var err error
 	dsn := path
 	if !strings.Contains(path, "?") {
-		dsn = path + "?_pragma=foreign_keys=1&_journal_mode=WAL"
+		dsn = path + "?_pragma=foreign_keys=1&_journal_mode=WAL&_busy_timeout=5000"
 	}
 	log.Printf("[DB] Connecting with DSN: %s", dsn)
 	DB, err = sqlx.Connect("sqlite", dsn)

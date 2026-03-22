@@ -120,7 +120,7 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 			<div class="p-3 border-b cursor-pointer hover:bg-blue-50 transition-colors contact-item group relative" 
 			     hx-get="/messages/%d" 
 				 hx-target="#chat-history"
-				 hx-on::after-request="htmx.find('#chat-history').setAttribute('hx-get', '/messages/%d')"
+				 hx-on:htmx:after-request="htmx.find('#chat-history').setAttribute('hx-get', '/messages/%d')"
 				 onclick="document.querySelectorAll('.contact-item').forEach(el => el.classList.remove('bg-blue-100')); this.classList.add('bg-blue-100')">
 				<div class="flex justify-between items-start">
 					<div class="flex items-center">
@@ -273,17 +273,18 @@ func handleContactActions(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(path, "/actions") {
 		id := strings.TrimPrefix(strings.TrimSuffix(path, "/actions"), "/contacts/")
 		fmt.Fprintf(w, `
-			<div class="bg-white border shadow-xl rounded-lg py-2 w-48 text-sm" hx-on::click-outside="this.remove()">
+			<div class="bg-white border shadow-xl rounded-lg py-2 w-48 text-sm" 
+			     hx-on:htmx:click-outside="this.innerHTML = ''">
 				<button class="w-full text-left px-4 py-2 hover:bg-blue-50 text-blue-700 font-medium"
 				        hx-get="/contacts/%s/create-sequence-modal"
 						hx-target="#modal-container"
-						onclick="this.parentElement.remove()">
+						hx-on:htmx:after-request="this.closest('.actions-menu').innerHTML = ''">
 					Start Sequence
 				</button>
 				<button class="w-full text-left px-4 py-2 hover:bg-blue-50 text-gray-700"
 				        hx-get="/contacts/%s/add-to-sequence-modal"
 						hx-target="#modal-container"
-						onclick="this.parentElement.remove()">
+						hx-on:htmx:after-request="this.closest('.actions-menu').innerHTML = ''">
 					Add to Existing
 				</button>
 			</div>
@@ -306,8 +307,8 @@ func handleContactActions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		fmt.Fprintf(w, `
-			<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]" id="modal">
-				<div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg overflow-y-auto max-h-[90vh]" hx-on::click-outside="htmx.remove('#modal')">
+			<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]" id="modal" onclick="if(event.target === this) htmx.remove('#modal')">
+				<div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg overflow-y-auto max-h-[90vh]" onclick="event.stopPropagation()">
 					<h2 class="text-xl font-bold mb-4 border-b pb-2">Start New Interview Sequence</h2>
 					<form hx-post="/sequences/create" hx-target="body">
 						<input type="hidden" name="contact_id" value="%s">
@@ -367,8 +368,8 @@ func handleContactActions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		fmt.Fprintf(w, `
-			<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]" id="modal">
-				<div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md" hx-on::click-outside="htmx.remove('#modal')">
+			<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]" id="modal" onclick="if(event.target === this) htmx.remove('#modal')">
+				<div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md" onclick="event.stopPropagation()">
 					<h2 class="text-xl font-bold mb-4">Add Recruiter to Sequence</h2>
 					<form hx-post="/sequences/add-contact" hx-target="body">
 						<input type="hidden" name="contact_id" value="%s">
@@ -393,6 +394,7 @@ func handleContactActions(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Web: handleCreateSequence triggered, method=%s", r.Method)
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", 405)
 		return
@@ -412,46 +414,85 @@ func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	techTypes := r.Form["tech_stage_type[]"]
 
 	// Find the account associated with this contact
-	var accountID int64
-	err = database.DB.Get(&accountID, "SELECT account_id FROM messages WHERE contact_id = ? LIMIT 1", contactID)
-	if err != nil {
-		log.Printf("Pipeline: Warning - could not find associated account for contact %s, using first active account", contactID)
-		database.DB.Get(&accountID, "SELECT id FROM accounts WHERE status = 'active' LIMIT 1")
+	var accountID *int64
+	var foundID int64
+	// Try 1: Look for account_id in previous messages
+	err = database.DB.Get(&foundID, "SELECT account_id FROM messages WHERE contact_id = ? AND account_id IS NOT NULL LIMIT 1", contactID)
+	if err == nil {
+		accountID = &foundID
+	} else {
+		// Try 2: Look for an active account
+		err = database.DB.Get(&foundID, "SELECT id FROM accounts WHERE status = 'active' LIMIT 1")
+		if err == nil {
+			accountID = &foundID
+		} else {
+			// Try 3: Look for any account
+			err = database.DB.Get(&foundID, "SELECT id FROM accounts LIMIT 1")
+			if err == nil {
+				accountID = &foundID
+			}
+		}
+	}
+
+	if accountID == nil {
+		log.Printf("Pipeline: Warning - no accounts found in database. Sequence will be created with account_id=NULL")
 	}
 
 	res, err := database.DB.Exec("INSERT INTO sequences (account_id, company_name, vacancy_name, status) VALUES (?, ?, ?, ?)", accountID, company, vacancy, "initial")
 	if err != nil {
-		log.Printf("Pipeline: Error creating sequence: %v", err)
-		http.Error(w, err.Error(), 500)
+		log.Printf("Pipeline: DB Error creating sequence: %v", err)
+		http.Error(w, "Failed to create sequence: "+err.Error(), 500)
 		return
 	}
 
-	seqID, _ := res.LastInsertId()
+	seqID, err := res.LastInsertId()
+	if err != nil {
+		log.Printf("Pipeline: Error getting last insert ID: %v", err)
+		http.Error(w, "Failed to retrieve sequence ID", 500)
+		return
+	}
 	log.Printf("Pipeline: Created sequence ID %d for %s (%s)", seqID, company, vacancy)
 
 	if contactID != "" {
-		database.DB.Exec("INSERT INTO sequence_contacts (sequence_id, contact_id) VALUES (?, ?)", seqID, contactID)
-		log.Printf("Pipeline: Linked recruiter ID %s to sequence ID %d", contactID, seqID)
+		_, err = database.DB.Exec("INSERT INTO sequence_contacts (sequence_id, contact_id) VALUES (?, ?)", seqID, contactID)
+		if err != nil {
+			log.Printf("Pipeline: Error linking recruiter %s to sequence %d: %v", contactID, seqID, err)
+		} else {
+			log.Printf("Pipeline: Linked recruiter ID %s to sequence ID %d", contactID, seqID)
+		}
 	}
 
 	// Create initial stage
 	initialDate, _ := time.Parse("2006-01-02T15:04", initialDateStr)
-	database.DB.Exec("INSERT INTO interview_stages (sequence_id, name, scheduled_at, is_completed, order_index) VALUES (?, ?, ?, ?, ?)",
+	_, err = database.DB.Exec("INSERT INTO interview_stages (sequence_id, name, scheduled_at, is_completed, order_index) VALUES (?, ?, ?, ?, ?)",
 		seqID, "Initial Contact", initialDate, 1, 0)
+	if err != nil {
+		log.Printf("Pipeline: Error creating initial stage for sequence %d: %v", seqID, err)
+	}
 
 	// Add HR Screening
-	database.DB.Exec("INSERT INTO interview_stages (sequence_id, name, order_index) VALUES (?, ?, ?)",
+	_, err = database.DB.Exec("INSERT INTO interview_stages (sequence_id, name, order_index) VALUES (?, ?, ?)",
 		seqID, "HR Screening", 1)
+	if err != nil {
+		log.Printf("Pipeline: Error creating screening stage for sequence %d: %v", seqID, err)
+	}
 
 	// Add Technical Stages
 	currIdx := 2
 	for i, name := range techNames {
+		name = strings.TrimSpace(name)
 		if name == "" {
 			continue
 		}
-		tType := techTypes[i]
-		database.DB.Exec("INSERT INTO interview_stages (sequence_id, name, stage_type, order_index) VALUES (?, ?, ?, ?)",
+		tType := ""
+		if i < len(techTypes) {
+			tType = techTypes[i]
+		}
+		_, err = database.DB.Exec("INSERT INTO interview_stages (sequence_id, name, stage_type, order_index) VALUES (?, ?, ?, ?)",
 			seqID, name, tType, currIdx)
+		if err != nil {
+			log.Printf("Pipeline: Error creating tech stage %d for sequence %d: %v", i, seqID, err)
+		}
 		currIdx++
 	}
 
@@ -461,6 +502,11 @@ func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	database.DB.Exec("INSERT INTO interview_stages (sequence_id, name, order_index) VALUES (?, ?, ?)",
 		seqID, "Offer", currIdx+1)
 
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Redirect", "/pipeline")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	http.Redirect(w, r, "/pipeline", 303)
 }
 
@@ -481,6 +527,11 @@ func handleAddToSequence(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Pipeline: Added recruiter ID %s to sequence ID %s", contactID, seqID)
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Redirect", "/")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	http.Redirect(w, r, "/", 303)
 }
 

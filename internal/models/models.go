@@ -24,7 +24,7 @@ type Contact struct {
 
 type Message struct {
 	ID          int64     `db:"id" json:"id"`
-	AccountID   int64     `db:"account_id" json:"account_id"`
+	AccountID   *int64    `db:"account_id" json:"account_id"`
 	ContactID   int64     `db:"contact_id" json:"contact_id"`
 	TGMessageID *int      `db:"tg_message_id" json:"tg_message_id"`
 	Text        string    `db:"text" json:"text"`

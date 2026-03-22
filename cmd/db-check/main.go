@@ -39,4 +39,52 @@ func main() {
 	for _, c := range contacts {
 		fmt.Printf(" - Contact ID %d: @%s\n", c.ID, c.Username)
 	}
+
+	var accCount int
+	err = db.Get(&accCount, "SELECT count(*) FROM accounts")
+	fmt.Printf("Accounts: %d (err: %v)\n", accCount, err)
+
+	type Acc struct {
+		ID     int64  `db:"id"`
+		Status string `db:"status"`
+	}
+	var accs []Acc
+	err = db.Select(&accs, "SELECT id, status FROM accounts")
+	if err == nil {
+		for _, a := range accs {
+			fmt.Printf(" - Acc ID %d: %s\n", a.ID, a.Status)
+		}
+	}
+
+	var seqCount int
+	err = db.Get(&seqCount, "SELECT count(*) FROM sequences")
+	fmt.Printf("Sequences: %d (err: %v)\n", seqCount, err)
+
+	type Seq struct {
+		ID          int64  `db:"id"`
+		CompanyName string `db:"company_name"`
+		AccountID   *int64 `db:"account_id"`
+	}
+	var seqs []Seq
+	err = db.Select(&seqs, "SELECT id, company_name, account_id FROM sequences LIMIT 5")
+	if err != nil {
+		fmt.Printf("Error selecting sequences: %v\n", err)
+	}
+	for _, s := range seqs {
+		accID := "NULL"
+		if s.AccountID != nil {
+			accID = fmt.Sprintf("%d", *s.AccountID)
+		}
+		fmt.Printf(" - Seq ID %d: %s (AccountID: %s)\n", s.ID, s.CompanyName, accID)
+	}
+
+	var columns []struct {
+		Name string `db:"name"`
+	}
+	db.Select(&columns, "PRAGMA table_info(sequences)")
+	fmt.Printf("Sequences columns: ")
+	for _, col := range columns {
+		fmt.Printf("%s ", col.Name)
+	}
+	fmt.Println()
 }
