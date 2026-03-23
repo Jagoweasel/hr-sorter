@@ -9,10 +9,14 @@
 </head>
 <body class="bg-gray-100 font-sans">
     <script>
-        // Request notification permission on load
-        if (Notification.permission !== 'granted') {
-            Notification.requestPermission();
-        }
+        // Request notification permission on first user interaction
+        let notificationRequested = false;
+        document.addEventListener('click', function() {
+            if (!notificationRequested && Notification.permission !== 'granted') {
+                Notification.requestPermission();
+                notificationRequested = true;
+            }
+        }, { once: true });
 
         // Handle new message events from HTMX
         document.body.addEventListener('new-message', function(evt) {

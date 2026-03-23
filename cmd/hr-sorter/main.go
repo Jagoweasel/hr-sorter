@@ -22,6 +22,7 @@ func main() {
 	debugSync := flag.Bool("debug-sync", false, "Enable debug logs for Telegram synchronization")
 	debugAdd := flag.Bool("debug-add", false, "Enable debug logs for adding sequences")
 	debugHistory := flag.Bool("debug-history", false, "Enable debug logs for sequence history and movement")
+	debugTG := flag.Bool("debug-tg", false, "Enable debug logs for Telegram API and client creation")
 	debugAll := flag.Bool("debug-all", false, "Enable all debug logs")
 	flag.Parse()
 
@@ -33,6 +34,9 @@ func main() {
 	}
 	if *debugAll || *debugHistory {
 		logger.Enable(logger.History)
+	}
+	if *debugAll || *debugTG {
+		logger.Enable(logger.Telegram)
 	}
 
 	log.Println("[Main] Starting application...")
@@ -53,7 +57,7 @@ func main() {
 	err := database.DB.Select(&integrations, `
 		SELECT i.* FROM integrations i
 		JOIN accounts a ON i.account_id = a.id
-		WHERE i.platform = 'tg' AND i.status = 'active' AND a.status = 'active'
+		WHERE i.platform = 'tg' AND i.status IN ('active', 'pending_auth') AND a.status = 'active'
 	`)
 	if err != nil {
 		log.Fatalf("[Main] Failed to fetch integrations: %v", err)
@@ -73,7 +77,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	web.RegisterRoutes(mux)
+	web.RegisterRoutes(mux, manager, ctx)
 
 	port := os.Getenv("HTTP_PORT")
 	if port == "" {

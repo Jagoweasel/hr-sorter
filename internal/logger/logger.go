@@ -12,6 +12,7 @@ const (
 	Sync        Category = "sync"
 	AddSequence Category = "add-sequence"
 	History     Category = "history"
+	Telegram    Category = "tg"
 )
 
 var enabledCategories = make(map[Category]bool)

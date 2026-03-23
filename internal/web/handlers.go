@@ -1,20 +1,28 @@
 package web
 
 import (
+	"context"
 	"fmt"
 	"html"
 	"html/template"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"hr-sorter/internal/database"
 	"hr-sorter/internal/logger"
 	"hr-sorter/internal/models"
+	"hr-sorter/internal/tgclient"
 )
 
-func RegisterRoutes(mux *http.ServeMux) {
+var tgManager *tgclient.Manager
+var rootCtx context.Context
+
+func RegisterRoutes(mux *http.ServeMux, manager *tgclient.Manager, ctx context.Context) {
+	tgManager = manager
+	rootCtx = ctx
 	mux.HandleFunc("/", handleIndex)
 	mux.HandleFunc("/contacts", handleContacts)
 	mux.HandleFunc("/messages/", handleMessages)
@@ -25,6 +33,9 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/integrations/create", handleCreateIntegration)
 	mux.HandleFunc("/integrations/toggle", handleToggleIntegration)
 	mux.HandleFunc("/integrations/delete", handleDeleteIntegration)
+	mux.HandleFunc("/integrations/status", handleIntegrationStatus)
+	mux.HandleFunc("/integrations/submit-code", handleSubmitCode)
+	mux.HandleFunc("/integrations/submit-password", handleSubmitPassword)
 	mux.HandleFunc("/pipeline", handlePipeline)
 	mux.HandleFunc("/contacts/", handleContactActions) // Catch-all for /contacts/{id}/actions etc
 	mux.HandleFunc("/sequences/create", handleCreateSequence)
@@ -110,41 +121,129 @@ func handleCreateIntegration(w http.ResponseWriter, r *http.Request) {
 	accID := r.FormValue("account_id")
 	platform := r.FormValue("platform")
 	identifier := r.FormValue("identifier")
-	apiID := r.FormValue("api_id")
+	apiIDStr := r.FormValue("api_id")
 	apiHash := r.FormValue("api_hash")
+
+	apiID := 0
+	if apiIDStr != "" {
+		apiID, _ = strconv.Atoi(apiIDStr)
+	}
 
 	status := "pending_auth"
 	sessionPath := ""
 	if platform == "tg" {
-		// Create session directory if it doesn't exist
 		sessionDir := "sessions"
 		sessionPath = fmt.Sprintf("%s/%s.json", sessionDir, identifier)
 	} else if platform == "hh" {
-		status = "inactive" // HH unimplemented
+		status = "inactive"
 	}
 
-	database.DB.MustExec("INSERT INTO integrations (account_id, platform, identifier, api_id, api_hash, status, session_path) VALUES (?, ?, ?, ?, ?, ?, ?)",
+	res, err := database.DB.Exec("INSERT INTO integrations (account_id, platform, identifier, api_id, api_hash, status, session_path) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		accID, platform, identifier, apiID, apiHash, status, sessionPath)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	if platform == "tg" {
+		id, _ := res.LastInsertId()
+		var integration models.Integration
+		database.DB.Get(&integration, "SELECT * FROM integrations WHERE id = ?", id)
+		go tgManager.StartIntegration(rootCtx, integration)
+	}
 
 	http.Redirect(w, r, "/accounts", 303)
 }
 
 func handleToggleIntegration(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
-	var status string
-	database.DB.Get(&status, "SELECT status FROM integrations WHERE id = ?", id)
-	newStatus := "active"
-	if status == "active" {
-		newStatus = "inactive"
+	var integration models.Integration
+	err := database.DB.Get(&integration, "SELECT * FROM integrations WHERE id = ?", id)
+	if err != nil {
+		http.Error(w, "Integration not found", 404)
+		return
 	}
+
+	newStatus := "active"
+	if integration.Status == "active" {
+		newStatus = "inactive"
+		if integration.Platform == "tg" {
+			tgManager.StopIntegration(integration.ID)
+		}
+	} else {
+		if integration.Platform == "tg" {
+			go tgManager.StartIntegration(rootCtx, integration)
+		}
+	}
+
 	database.DB.MustExec("UPDATE integrations SET status = ? WHERE id = ?", newStatus, id)
 	http.Redirect(w, r, "/accounts", 303)
 }
 
 func handleDeleteIntegration(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+	idStr := r.URL.Query().Get("id")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+
+	var integration models.Integration
+	err := database.DB.Get(&integration, "SELECT * FROM integrations WHERE id = ?", id)
+	if err == nil && integration.Platform == "tg" {
+		tgManager.StopIntegration(integration.ID)
+	}
+
 	database.DB.MustExec("DELETE FROM integrations WHERE id = ?", id)
 	http.Redirect(w, r, "/accounts", 303)
+}
+
+func handleIntegrationStatus(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+
+	var integration models.Integration
+	err := database.DB.Get(&integration, "SELECT * FROM integrations WHERE id = ?", id)
+	if err != nil {
+		w.Write([]byte(`{"status": "error"}`))
+		return
+	}
+
+	w.Write([]byte(fmt.Sprintf(`{"status": "%s", "identifier": "%s"}`, integration.Status, integration.Identifier)))
+}
+
+func handleSubmitCode(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", 405)
+		return
+	}
+
+	idStr := r.FormValue("integration_id")
+	code := r.FormValue("code")
+
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+
+	ok := tgManager.SubmitCode(id, code)
+	if ok {
+		w.Write([]byte(`{"ok": true}`))
+	} else {
+		w.Write([]byte(`{"ok": false, "error": "no pending auth request"}`))
+	}
+}
+
+func handleSubmitPassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", 405)
+		return
+	}
+
+	idStr := r.FormValue("integration_id")
+	password := r.FormValue("password")
+
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+
+	ok := tgManager.SubmitPassword(id, password)
+	if ok {
+		w.Write([]byte(`{"ok": true}`))
+	} else {
+		w.Write([]byte(`{"ok": false, "error": "no pending auth request"}`))
+	}
 }
 
 func handleContacts(w http.ResponseWriter, r *http.Request) {

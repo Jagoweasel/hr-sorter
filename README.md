@@ -38,12 +38,17 @@ go run cmd/hr-sorter/main.go --debug-add
 # Enable sequence history and movement logs
 go run cmd/hr-sorter/main.go --debug-history
 
+# Enable detailed Telegram API and connection logs
+go run cmd/hr-sorter/main.go --debug-tg
+
 # Enable everything
 go run cmd/hr-sorter/main.go --debug-all
 ```
 
 When `--debug-history` is enabled, the application will output a visual representation of recruitment chains:
 `[HISTORY] Seq #13 (Google): Initial Contact -> HR Screening -> Tech Interview 1 -> [REJECTED]`
+
+When `--debug-tg` is enabled, you will see detailed initialization and verification steps for each Telegram account.
 
 ## Tech Stack
 - **Backend:** Go, `gotd/td` (MTProto), `sqlx`.

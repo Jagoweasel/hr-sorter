@@ -10,6 +10,7 @@ import (
 
 	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
+	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/tg"
 	"hr-sorter/internal/database"
 	"hr-sorter/internal/logger"
@@ -17,18 +18,44 @@ import (
 )
 
 type Manager struct {
-	clients map[int64]*telegram.Client
-	mu      sync.RWMutex
+	clients   map[int64]*telegram.Client
+	cancels   map[int64]context.CancelFunc
+	codeChans map[int64]chan string
+	passChans map[int64]chan string
+	mu        sync.RWMutex
 }
 
 func NewManager() *Manager {
 	return &Manager{
-		clients: make(map[int64]*telegram.Client),
+		clients:   make(map[int64]*telegram.Client),
+		cancels:   make(map[int64]context.CancelFunc),
+		codeChans: make(map[int64]chan string),
+		passChans: make(map[int64]chan string),
 	}
 }
 
 func (m *Manager) StartIntegration(ctx context.Context, integration models.Integration) error {
-	log.Printf("[Integration %s] [STARTING] (ID: %d, Path: %s)", integration.Identifier, integration.ID, integration.SessionPath)
+	m.mu.Lock()
+	if _, running := m.cancels[integration.ID]; running {
+		m.mu.Unlock()
+		logger.Debug(logger.Telegram, "Integration %s is already running", integration.Identifier)
+		return nil
+	}
+
+	// Create a sub-context for this specific integration
+	intCtx, cancel := context.WithCancel(ctx)
+	m.cancels[integration.ID] = cancel
+	m.mu.Unlock()
+
+	defer func() {
+		m.mu.Lock()
+		delete(m.cancels, integration.ID)
+		delete(m.codeChans, integration.ID)
+		delete(m.passChans, integration.ID)
+		m.mu.Unlock()
+	}()
+
+	logger.Debug(logger.Telegram, "Starting integration %s (ID: %d, Path: %s, API ID: %d)", integration.Identifier, integration.ID, integration.SessionPath, integration.APIID)
 	if integration.SessionPath == "" {
 		return fmt.Errorf("no session path for integration %s", integration.Identifier)
 	}
@@ -42,6 +69,7 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 	// Ensure absolute path and use forward slashes for cross-platform compatibility
 	sessionPath, _ := filepath.Abs(integration.SessionPath)
 	sessionPath = filepath.ToSlash(sessionPath)
+	logger.Debug(logger.Telegram, "Using session file: %s", sessionPath)
 
 	client := telegram.NewClient(integration.APIID, integration.APIHash, telegram.Options{
 		SessionStorage: &session.FileStorage{
@@ -56,9 +84,38 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 		return m.HandleNewMessage(ctx, api, u, e.Users, integration.ID)
 	})
 
-	log.Printf("[Integration %s] [INIT] Client setup complete, starting run...", integration.Identifier)
+	// Setup Auth Flow
+	codeChan := make(chan string, 1)
+	passChan := make(chan string, 1)
+	m.mu.Lock()
+	m.codeChans[integration.ID] = codeChan
+	m.passChans[integration.ID] = passChan
+	m.mu.Unlock()
 
-	return client.Run(ctx, func(ctx context.Context) error {
+	// Custom authenticator that handles both code and password
+	a := &codeAuthenticator{
+		phone:         integration.Identifier,
+		codeChan:      codeChan,
+		passChan:      passChan,
+		integrationID: integration.ID,
+	}
+
+	flow := auth.NewFlow(a, auth.SendCodeOptions{})
+
+	logger.Debug(logger.Telegram, "Client initialized, entering Run loop...")
+
+	return client.Run(intCtx, func(ctx context.Context) error {
+		logger.Debug(logger.Telegram, "[Int ID %d] Calling client.Auth().IfNecessary (auth flow starts)", integration.ID)
+		if err := client.Auth().IfNecessary(ctx, flow); err != nil {
+			logger.Debug(logger.Telegram, "[Int ID %d] Auth failed: %v", integration.ID, err)
+			database.DB.Exec("UPDATE integrations SET status = 'pending_auth' WHERE id = ?", integration.ID)
+			return fmt.Errorf("auth failed: %w", err)
+		}
+
+		logger.Debug(logger.Telegram, "[Int ID %d] Auth succeeded! Updating status to active.", integration.ID)
+		database.DB.Exec("UPDATE integrations SET status = 'active' WHERE id = ?", integration.ID)
+
+		logger.Debug(logger.Telegram, "Client loop running for %s", integration.Identifier)
 		log.Printf("[Integration %s] [RUNNING] Logged in successfully.", integration.Identifier)
 
 		// Trigger initial sync in background
@@ -76,6 +133,94 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 	})
 }
 
+func (m *Manager) SubmitCode(id int64, code string) bool {
+	m.mu.RLock()
+	ch, ok := m.codeChans[id]
+	m.mu.RUnlock()
+	if ok {
+		ch <- code
+		return true
+	}
+	return false
+}
+
+func (m *Manager) SubmitPassword(id int64, password string) bool {
+	m.mu.RLock()
+	ch, ok := m.passChans[id]
+	m.mu.RUnlock()
+	if ok {
+		ch <- password
+		return true
+	}
+	return false
+}
+
+// codeAuthenticator implements auth.UserAuthenticator
+type codeAuthenticator struct {
+	phone         string
+	codeChan      chan string
+	passChan      chan string
+	integrationID int64
+}
+
+func (a *codeAuthenticator) Phone(ctx context.Context) (string, error) {
+	return a.phone, nil
+}
+
+func (a *codeAuthenticator) Password(ctx context.Context) (string, error) {
+	logger.Debug(logger.Telegram, "[Int ID %d] Auth flow triggered - PASSWORD needed. Updating status to awaiting_password.", a.integrationID)
+	database.DB.Exec("UPDATE integrations SET status = 'awaiting_password' WHERE id = ?", a.integrationID)
+
+	select {
+	case password := <-a.passChan:
+		logger.Debug(logger.Telegram, "[Int ID %d] Received password from UI. Submitting to Telegram...", a.integrationID)
+		return password, nil
+	case <-ctx.Done():
+		logger.Debug(logger.Telegram, "[Int ID %d] Context cancelled while waiting for password", a.integrationID)
+		return "", ctx.Err()
+	case <-time.After(5 * time.Minute):
+		logger.Debug(logger.Telegram, "[Int ID %d] Password entry timeout (5 min)", a.integrationID)
+		return "", fmt.Errorf("auth timeout")
+	}
+}
+
+func (a *codeAuthenticator) AcceptTermsOfService(ctx context.Context, tos tg.HelpTermsOfService) error {
+	return nil
+}
+
+func (a *codeAuthenticator) SignUp(ctx context.Context) (auth.UserInfo, error) {
+	return auth.UserInfo{}, nil
+}
+
+func (a *codeAuthenticator) Code(ctx context.Context, sentCode *tg.AuthSentCode) (string, error) {
+	logger.Debug(logger.Telegram, "[Int ID %d] Auth flow triggered. Has code: %v, PhoneChanged: %v",
+		a.integrationID, sentCode != nil, sentCode != nil && sentCode.PhoneCodeHash != "")
+	logger.Debug(logger.Telegram, "[Int ID %d] Auth requested code. Updating status to awaiting_code.", a.integrationID)
+	database.DB.Exec("UPDATE integrations SET status = 'awaiting_code' WHERE id = ?", a.integrationID)
+
+	select {
+	case code := <-a.codeChan:
+		logger.Debug(logger.Telegram, "[Int ID %d] Received code from UI. Submitting code to Telegram...", a.integrationID)
+		return code, nil
+	case <-ctx.Done():
+		logger.Debug(logger.Telegram, "[Int ID %d] Context cancelled while waiting for code", a.integrationID)
+		return "", ctx.Err()
+	case <-time.After(5 * time.Minute):
+		logger.Debug(logger.Telegram, "[Int ID %d] Code entry timeout (5 min)", a.integrationID)
+		return "", fmt.Errorf("auth timeout")
+	}
+}
+
+func (m *Manager) StopIntegration(id int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if cancel, ok := m.cancels[id]; ok {
+		logger.Debug(logger.Telegram, "Stopping integration ID %d", id)
+		cancel()
+		delete(m.cancels, id)
+	}
+}
+
 func (m *Manager) getOrCreateContact(ctx context.Context, user *tg.User, integrationID int64) (int64, error) {
 	externalID := fmt.Sprintf("%d", user.ID)
 	_, err := database.DB.Exec("INSERT OR IGNORE INTO contacts (integration_id, platform, external_id, first_name, last_name, username) VALUES (?, 'tg', ?, ?, ?, ?)",
@@ -90,15 +235,21 @@ func (m *Manager) getOrCreateContact(ctx context.Context, user *tg.User, integra
 }
 
 func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, integrationID int64) error {
+	logger.Debug(logger.Telegram, "[Int ID %d] Starting initial verification...", integrationID)
 	// Verify session first
 	me, err := api.UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUserSelf{}})
 	if err != nil {
+		logger.Debug(logger.Telegram, "[Int ID %d] Session verification failed: %v", integrationID, err)
 		return fmt.Errorf("failed to verify session: %w", err)
 	}
 	if len(me) > 0 {
 		if u, ok := me[0].(*tg.User); ok {
-			logger.Debug(logger.Sync, "[Int ID %d] Session verified as @%s (%s %s)", integrationID, u.Username, u.FirstName, u.LastName)
+			logger.Debug(logger.Telegram, "[Int ID %d] Session verified as @%s (%s %s). Updating status to active.", integrationID, u.Username, u.FirstName, u.LastName)
+			// Auto-activate if verified
+			database.DB.Exec("UPDATE integrations SET status = 'active' WHERE id = ?", integrationID)
 		}
+	} else {
+		logger.Debug(logger.Telegram, "[Int ID %d] No user info returned from Telegram (unauthorized)", integrationID)
 	}
 
 	// Map to track peers across folders to avoid duplicate syncs
