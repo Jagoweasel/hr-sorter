@@ -30,9 +30,9 @@ type Contact struct {
 	IntegrationID int64     `db:"integration_id" json:"integration_id"`
 	Platform      string    `db:"platform" json:"platform"` // "tg", "hh"
 	ExternalID    string    `db:"external_id" json:"external_id"`
-	FirstName     string    `db:"first_name" json:"first_name"`
-	LastName      string    `db:"last_name" json:"last_name"`
-	Username      string    `db:"username" json:"username"`
+	FirstName     *string   `db:"first_name" json:"first_name"`
+	LastName      *string   `db:"last_name" json:"last_name"`
+	Username      *string   `db:"username" json:"username"`
 	AccessHash    int64     `db:"access_hash" json:"access_hash"`
 	CreatedAt     time.Time `db:"created_at" json:"created_at"`
 	// UI fields

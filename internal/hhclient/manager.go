@@ -102,68 +102,91 @@ func (m *Manager) Sync(ctx context.Context, integrationID int64) error {
 }
 
 func (m *Manager) syncNegotiations(ctx context.Context, integration models.Integration) error {
-	logger.Debug(logger.HH, "[HH] Fetching negotiations for %s", integration.Identifier)
-	req, _ := http.NewRequestWithContext(ctx, "GET", HHApiURL+"negotiations", nil)
-	req.Header.Set("Authorization", "Bearer "+*integration.AccessToken)
-	req.Header.Set("User-Agent", *integration.UserAgent)
-	req.Header.Set("X-HH-App-Active", "true")
+	page := 0
+	for {
+		logger.Debug(logger.HH, "[HH] Fetching negotiations page %d for %s", page, integration.Identifier)
+		url := fmt.Sprintf("%snegotiations?page=%d&per_page=20", HHApiURL, page)
+		req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+		req.Header.Set("Authorization", "Bearer "+*integration.AccessToken)
+		req.Header.Set("User-Agent", *integration.UserAgent)
+		req.Header.Set("X-HH-App-Active", "true")
 
-	client := GetHHHttpClient()
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("api error: %d", resp.StatusCode)
-	}
-
-	var data struct {
-		Items []struct {
-			ID        string `json:"id"`
-			UpdatedAt string `json:"updated_at"`
-			Employer  struct {
-				ID   string `json:"id"`
-				Name string `json:"name"`
-			} `json:"employer"`
-			Vacancy struct {
-				ID   string `json:"id"`
-				Name string `json:"name"`
-			} `json:"vacancy"`
-			MessagesURL string `json:"messages_url"`
-		} `json:"items"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return err
-	}
-
-	logger.Debug(logger.HH, "[HH] Found %d negotiations for %s", len(data.Items), integration.Identifier)
-
-	for _, item := range data.Items {
-		// 1. Ensure Contact
-		contactID, err := m.getOrCreateContact(integration.ID, item.Employer.ID, item.Employer.Name, item.Vacancy.Name)
+		client := GetHHHttpClient()
+		resp, err := client.Do(req)
 		if err != nil {
-			continue
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("api error: %d", resp.StatusCode)
 		}
 
-		// 2. Sync Messages for this negotiation
-		if err := m.syncMessages(ctx, integration, contactID, item.MessagesURL); err != nil {
-			logger.Debug(logger.HH, "[HH] Failed to sync messages for negotiation %s: %v", item.ID, err)
+		var data struct {
+			Items []struct {
+				ID    string `json:"id"`
+				State struct {
+					Name string `json:"name"`
+				} `json:"state"`
+				UpdatedAt string `json:"updated_at"`
+				Employer  struct {
+					Name string `json:"name"`
+				} `json:"employer"`
+				Vacancy struct {
+					Name string `json:"name"`
+				} `json:"vacancy"`
+				MessagesURL string `json:"messages_url"`
+			} `json:"items"`
+			Found int `json:"found"`
+			Pages int `json:"pages"`
+			Page  int `json:"page"`
 		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+			return err
+		}
+
+		logger.Debug(logger.HH, "[HH] Found %d negotiations on page %d for %s", len(data.Items), data.Page, integration.Identifier)
+
+		for _, item := range data.Items {
+			// 1. Ensure Contact (using Negotiation ID to keep separate)
+			contactID, err := m.getOrCreateContact(integration.ID, item.ID, item.Employer.Name, item.Vacancy.Name, item.State.Name)
+			if err != nil {
+				continue
+			}
+
+			// 2. Sync Messages for this negotiation
+			if err := m.syncMessages(ctx, integration, contactID, item.MessagesURL); err != nil {
+				logger.Debug(logger.HH, "[HH] Failed to sync messages for negotiation %s: %v", item.ID, err)
+			}
+		}
+
+		if data.Page >= data.Pages-1 || len(data.Items) == 0 {
+			break
+		}
+		page++
 	}
 
 	return nil
 }
 
-func (m *Manager) getOrCreateContact(integrationID int64, employerID, employerName, vacancyName string) (int64, error) {
-	externalID := fmt.Sprintf("hh_%s", employerID)
+func (m *Manager) getOrCreateContact(integrationID int64, negID, employerName, vacancyName, stateName string) (int64, error) {
+	externalID := fmt.Sprintf("hh_neg_%s", negID)
+	logger.Debug(logger.HH, "[HH] Ensuring contact for negotiation %s (%s - %s)", negID, employerName, vacancyName)
+	// We map:
+	// first_name -> Employer Name
+	// last_name -> Vacancy Name
+	// username -> Current Status (State)
+	// access_hash -> Always 0 for HH
 	_, err := database.DB.Exec(`
-		INSERT INTO contacts (integration_id, platform, external_id, first_name, username) 
-		VALUES (?, 'hh', ?, ?, ?)
-		ON CONFLICT(external_id) DO UPDATE SET first_name = excluded.first_name`,
-		integrationID, externalID, employerName, vacancyName)
+		INSERT INTO contacts (integration_id, platform, external_id, first_name, last_name, username, access_hash) 
+		VALUES (?, 'hh', ?, ?, ?, ?, 0)
+		ON CONFLICT(external_id) DO UPDATE SET 
+			first_name = excluded.first_name,
+			last_name = excluded.last_name,
+			username = excluded.username,
+			access_hash = 0`,
+		integrationID, externalID, employerName, vacancyName, stateName)
 	if err != nil {
 		return 0, err
 	}
@@ -193,7 +216,7 @@ func (m *Manager) syncMessages(ctx context.Context, integration models.Integrati
 			CreatedAt string `json:"created_at"`
 			Text      string `json:"text"`
 			Author    struct {
-				ParticipantGroup string `json:"participant_group"` // "employer" or "applicant"
+				ParticipantType string `json:"participant_type"` // "employer" or "applicant"
 			} `json:"author"`
 		} `json:"items"`
 	}
@@ -204,13 +227,19 @@ func (m *Manager) syncMessages(ctx context.Context, integration models.Integrati
 
 	newMsgs := 0
 	for _, msg := range data.Items {
-		ts, _ := time.Parse(time.RFC3339, msg.CreatedAt)
-		isIncoming := msg.Author.ParticipantGroup == "employer"
+		// HH uses +0300 format which time.RFC3339 might not like depending on Go version
+		// but usually it works. Let's use a more flexible parser.
+		ts, err := time.Parse("2006-01-02T15:04:05-0700", msg.CreatedAt)
+		if err != nil {
+			// Fallback to RFC3339
+			ts, _ = time.Parse(time.RFC3339, msg.CreatedAt)
+		}
+		isIncoming := msg.Author.ParticipantType == "employer"
 
 		res, err := database.DB.Exec(`
 			INSERT OR IGNORE INTO messages (integration_id, contact_id, external_id, text, is_incoming, timestamp) 
 			VALUES (?, ?, ?, ?, ?, ?)`,
-			integration.ID, contactID, fmt.Sprintf("hh_%s", msg.ID), msg.Text, isIncoming, ts)
+			integration.ID, contactID, fmt.Sprintf("hh_msg_%s", msg.ID), msg.Text, isIncoming, ts)
 		if err != nil {
 			logger.Debug(logger.HH, "[HH] DB error saving message: %v", err)
 			continue

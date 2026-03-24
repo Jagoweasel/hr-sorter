@@ -440,8 +440,23 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 		platformIcon := `<span class="text-blue-400" title="Telegram">
 			<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.02-1.96 1.25-5.54 3.69-.52.35-.97.52-1.35.51-.42-.01-1.24-.24-1.84-.44-.74-.24-1.33-.37-1.28-.79.03-.22.33-.44.89-.67 3.49-1.52 5.82-2.52 6.99-3.01 3.32-1.39 4.02-1.63 4.47-1.63.1 0 .32.02.46.14.12.1.15.23.16.33.01.07.02.21.01.35z"/></svg>
 		</span>`
+
+		deref := func(s *string) string {
+			if s == nil {
+				return ""
+			}
+			return *s
+		}
+
+		nameDisplay := fmt.Sprintf("%s %s", deref(c.FirstName), deref(c.LastName))
+		subDisplay := "@" + deref(c.Username)
+
 		if c.Platform == "hh" {
-			platformIcon = `<span class="text-red-500 font-black text-[10px]" title="HeadHunter">HH</span>`
+			platformIcon = `<span class="text-red-500 font-black text-[10px] border border-red-200 px-1 rounded bg-red-50" title="HeadHunter">HH</span>`
+			nameDisplay = deref(c.FirstName) // Employer Name
+			subDisplay = deref(c.LastName)   // Vacancy Name
+			// Add HH status badge
+			statusIndicator += fmt.Sprintf(`<span class="ml-2 px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[8px] font-black uppercase tracking-tighter">%s</span>`, deref(c.Username))
 		}
 
 		fmt.Fprintf(w, `
@@ -450,12 +465,12 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 				 hx-target="#chat-history"
 				 onclick="document.querySelectorAll('.contact-item').forEach(el => el.classList.remove('bg-blue-100')); this.classList.add('bg-blue-100')">
 				<div class="flex justify-between items-start">
-					<div class="flex items-center space-x-2">
+					<div class="flex items-center space-x-2 overflow-hidden">
 						%s
-						<p class="font-bold text-blue-800 text-sm">%s %s</p>
+						<p class="font-bold text-blue-800 text-sm truncate">%s</p>
 						%s
 					</div>
-					<span class="text-[10px] text-gray-400">@%s</span>
+					<span class="text-[10px] text-gray-400 shrink-0 ml-2">%s</span>
 				</div>
 				<p class="text-[11px] text-gray-600 truncate mt-1">%s</p>
 				
@@ -466,7 +481,7 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 					<svg class="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg>
 				</button>
 			</div>
-		`, c.ID, platformIcon, c.FirstName, c.LastName, statusIndicator, c.Username, html.EscapeString(lastMsg), c.ID)
+		`, c.ID, platformIcon, nameDisplay, statusIndicator, subDisplay, html.EscapeString(lastMsg), c.ID)
 	}
 }
 
