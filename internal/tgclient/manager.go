@@ -568,8 +568,9 @@ func (m *Manager) HandleNewMessage(ctx context.Context, api *tg.Client, msgClass
 
 	// Save message
 	externalID := fmt.Sprintf("%d", msg.ID)
+	ts := time.Unix(int64(msg.Date), 0).UTC().Format("2006-01-02 15:04:05")
 	_, err = database.DB.Exec("INSERT OR IGNORE INTO messages (integration_id, contact_id, external_id, text, is_incoming, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-		integrationID, contactID, externalID, text, !msg.Out, time.Unix(int64(msg.Date), 0))
+		integrationID, contactID, externalID, text, !msg.Out, ts)
 	if err != nil {
 		logger.Debug(logger.Sync, "[Int ID %d] DB Error saving message: %v", integrationID, err)
 		return err
@@ -640,8 +641,9 @@ func (m *Manager) SyncHistory(ctx context.Context, api *tg.Client, user *tg.User
 
 		// Use INSERT OR IGNORE to avoid duplicates if message was already captured live
 		externalID := fmt.Sprintf("%d", msg.ID)
+		ts := time.Unix(int64(msg.Date), 0).UTC().Format("2006-01-02 15:04:05")
 		res, err := database.DB.Exec("INSERT OR IGNORE INTO messages (integration_id, contact_id, external_id, text, is_incoming, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-			integrationID, contactID, externalID, msg.Message, !msg.Out, time.Unix(int64(msg.Date), 0))
+			integrationID, contactID, externalID, msg.Message, !msg.Out, ts)
 		if err != nil {
 			logger.Debug(logger.Sync, "[Int ID %d] DB Error during sync for @%s: %v", integrationID, user.Username, err)
 			continue

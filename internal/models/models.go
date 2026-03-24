@@ -41,13 +41,13 @@ type Contact struct {
 }
 
 type Message struct {
-	ID            int64     `db:"id" json:"id"`
-	IntegrationID int64     `db:"integration_id" json:"integration_id"`
-	ContactID     int64     `db:"contact_id" json:"contact_id"`
-	ExternalID    *string   `db:"external_id" json:"external_id"`
-	Text          string    `db:"text" json:"text"`
-	IsIncoming    bool      `db:"is_incoming" json:"is_incoming"`
-	Timestamp     time.Time `db:"timestamp" json:"timestamp"`
+	ID            int64   `db:"id" json:"id"`
+	IntegrationID int64   `db:"integration_id" json:"integration_id"`
+	ContactID     int64   `db:"contact_id" json:"contact_id"`
+	ExternalID    *string `db:"external_id" json:"external_id"`
+	Text          string  `db:"text" json:"text"`
+	IsIncoming    bool    `db:"is_incoming" json:"is_incoming"`
+	Timestamp     string  `db:"timestamp" json:"timestamp"`
 }
 
 type Sequence struct {

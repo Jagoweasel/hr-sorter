@@ -380,6 +380,7 @@ func handleSubmitPassword(w http.ResponseWriter, r *http.Request) {
 func handleContacts(w http.ResponseWriter, r *http.Request) {
 	activeAccountID := r.URL.Query().Get("account_id")
 	platformFilter := r.URL.Query().Get("platform") // "tg", "hh", or empty for both
+	showDeclines := r.URL.Query().Get("show_declines") == "true"
 
 	query := `
 		SELECT c.*, 
@@ -399,6 +400,10 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 	if platformFilter != "" {
 		query += " AND c.platform = ?"
 		args = append(args, platformFilter)
+	}
+	if !showDeclines {
+		// Filter out HH declines
+		query += " AND NOT (c.platform = 'hh' AND (c.username = 'Отказ' OR c.username = 'discard'))"
 	}
 	query += " ORDER BY last_time DESC"
 
@@ -510,6 +515,20 @@ func handleMessages(w http.ResponseWriter, r *http.Request) {
 			align = "items-end"
 			bgColor = "bg-green-100"
 		}
+
+		// Parse the timestamp string
+		displayTime := m.Timestamp
+		t, err := time.Parse("2006-01-02 15:04:05", m.Timestamp)
+		if err == nil {
+			displayTime = t.Format("Jan 02, 15:04")
+		} else {
+			// Try RFC3339 as fallback
+			t, err = time.Parse(time.RFC3339, m.Timestamp)
+			if err == nil {
+				displayTime = t.Format("Jan 02, 15:04")
+			}
+		}
+
 		fmt.Fprintf(w, `
 			<div class="flex flex-col %s">
 				<div class="%s p-3 rounded-lg max-w-[85%%] shadow-sm">
@@ -517,7 +536,7 @@ func handleMessages(w http.ResponseWriter, r *http.Request) {
 					<p class="text-[9px] text-gray-500 mt-1 text-right">%s</p>
 				</div>
 			</div>
-		`, align, bgColor, html.EscapeString(m.Text), m.Timestamp.Format("Jan 02, 15:04"))
+		`, align, bgColor, html.EscapeString(m.Text), displayTime)
 	}
 	fmt.Fprint(w, `</div>`)
 }

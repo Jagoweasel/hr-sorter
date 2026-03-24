@@ -129,11 +129,11 @@ func (m *Manager) syncNegotiations(ctx context.Context, integration models.Integ
 					Name string `json:"name"`
 				} `json:"state"`
 				UpdatedAt string `json:"updated_at"`
-				Employer  struct {
-					Name string `json:"name"`
-				} `json:"employer"`
-				Vacancy struct {
-					Name string `json:"name"`
+				Vacancy   struct {
+					Name     string `json:"name"`
+					Employer struct {
+						Name string `json:"name"`
+					} `json:"employer"`
 				} `json:"vacancy"`
 				MessagesURL string `json:"messages_url"`
 			} `json:"items"`
@@ -150,7 +150,7 @@ func (m *Manager) syncNegotiations(ctx context.Context, integration models.Integ
 
 		for _, item := range data.Items {
 			// 1. Ensure Contact (using Negotiation ID to keep separate)
-			contactID, err := m.getOrCreateContact(integration.ID, item.ID, item.Employer.Name, item.Vacancy.Name, item.State.Name)
+			contactID, err := m.getOrCreateContact(integration.ID, item.ID, item.Vacancy.Employer.Name, item.Vacancy.Name, item.State.Name)
 			if err != nil {
 				continue
 			}
@@ -239,7 +239,7 @@ func (m *Manager) syncMessages(ctx context.Context, integration models.Integrati
 		res, err := database.DB.Exec(`
 			INSERT OR IGNORE INTO messages (integration_id, contact_id, external_id, text, is_incoming, timestamp) 
 			VALUES (?, ?, ?, ?, ?, ?)`,
-			integration.ID, contactID, fmt.Sprintf("hh_msg_%s", msg.ID), msg.Text, isIncoming, ts)
+			integration.ID, contactID, fmt.Sprintf("hh_msg_%s", msg.ID), msg.Text, isIncoming, ts.UTC().Format("2006-01-02 15:04:05"))
 		if err != nil {
 			logger.Debug(logger.HH, "[HH] DB error saving message: %v", err)
 			continue
