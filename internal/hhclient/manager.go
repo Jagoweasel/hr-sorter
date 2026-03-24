@@ -27,30 +27,42 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 	intCtx, cancel := context.WithCancel(ctx)
 	m.cancels[integration.ID] = cancel
 
-	logger.Debug(logger.Sync, "[HH] Starting sync for integration %s", integration.Identifier)
+	log.Printf("[HH] Initializing background sync for %s (ID: %d)", integration.Identifier, integration.ID)
+	logger.Debug(logger.HH, "[HH] Starting sync loop for integration %s", integration.Identifier)
 
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 
 		// Initial sync
+		logger.Debug(logger.HH, "[HH] Triggering initial sync for %s", integration.Identifier)
 		if err := m.Sync(intCtx, integration.ID); err != nil {
-			log.Printf("[HH] Initial sync failed for %s: %v", integration.Identifier, err)
+			logger.Debug(logger.HH, "[HH] Initial sync failed for %s: %v", integration.Identifier, err)
 		}
 
 		for {
 			select {
 			case <-intCtx.Done():
+				logger.Debug(logger.HH, "[HH] Stopping sync for %s (context cancelled)", integration.Identifier)
 				return
 			case <-ticker.C:
+				logger.Debug(logger.HH, "[HH] Ticker triggered sync for %s", integration.Identifier)
 				if err := m.Sync(intCtx, integration.ID); err != nil {
-					log.Printf("[HH] Sync failed for %s: %v", integration.Identifier, err)
+					logger.Debug(logger.HH, "[HH] Sync failed for %s: %v", integration.Identifier, err)
 				}
 			}
 		}
 	}()
 
 	return nil
+}
+
+func (m *Manager) StopIntegration(id int64) {
+	if cancel, ok := m.cancels[id]; ok {
+		cancel()
+		delete(m.cancels, id)
+		logger.Debug(logger.HH, "[HH] Stopped background manager for integration %d", id)
+	}
 }
 
 func (m *Manager) Sync(ctx context.Context, integrationID int64) error {
@@ -60,14 +72,23 @@ func (m *Manager) Sync(ctx context.Context, integrationID int64) error {
 		return err
 	}
 
-	if integration.Status != "active" || integration.AccessToken == nil {
+	if integration.Status != "active" {
+		logger.Debug(logger.HH, "[HH] Skipping sync for %s: status is %s (need 'active')", integration.Identifier, integration.Status)
+		return nil
+	}
+	if integration.AccessToken == nil || *integration.AccessToken == "" {
+		logger.Debug(logger.HH, "[HH] Skipping sync for %s: access token is missing or empty", integration.Identifier)
 		return nil
 	}
 
 	// Check if token needs refresh (5 min buffer)
 	if integration.ExpiresAt != nil && time.Now().Add(5*time.Minute).After(*integration.ExpiresAt) {
-		logger.Debug(logger.Sync, "[HH] Refreshing token for %s", integration.Identifier)
-		tr, err := RefreshToken(*integration.RefreshToken)
+		logger.Debug(logger.HH, "[HH] Refreshing token for %s", integration.Identifier)
+		ua := ""
+		if integration.UserAgent != nil {
+			ua = *integration.UserAgent
+		}
+		tr, err := RefreshToken(*integration.RefreshToken, ua)
 		if err != nil {
 			return fmt.Errorf("refresh token: %w", err)
 		}
@@ -81,12 +102,14 @@ func (m *Manager) Sync(ctx context.Context, integrationID int64) error {
 }
 
 func (m *Manager) syncNegotiations(ctx context.Context, integration models.Integration) error {
+	logger.Debug(logger.HH, "[HH] Fetching negotiations for %s", integration.Identifier)
 	req, _ := http.NewRequestWithContext(ctx, "GET", HHApiURL+"negotiations", nil)
 	req.Header.Set("Authorization", "Bearer "+*integration.AccessToken)
 	req.Header.Set("User-Agent", *integration.UserAgent)
 	req.Header.Set("X-HH-App-Active", "true")
 
-	resp, err := http.DefaultClient.Do(req)
+	client := GetHHHttpClient()
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -116,6 +139,8 @@ func (m *Manager) syncNegotiations(ctx context.Context, integration models.Integ
 		return err
 	}
 
+	logger.Debug(logger.HH, "[HH] Found %d negotiations for %s", len(data.Items), integration.Identifier)
+
 	for _, item := range data.Items {
 		// 1. Ensure Contact
 		contactID, err := m.getOrCreateContact(integration.ID, item.Employer.ID, item.Employer.Name, item.Vacancy.Name)
@@ -125,7 +150,7 @@ func (m *Manager) syncNegotiations(ctx context.Context, integration models.Integ
 
 		// 2. Sync Messages for this negotiation
 		if err := m.syncMessages(ctx, integration, contactID, item.MessagesURL); err != nil {
-			log.Printf("[HH] Failed to sync messages for negotiation %s: %v", item.ID, err)
+			logger.Debug(logger.HH, "[HH] Failed to sync messages for negotiation %s: %v", item.ID, err)
 		}
 	}
 
@@ -149,12 +174,14 @@ func (m *Manager) getOrCreateContact(integrationID int64, employerID, employerNa
 }
 
 func (m *Manager) syncMessages(ctx context.Context, integration models.Integration, contactID int64, messagesURL string) error {
+	logger.Debug(logger.HH, "[HH] Syncing messages from %s", messagesURL)
 	req, _ := http.NewRequestWithContext(ctx, "GET", messagesURL, nil)
 	req.Header.Set("Authorization", "Bearer "+*integration.AccessToken)
 	req.Header.Set("User-Agent", *integration.UserAgent)
 	req.Header.Set("X-HH-App-Active", "true")
 
-	resp, err := http.DefaultClient.Do(req)
+	client := GetHHHttpClient()
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -175,17 +202,27 @@ func (m *Manager) syncMessages(ctx context.Context, integration models.Integrati
 		return err
 	}
 
+	newMsgs := 0
 	for _, msg := range data.Items {
 		ts, _ := time.Parse(time.RFC3339, msg.CreatedAt)
 		isIncoming := msg.Author.ParticipantGroup == "employer"
 
-		_, err := database.DB.Exec(`
+		res, err := database.DB.Exec(`
 			INSERT OR IGNORE INTO messages (integration_id, contact_id, external_id, text, is_incoming, timestamp) 
 			VALUES (?, ?, ?, ?, ?, ?)`,
 			integration.ID, contactID, fmt.Sprintf("hh_%s", msg.ID), msg.Text, isIncoming, ts)
 		if err != nil {
-			log.Printf("[HH] DB error saving message: %v", err)
+			logger.Debug(logger.HH, "[HH] DB error saving message: %v", err)
+			continue
 		}
+
+		if rows, _ := res.RowsAffected(); rows > 0 {
+			newMsgs++
+		}
+	}
+
+	if newMsgs > 0 {
+		logger.Debug(logger.HH, "[HH] Saved %d new messages from contact %d", newMsgs, contactID)
 	}
 
 	return nil

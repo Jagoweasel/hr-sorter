@@ -1,12 +1,58 @@
 package hhclient
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"hr-sorter/internal/logger"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
 )
+
+type loggingRoundTripper struct {
+	next http.RoundTripper
+}
+
+func (l *loggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	logger.Debug(logger.HH, "--> %s %s", req.Method, req.URL.String())
+	for k, v := range req.Header {
+		if k == "Authorization" {
+			logger.Debug(logger.HH, "Header: %s: Bearer [REDACTED]", k)
+		} else {
+			logger.Debug(logger.HH, "Header: %s: %v", k, v)
+		}
+	}
+
+	resp, err := l.next.RoundTrip(req)
+	if err != nil {
+		logger.Debug(logger.HH, "<-- ERROR: %v", err)
+		return nil, err
+	}
+
+	logger.Debug(logger.HH, "<-- %d %s", resp.StatusCode, req.URL.String())
+
+	// Log response body for non-binary content
+	if !strings.Contains(resp.Header.Get("Content-Type"), "image") {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body = io.NopCloser(bytes.NewBuffer(body))
+		if len(body) > 0 {
+			logger.Debug(logger.HH, "Response Body: %s", string(body))
+		}
+	}
+
+	return resp, nil
+}
+
+func GetHHHttpClient() *http.Client {
+	if logger.IsEnabled(logger.HH) {
+		return &http.Client{
+			Transport: &loggingRoundTripper{next: http.DefaultTransport},
+		}
+	}
+	return http.DefaultClient
+}
 
 const (
 	HHApiURL   = "https://api.hh.ru/"
@@ -26,13 +72,13 @@ type TokenResponse struct {
 func GetAuthorizeURL() string {
 	params := url.Values{
 		"client_id":     {AndroidClientID},
-		"redirect_uri":  {"hhandroid://"},
 		"response_type": {"code"},
 	}
 	return HHOAuthURL + "authorize?" + params.Encode()
 }
 
-func ExchangeToken(code string) (*TokenResponse, error) {
+func ExchangeToken(code string, userAgent string) (*TokenResponse, error) {
+	logger.Debug(logger.HH, "Exchanging code for token...")
 	data := url.Values{
 		"client_id":     {AndroidClientID},
 		"client_secret": {AndroidClientSecret},
@@ -40,8 +86,15 @@ func ExchangeToken(code string) (*TokenResponse, error) {
 		"grant_type":    {"authorization_code"},
 	}
 
-	resp, err := http.Post(HHOAuthURL+"token", "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+	req, _ := http.NewRequest("POST", HHOAuthURL+"token", strings.NewReader(data.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("X-HH-App-Active", "true")
+
+	client := GetHHHttpClient()
+	resp, err := client.Do(req)
 	if err != nil {
+		logger.Debug(logger.HH, "Token exchange request failed: %v", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -52,20 +105,30 @@ func ExchangeToken(code string) (*TokenResponse, error) {
 
 	var tr TokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&tr); err != nil {
+		logger.Debug(logger.HH, "Failed to decode token response: %v", err)
 		return nil, err
 	}
 
+	logger.Debug(logger.HH, "Token exchange successful!")
 	return &tr, nil
 }
 
-func RefreshToken(refreshToken string) (*TokenResponse, error) {
+func RefreshToken(refreshToken string, userAgent string) (*TokenResponse, error) {
+	logger.Debug(logger.HH, "Refreshing access token...")
 	data := url.Values{
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {refreshToken},
 	}
 
-	resp, err := http.Post(HHOAuthURL+"token", "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+	req, _ := http.NewRequest("POST", HHOAuthURL+"token", strings.NewReader(data.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("X-HH-App-Active", "true")
+
+	client := GetHHHttpClient()
+	resp, err := client.Do(req)
 	if err != nil {
+		logger.Debug(logger.HH, "Token refresh request failed: %v", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -76,8 +139,10 @@ func RefreshToken(refreshToken string) (*TokenResponse, error) {
 
 	var tr TokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&tr); err != nil {
+		logger.Debug(logger.HH, "Failed to decode refresh response: %v", err)
 		return nil, err
 	}
 
+	logger.Debug(logger.HH, "Token refresh successful!")
 	return &tr, nil
 }

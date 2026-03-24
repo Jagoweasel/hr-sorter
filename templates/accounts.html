@@ -68,13 +68,20 @@
                                 <p class="text-[10px] font-bold uppercase tracking-tighter status-badge {{ if eq .Status "active" }}text-green-600{{ else if eq .Status "awaiting_code" }}text-yellow-600{{ else if eq .Status "awaiting_password" }}text-yellow-600{{ else if eq .Status "pending_auth" }}text-orange-500{{ else }}text-gray-400{{ end }}">{{ .Status }}</p>
                             </div>
                         </div>
-                        <div class="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <a href="/integrations/toggle?id={{ .ID }}" class="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400" title="Toggle Active">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
-                            </a>
-                            <a href="/integrations/delete?id={{ .ID }}" onclick="return confirm('Remove integration?')" class="p-1.5 hover:bg-red-50 rounded-lg text-gray-300 hover:text-red-500" title="Delete">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                            </a>
+                        <div class="flex items-center space-x-2">
+                            {{ if eq .Status "pending_auth" }}
+                            <button onclick="manualFinishAuth('{{ .ID }}')" class="px-2 py-1 bg-orange-100 text-orange-600 rounded text-[9px] font-black uppercase tracking-widest hover:bg-orange-200 transition-colors">
+                                Finish Auth
+                            </button>
+                            {{ end }}
+                            <div class="opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-2">
+                                <a href="/integrations/toggle?id={{ .ID }}" class="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400" title="Toggle Active">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+                                </a>
+                                <a href="/integrations/delete?id={{ .ID }}" onclick="return confirm('Remove integration?')" class="p-1.5 hover:bg-red-50 rounded-lg text-gray-300 hover:text-red-500" title="Delete">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                </a>
+                            </div>
                         </div>
                     </div>
                     {{ else }}
@@ -191,18 +198,22 @@
 
 <!-- Modal: HH Auth Code Entry -->
 <div id="auth-hh-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-[300]" onclick="if(event.target === this) { /* don't close */ }">
-    <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm relative" onclick="event.stopPropagation()">
+    <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md relative" onclick="event.stopPropagation()">
         <h2 class="text-xl font-black text-gray-900 tracking-tight mb-2">HeadHunter Auth</h2>
-        <p class="text-sm text-gray-500 mb-6">1. <a id="hh-auth-link" href="#" target="_blank" class="text-blue-600 font-bold underline">Click here to login</a><br>2. Copy the 'code' from the redirected URL<br>3. Paste it below:</p>
+        <div class="text-xs text-gray-500 mb-6 space-y-3 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+            <p>1. <a id="hh-auth-link" href="#" target="_blank" class="text-blue-600 font-bold underline">Click here to login on HeadHunter</a></p>
+            <p>2. After logging in, HH will redirect you to a broken address starting with <code class="bg-gray-200 px-1 rounded">hhandroid://</code>. <span class="text-orange-600 font-bold">This is normal.</span></p>
+            <p>3. Look at your browser's <span class="font-bold text-gray-900">Address Bar</span>. Copy everything after <code class="bg-gray-200 px-1 rounded">code=</code> and before any other symbols.</p>
+        </div>
         <form id="auth-hh-form" class="space-y-4">
             <input type="hidden" name="integration_id" id="auth-hh-integration-id">
             <div>
                 <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Authorization Code</label>
-                <input type="text" name="code" required class="block w-full border-2 border-gray-100 rounded-xl p-3 text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none transition-colors text-center" placeholder="Paste code here" autofocus>
+                <input type="text" name="code" required class="block w-full border-2 border-gray-100 rounded-xl p-3 text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none transition-colors text-center" placeholder="Paste the code from the URL here" autofocus>
             </div>
             <div class="flex justify-between space-x-3 pt-2">
                 <button type="button" onclick="closeAllModals()" class="px-4 py-2 text-[10px] font-black text-gray-400 uppercase">Cancel</button>
-                <button type="submit" class="px-6 py-2 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-red-700">Link HH</button>
+                <button type="submit" class="px-6 py-2 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-red-700">Link HH Account</button>
             </div>
         </form>
         <div id="hh-auth-error" class="mt-4 text-center text-red-500 text-xs font-bold hidden"></div>
@@ -210,208 +221,72 @@
 </div>
 
 <script>
-    // Store the last created integration ID (set after form submission)
     let pendingIntegrationId = null;
     let authPollingInterval = null;
 
-    // Intercept form submission to capture the integration ID after creation
-    document.addEventListener('htmx:afterRequest', function(evt) {
-        if (evt.detail.requestConfig.verb === 'post' && evt.detail.requestConfig.path === '/integrations/create') {
-            // Should redirect to /accounts, grab the integration ID from response
-            // Simpler: poll for newly created "pending_auth" integration
-            setTimeout(checkForNewIntegration, 500);
-        }
-    });
+    // --- Core Logic ---
 
-    async function checkForNewIntegration() {
-        // Find any TG integration that needs auth
-        const cards = document.querySelectorAll('.integration-card');
-        for (let card of cards) {
-            const statusEl = card.querySelector('.status-badge');
-            const status = statusEl ? statusEl.textContent.trim() : '';
-            console.log('Checking card', card.dataset.integrationId, 'status:', status);
-            if (status === 'pending_auth' || status === 'awaiting_code' || status === 'awaiting_password') {
-                const id = card.dataset.integrationId;
-                console.log('Found integration needing auth:', id);
-                if (!pendingIntegrationId) {
-                    pendingIntegrationId = id;
-                    startAuthPolling(id);
-                }
-                break;
-            }
-        }
-    }
-
-    function startAuthPolling(integrationId) {
-        if (authPollingInterval) clearInterval(authPollingInterval);
-        
-        pollAuthStatus(integrationId);
-        authPollingInterval = setInterval(() => pollAuthStatus(integrationId), 2000);
-    }
-
-    async function pollAuthStatus(integrationId) {
+    async function pollAuthStatus(id) {
         try {
-            const resp = await fetch(`/integrations/status?id=${integrationId}`);
+            const resp = await fetch(`/integrations/status?id=${id}`);
+            if (!resp.ok) return;
             const data = await resp.json();
             
-            // Update status badge in UI
-            const card = document.querySelector(`.integration-card[data-integration-id="${integrationId}"]`);
+            console.log(`[AuthPoll] ID: ${id}, Status: ${data.status}, Platform: ${data.platform}`);
+
+            // Update UI badge
+            const card = document.querySelector(`.integration-card[data-integration-id="${id}"]`);
             if (card) {
-                const statusEl = card.querySelector('.status-badge');
-                if (statusEl) {
-                    statusEl.textContent = data.status;
-                    statusEl.className = 'text-[10px] font-bold uppercase tracking-tighter status-badge ' + 
+                const badge = card.querySelector('.status-badge');
+                if (badge) {
+                    badge.textContent = data.status;
+                    badge.className = 'text-[10px] font-bold uppercase tracking-tighter status-badge ' + 
                         (data.status === 'active' ? 'text-green-600' : 
                          data.status === 'awaiting_code' ? 'text-yellow-600' : 
                          data.status === 'pending_auth' ? 'text-orange-500' : 'text-gray-400');
                 }
             }
 
-            if (data.status === 'awaiting_code' && data.platform === 'tg' && document.getElementById('auth-code-modal').classList.contains('hidden')) {
-                showCodeModal(integrationId, data.identifier);
-                clearInterval(authPollingInterval);
-            } else if (data.status === 'awaiting_password' && data.platform === 'tg' && document.getElementById('auth-password-modal').classList.contains('hidden')) {
-                showPasswordModal(integrationId, data.identifier);
-                clearInterval(authPollingInterval);
-            } else if (data.status === 'pending_auth' && data.platform === 'hh' && document.getElementById('auth-hh-modal').classList.contains('hidden')) {
-                showHHModal(integrationId, data.auth_url);
-                clearInterval(authPollingInterval);
+            // State machine for modals
+            if (data.status === 'awaiting_code' && data.platform === 'tg') {
+                showCodeModal(id, data.identifier);
+                stopPolling();
+            } else if (data.status === 'awaiting_password' && data.platform === 'tg') {
+                showPasswordModal(id, data.identifier);
+                stopPolling();
+            } else if (data.status === 'pending_auth' && data.platform === 'hh') {
+                // Only auto-show if we haven't shown it yet or manually requested
+                if (pendingIntegrationId === String(id) && isModalHidden('auth-hh-modal')) {
+                    showHHModal(id, data.auth_url);
+                    stopPolling();
+                }
             } else if (data.status === 'active') {
-                clearInterval(authPollingInterval);
-                pendingIntegrationId = null;
+                console.log('[AuthPoll] Success! Reloading...');
+                stopPolling();
                 closeAllModals();
+                setTimeout(() => window.location.reload(), 1000);
             }
         } catch (e) {
-            console.error('Poll error:', e);
+            console.error('[AuthPoll] Error:', e);
         }
     }
 
-    function closeAuthModal() {
-        document.getElementById('auth-code-modal').classList.add('hidden');
-        document.querySelector('#auth-code-form input[name="code"]').value = '';
-        document.getElementById('auth-error').classList.add('hidden');
-        if (pendingIntegrationId) {
-            startAuthPolling(pendingIntegrationId);
-        }
-    }
-    
-    function showHHModal(integrationId, authURL) {
-        document.getElementById('auth-hh-integration-id').value = integrationId;
-        document.getElementById('hh-auth-link').href = authURL;
-        document.getElementById('auth-hh-modal').classList.remove('hidden');
+    function startPolling(id) {
+        stopPolling();
+        pendingIntegrationId = String(id);
+        console.log('[AuthPoll] Started for:', id);
+        pollAuthStatus(id);
+        authPollingInterval = setInterval(() => pollAuthStatus(id), 2500);
     }
 
-    function closeAllModals() {
-        document.getElementById('auth-hh-modal').classList.add('hidden');
-        document.getElementById('auth-code-modal').classList.add('hidden');
-        document.getElementById('auth-password-modal').classList.add('hidden');
-        document.querySelector('#auth-code-form input[name="code"]').value = '';
-        document.querySelector('#auth-password-form input[name="password"]').value = '';
-        document.querySelector('#auth-hh-form input[name="code"]').value = '';
-        document.getElementById('auth-error').classList.add('hidden');
-        document.getElementById('password-error').classList.add('hidden');
-        document.getElementById('hh-auth-error').classList.add('hidden');
-        if (pendingIntegrationId) {
-            startAuthPolling(pendingIntegrationId);
+    function stopPolling() {
+        if (authPollingInterval) {
+            clearInterval(authPollingInterval);
+            authPollingInterval = null;
         }
-    }
-    
-    document.getElementById('auth-hh-form').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const formData = new FormData(this);
-        const intId = formData.get('integration_id');
-        
-        try {
-            const resp = await fetch('/integrations/submit-hh-code', {
-                method: 'POST',
-                body: formData
-            });
-            const result = await resp.json();
-            
-            if (result.ok) {
-                document.getElementById('hh-auth-error').classList.add('hidden');
-                document.getElementById('auth-hh-modal').classList.add('hidden');
-                setTimeout(() => startAuthPolling(intId), 1000);
-            } else {
-                document.getElementById('hh-auth-error').textContent = result.error || 'Invalid HH code';
-                document.getElementById('hh-auth-error').classList.remove('hidden');
-            }
-        } catch (e) {
-            document.getElementById('hh-auth-error').textContent = 'Network error';
-            document.getElementById('hh-auth-error').classList.remove('hidden');
-        }
-    });
-
-    function showCodeModal(integrationId, phone) {
-        document.getElementById('auth-integration-id').value = integrationId;
-        document.getElementById('auth-phone').textContent = phone;
-        document.getElementById('auth-code-modal').classList.remove('hidden');
-    }
-    
-    function showPasswordModal(integrationId, phone) {
-        document.getElementById('auth-password-integration-id').value = integrationId;
-        document.getElementById('auth-password-phone').textContent = phone;
-        document.getElementById('auth-password-modal').classList.remove('hidden');
     }
 
-    document.getElementById('auth-code-form').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const formData = new FormData(this);
-        const intId = formData.get('integration_id');
-        const code = formData.get('code');
-        
-        try {
-            const resp = await fetch('/integrations/submit-code', {
-                method: 'POST',
-                body: formData
-            });
-            const result = await resp.json();
-            
-            if (result.ok) {
-                document.getElementById('auth-error').classList.add('hidden');
-                // Hide modal and wait a few seconds for DB status to update before polling again
-                document.getElementById('auth-code-modal').classList.add('hidden');
-                // Give time for auth to complete and DB to update
-                setTimeout(() => startAuthPolling(intId), 3000);
-            } else {
-                // Even if no pending request, poll to see actual status (might have succeeded)
-                document.getElementById('auth-error').textContent = result.error || 'Invalid code';
-                document.getElementById('auth-error').classList.remove('hidden');
-                pollAuthStatus(intId);
-            }
-        } catch (e) {
-            document.getElementById('auth-error').textContent = 'Network error';
-            document.getElementById('auth-error').classList.remove('hidden');
-        }
-    });
-    
-    document.getElementById('auth-password-form').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const formData = new FormData(this);
-        const intId = formData.get('integration_id');
-        const password = formData.get('password');
-        
-        try {
-            const resp = await fetch('/integrations/submit-password', {
-                method: 'POST',
-                body: formData
-            });
-            const result = await resp.json();
-            
-            if (result.ok) {
-                document.getElementById('password-error').classList.add('hidden');
-                document.getElementById('auth-password-modal').classList.add('hidden');
-                setTimeout(() => startAuthPolling(intId), 3000);
-            } else {
-                document.getElementById('password-error').textContent = result.error || 'Invalid password';
-                document.getElementById('password-error').classList.remove('hidden');
-                pollAuthStatus(intId);
-            }
-        } catch (e) {
-            document.getElementById('password-error').textContent = 'Network error';
-            document.getElementById('password-error').classList.remove('hidden');
-        }
-    });
+    // --- UI Actions ---
 
     function openIntModal(accID, platform) {
         document.getElementById('acc-id-input').value = accID;
@@ -419,18 +294,104 @@
         const tgCreds = document.getElementById('tg-creds');
         if (platform === 'tg') {
             tgCreds.classList.remove('hidden');
-            // Don't require - user might provide empty and use .env fallback
-            tgCreds.querySelectorAll('input').forEach(i => i.required = false);
         } else {
             tgCreds.classList.add('hidden');
-            tgCreds.querySelectorAll('input').forEach(i => i.required = false);
         }
         document.getElementById('new-int-modal').classList.remove('hidden');
     }
 
-    // Start polling for any existing awaiting_code integrations on page load
-    document.addEventListener('DOMContentLoaded', function() {
-        checkForNewIntegration();
+    function manualFinishAuth(id) {
+        startPolling(id);
+    }
+
+    function closeAllModals() {
+        ['auth-hh-modal', 'auth-code-modal', 'auth-password-modal', 'new-int-modal', 'new-account-modal']
+            .forEach(id => document.getElementById(id).classList.add('hidden'));
+        stopPolling();
+        pendingIntegrationId = null;
+    }
+
+    function isModalHidden(id) {
+        return document.getElementById(id).classList.contains('hidden');
+    }
+
+    // --- Modal Fillers ---
+
+    function showCodeModal(id, phone) {
+        document.getElementById('auth-integration-id').value = id;
+        document.getElementById('auth-phone').textContent = phone;
+        document.getElementById('auth-code-modal').classList.remove('hidden');
+    }
+
+    function showPasswordModal(id, phone) {
+        document.getElementById('auth-password-integration-id').value = id;
+        document.getElementById('auth-password-phone').textContent = phone;
+        document.getElementById('auth-password-modal').classList.remove('hidden');
+    }
+
+    function showHHModal(id, url) {
+        document.getElementById('auth-hh-integration-id').value = id;
+        document.getElementById('hh-auth-link').href = url;
+        document.getElementById('auth-hh-modal').classList.remove('hidden');
+    }
+
+    // --- Submissions ---
+
+    async function handleAuthForm(e, endpoint, errorId) {
+        e.preventDefault();
+        const form = e.target;
+        const errorEl = document.getElementById(errorId);
+        const formData = new FormData(form);
+        const intId = formData.get('integration_id');
+
+        try {
+            const resp = await fetch(endpoint, { method: 'POST', body: formData });
+            const res = await resp.json();
+            if (res.ok) {
+                errorEl.classList.add('hidden');
+                form.closest('.fixed').classList.add('hidden');
+                startPolling(intId);
+            } else {
+                errorEl.textContent = res.error || 'Failed';
+                errorEl.classList.remove('hidden');
+            }
+        } catch (e) {
+            errorEl.textContent = 'Network Error';
+            errorEl.classList.remove('hidden');
+        }
+    }
+
+    document.getElementById('auth-code-form').onsubmit = (e) => handleAuthForm(e, '/integrations/submit-code', 'auth-error');
+    document.getElementById('auth-password-form').onsubmit = (e) => handleAuthForm(e, '/integrations/submit-password', 'password-error');
+    document.getElementById('auth-hh-form').onsubmit = (e) => handleAuthForm(e, '/integrations/submit-hh-code', 'hh-auth-error');
+
+    // --- HTMX Integration ---
+
+    document.addEventListener('htmx:afterRequest', (evt) => {
+        if (evt.detail.requestConfig.path === '/integrations/create') {
+            console.log('Integration created, looking for it in UI');
+            setTimeout(scanForPendingIntegrations, 600);
+        }
+    });
+
+    function scanForPendingIntegrations() {
+        document.querySelectorAll('.integration-card').forEach(card => {
+            const statusBadge = card.querySelector('.status-badge');
+            if (statusBadge) {
+                const status = statusBadge.textContent.trim();
+                if ((status === 'pending_auth' || status === 'awaiting_code' || status === 'awaiting_password') && !authPollingInterval) {
+                    console.log('[Init] Auto-starting poll for:', card.dataset.integrationId);
+                    startPolling(card.dataset.integrationId);
+                }
+            }
+        });
+    }
+
+    // Start polling on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('[Init] Scanning for pending integrations on load...');
+        scanForPendingIntegrations();
     });
 </script>
 {{ end }}
+

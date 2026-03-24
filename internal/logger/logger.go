@@ -13,6 +13,7 @@ const (
 	AddSequence Category = "add-sequence"
 	History     Category = "history"
 	Telegram    Category = "tg"
+	HH          Category = "hh"
 )
 
 var enabledCategories = make(map[Category]bool)

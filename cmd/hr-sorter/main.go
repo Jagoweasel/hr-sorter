@@ -24,6 +24,7 @@ func main() {
 	debugAdd := flag.Bool("debug-add", false, "Enable debug logs for adding sequences")
 	debugHistory := flag.Bool("debug-history", false, "Enable debug logs for sequence history and movement")
 	debugTG := flag.Bool("debug-tg", false, "Enable debug logs for Telegram API and client creation")
+	debugHH := flag.Bool("debug-hh", false, "Enable debug logs for HeadHunter API and sync")
 	debugAll := flag.Bool("debug-all", false, "Enable all debug logs")
 	flag.Parse()
 
@@ -38,6 +39,9 @@ func main() {
 	}
 	if *debugAll || *debugTG {
 		logger.Enable(logger.Telegram)
+	}
+	if *debugAll || *debugHH {
+		logger.Enable(logger.HH)
 	}
 
 	log.Println("[Main] Starting application...")
@@ -87,7 +91,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	web.RegisterRoutes(mux, manager, ctx)
+	web.RegisterRoutes(mux, manager, hhManager, ctx)
 
 	port := os.Getenv("HTTP_PORT")
 	if port == "" {

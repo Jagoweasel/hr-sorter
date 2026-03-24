@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -19,10 +20,12 @@ import (
 )
 
 var tgManager *tgclient.Manager
+var hhManager *hhclient.Manager
 var rootCtx context.Context
 
-func RegisterRoutes(mux *http.ServeMux, manager *tgclient.Manager, ctx context.Context) {
+func RegisterRoutes(mux *http.ServeMux, manager *tgclient.Manager, hhMan *hhclient.Manager, ctx context.Context) {
 	tgManager = manager
+	hhManager = hhMan
 	rootCtx = ctx
 	mux.HandleFunc("/", handleIndex)
 	mux.HandleFunc("/contacts", handleContacts)
@@ -108,6 +111,29 @@ func handleToggleAccount(w http.ResponseWriter, r *http.Request) {
 	newStatus := "active"
 	if status == "active" {
 		newStatus = "inactive"
+		// Stop all integrations for this account
+		var integrations []models.Integration
+		database.DB.Select(&integrations, "SELECT * FROM integrations WHERE account_id = ?", id)
+		for _, i := range integrations {
+			if i.Platform == "tg" {
+				tgManager.StopIntegration(i.ID)
+			} else if i.Platform == "hh" {
+				hhManager.StopIntegration(i.ID)
+			}
+		}
+	} else {
+		// Restart integrations for this account
+		var integrations []models.Integration
+		database.DB.Select(&integrations, "SELECT * FROM integrations WHERE account_id = ?", id)
+		for _, i := range integrations {
+			if i.Status == "active" || i.Status == "pending_auth" {
+				if i.Platform == "tg" {
+					go tgManager.StartIntegration(rootCtx, i)
+				} else if i.Platform == "hh" {
+					go hhManager.StartIntegration(rootCtx, i)
+				}
+			}
+		}
 	}
 	database.DB.MustExec("UPDATE accounts SET status = ? WHERE id = ?", newStatus, id)
 	http.Redirect(w, r, "/accounts", 303)
@@ -115,6 +141,23 @@ func handleToggleAccount(w http.ResponseWriter, r *http.Request) {
 
 func handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
+
+	// Clean up all integrations within this account first
+	var integrations []models.Integration
+	err := database.DB.Select(&integrations, "SELECT * FROM integrations WHERE account_id = ?", id)
+	if err == nil {
+		for _, i := range integrations {
+			if i.Platform == "tg" {
+				tgManager.StopIntegration(i.ID)
+				if i.SessionPath != "" {
+					os.Remove(i.SessionPath)
+				}
+			} else if i.Platform == "hh" {
+				hhManager.StopIntegration(i.ID)
+			}
+		}
+	}
+
 	database.DB.MustExec("DELETE FROM accounts WHERE id = ?", id)
 	http.Redirect(w, r, "/accounts", 303)
 }
@@ -154,6 +197,12 @@ func handleCreateIntegration(w http.ResponseWriter, r *http.Request) {
 		var integration models.Integration
 		database.DB.Get(&integration, "SELECT * FROM integrations WHERE id = ?", id)
 		go tgManager.StartIntegration(rootCtx, integration)
+	} else if platform == "hh" {
+		id, _ := res.LastInsertId()
+		var integration models.Integration
+		database.DB.Get(&integration, "SELECT * FROM integrations WHERE id = ?", id)
+		logger.Debug(logger.HH, "[Web] Starting HH worker for new integration %s", identifier)
+		go hhManager.StartIntegration(rootCtx, integration)
 	}
 
 	http.Redirect(w, r, "/accounts", 303)
@@ -173,10 +222,14 @@ func handleToggleIntegration(w http.ResponseWriter, r *http.Request) {
 		newStatus = "inactive"
 		if integration.Platform == "tg" {
 			tgManager.StopIntegration(integration.ID)
+		} else if integration.Platform == "hh" {
+			hhManager.StopIntegration(integration.ID)
 		}
 	} else {
 		if integration.Platform == "tg" {
 			go tgManager.StartIntegration(rootCtx, integration)
+		} else if integration.Platform == "hh" {
+			go hhManager.StartIntegration(rootCtx, integration)
 		}
 	}
 
@@ -190,10 +243,27 @@ func handleDeleteIntegration(w http.ResponseWriter, r *http.Request) {
 
 	var integration models.Integration
 	err := database.DB.Get(&integration, "SELECT * FROM integrations WHERE id = ?", id)
-	if err == nil && integration.Platform == "tg" {
-		tgManager.StopIntegration(integration.ID)
+	if err != nil {
+		http.Redirect(w, r, "/accounts", 303)
+		return
 	}
 
+	// 1. Stop background processing
+	if integration.Platform == "tg" {
+		tgManager.StopIntegration(integration.ID)
+	} else if integration.Platform == "hh" {
+		hhManager.StopIntegration(integration.ID)
+	}
+
+	// 2. Clean up filesystem (for TG)
+	if integration.Platform == "tg" && integration.SessionPath != "" {
+		if _, err := os.Stat(integration.SessionPath); err == nil {
+			logger.Debug(logger.Telegram, "Deleting session file: %s", integration.SessionPath)
+			os.Remove(integration.SessionPath)
+		}
+	}
+
+	// 3. Delete from DB (cascades will handle contacts/messages/state)
 	database.DB.MustExec("DELETE FROM integrations WHERE id = ?", id)
 	http.Redirect(w, r, "/accounts", 303)
 }
@@ -249,8 +319,23 @@ func handleSubmitHHCode(w http.ResponseWriter, r *http.Request) {
 	code := r.FormValue("code")
 	id, _ := strconv.ParseInt(idStr, 10, 64)
 
-	token, err := hhclient.ExchangeToken(code)
+	logger.Debug(logger.HH, "[Int ID %d] Received HH auth code submission", id)
+
+	var integration models.Integration
+	err := database.DB.Get(&integration, "SELECT * FROM integrations WHERE id = ?", id)
 	if err != nil {
+		w.Write([]byte(fmt.Sprintf(`{"ok": false, "error": "Integration not found: %v"}`, err)))
+		return
+	}
+
+	ua := ""
+	if integration.UserAgent != nil {
+		ua = *integration.UserAgent
+	}
+
+	token, err := hhclient.ExchangeToken(code, ua)
+	if err != nil {
+		logger.Debug(logger.HH, "[Int ID %d] HH token exchange failed: %v", id, err)
 		w.Write([]byte(fmt.Sprintf(`{"ok": false, "error": "%v"}`, err)))
 		return
 	}
@@ -259,9 +344,16 @@ func handleSubmitHHCode(w http.ResponseWriter, r *http.Request) {
 	_, err = database.DB.Exec("UPDATE integrations SET access_token = ?, refresh_token = ?, expires_at = ?, status = 'active' WHERE id = ?",
 		token.AccessToken, token.RefreshToken, expiresAt, id)
 	if err != nil {
+		logger.Debug(logger.HH, "[Int ID %d] HH DB update failed: %v", id, err)
 		w.Write([]byte(fmt.Sprintf(`{"ok": false, "error": "DB error: %v"}`, err)))
 		return
 	}
+
+	logger.Debug(logger.HH, "[Int ID %d] HH auth successful, triggering immediate sync", id)
+
+	// Start integration in background manager
+	database.DB.Get(&integration, "SELECT * FROM integrations WHERE id = ?", id)
+	go hhManager.StartIntegration(rootCtx, integration)
 
 	w.Write([]byte(`{"ok": true}`))
 }
