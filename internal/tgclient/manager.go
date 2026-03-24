@@ -73,7 +73,9 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 
 	// Create updates manager for reliable delivery
 	updateManager := updates.New(updates.Config{
-		Handler: dispatcher,
+		Handler:      dispatcher,
+		Storage:      &dbStateStorage{integrationID: integration.ID},
+		AccessHasher: &dbStateStorage{integrationID: integration.ID},
 	})
 
 	// Detailed logging for ALL updates
@@ -282,8 +284,17 @@ func (m *Manager) StopIntegration(id int64) {
 
 func (m *Manager) getOrCreateContact(ctx context.Context, user *tg.User, integrationID int64) (int64, error) {
 	externalID := fmt.Sprintf("%d", user.ID)
-	_, err := database.DB.Exec("INSERT OR IGNORE INTO contacts (integration_id, platform, external_id, first_name, last_name, username) VALUES (?, 'tg', ?, ?, ?, ?)",
-		integrationID, externalID, user.FirstName, user.LastName, user.Username)
+	logger.Debug(logger.Sync, "[Int ID %d] getOrCreateContact: %s %s (@%s), ID: %s, AccessHash: %d", integrationID, user.FirstName, user.LastName, user.Username, externalID, user.AccessHash)
+	// Update access_hash if it has changed
+	_, err := database.DB.Exec(`
+		INSERT INTO contacts (integration_id, platform, external_id, first_name, last_name, username, access_hash) 
+		VALUES (?, 'tg', ?, ?, ?, ?, ?)
+		ON CONFLICT(external_id) DO UPDATE SET 
+			first_name = excluded.first_name,
+			last_name = excluded.last_name,
+			username = excluded.username,
+			access_hash = CASE WHEN excluded.access_hash != 0 THEN excluded.access_hash ELSE access_hash END
+	`, integrationID, externalID, user.FirstName, user.LastName, user.Username, user.AccessHash)
 	if err != nil {
 		return 0, err
 	}
@@ -339,6 +350,7 @@ func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, integrationID
 		}
 
 		var users = make(map[int64]*tg.User)
+		var chats = make(map[int64]tg.ChatClass)
 		var dialogs []tg.DialogClass
 
 		switch d := res.(type) {
@@ -349,12 +361,18 @@ func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, integrationID
 					users[u.ID] = u
 				}
 			}
+			for _, cClass := range d.Chats {
+				chats[cClass.GetID()] = cClass
+			}
 		case *tg.MessagesDialogsSlice:
 			dialogs = d.Dialogs
 			for _, uClass := range d.Users {
 				if u, ok := uClass.(*tg.User); ok {
 					users[u.ID] = u
 				}
+			}
+			for _, cClass := range d.Chats {
+				chats[cClass.GetID()] = cClass
 			}
 		}
 
@@ -381,29 +399,42 @@ func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, integrationID
 					logger.Debug(logger.Sync, "[Int ID %d] Skipping PeerUser %d (user info not found in dialog response)", integrationID, p.UserID)
 				}
 			case *tg.PeerChat:
-				logger.Debug(logger.Sync, "[Int ID %d] Found PeerChat %d", integrationID, p.ChatID)
-				if _, exists := uniquePeers[p.ChatID]; !exists {
-					uniquePeers[p.ChatID] = peerInfo{
-						user: &tg.User{
-							ID:        p.ChatID,
-							FirstName: fmt.Sprintf("Chat %d", p.ChatID),
-							Username:  fmt.Sprintf("chat_%d", p.ChatID),
-						},
-						name:     fmt.Sprintf("Chat %d", p.ChatID),
-						peerType: "Chat",
+				if c, ok := chats[p.ChatID]; ok {
+					title := ""
+					if chat, ok := c.(*tg.Chat); ok {
+						title = chat.Title
+					}
+					if _, exists := uniquePeers[p.ChatID]; !exists {
+						uniquePeers[p.ChatID] = peerInfo{
+							user: &tg.User{
+								ID:        p.ChatID,
+								FirstName: title,
+								Username:  fmt.Sprintf("chat_%d", p.ChatID),
+							},
+							name:     title,
+							peerType: "Chat",
+						}
 					}
 				}
 			case *tg.PeerChannel:
-				logger.Debug(logger.Sync, "[Int ID %d] Found PeerChannel %d", integrationID, p.ChannelID)
-				if _, exists := uniquePeers[p.ChannelID]; !exists {
-					uniquePeers[p.ChannelID] = peerInfo{
-						user: &tg.User{
-							ID:        p.ChannelID,
-							FirstName: fmt.Sprintf("Channel %d", p.ChannelID),
-							Username:  fmt.Sprintf("channel_%d", p.ChannelID),
-						},
-						name:     fmt.Sprintf("Channel %d", p.ChannelID),
-						peerType: "Channel",
+				if c, ok := chats[p.ChannelID]; ok {
+					title := ""
+					var accessHash int64
+					if channel, ok := c.(*tg.Channel); ok {
+						title = channel.Title
+						accessHash = channel.AccessHash
+					}
+					if _, exists := uniquePeers[p.ChannelID]; !exists {
+						uniquePeers[p.ChannelID] = peerInfo{
+							user: &tg.User{
+								ID:         p.ChannelID,
+								FirstName:  title,
+								Username:   fmt.Sprintf("channel_%d", p.ChannelID),
+								AccessHash: accessHash,
+							},
+							name:     title,
+							peerType: "Channel",
+						}
 					}
 				}
 			default:
@@ -469,18 +500,46 @@ func (m *Manager) HandleNewMessage(ctx context.Context, api *tg.Client, msgClass
 	if peerName == "" { // It's a User peer
 		user, ok = users[userID]
 		if !ok {
-			logger.Debug(logger.Sync, "[Int ID %d] Fetching missing user info for %d...", integrationID, userID)
-			usersRes, err := api.UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUser{
-				UserID: userID,
-			}})
-			if err != nil {
-				logger.Debug(logger.Sync, "[Int ID %d] Failed to fetch user %d: %v", integrationID, userID, err)
-				return nil
+			logger.Debug(logger.Sync, "[Int ID %d] Fetching missing user info for %d via MessagesGetMessages...", integrationID, userID)
+			// Try to get message info to force resolve entities
+			// If we have no entities, we can try to fetch the message we just got
+			// This often returns the missing users in the response
+			res, err := api.MessagesGetMessages(ctx, []tg.InputMessageClass{&tg.InputMessageID{ID: msg.ID}})
+			if err == nil {
+				logger.Debug(logger.Sync, "[Int ID %d] MessagesGetMessages succeeded, looking for user %d in entities...", integrationID, userID)
+				switch mres := res.(type) {
+				case *tg.MessagesMessages:
+					for _, uClass := range mres.Users {
+						if u, ok := uClass.(*tg.User); ok {
+							logger.Debug(logger.Sync, "[Int ID %d] Found user %d (@%s) in entities", integrationID, u.ID, u.Username)
+							if u.ID == userID {
+								user = u
+							}
+						}
+					}
+				case *tg.MessagesMessagesSlice:
+					for _, uClass := range mres.Users {
+						if u, ok := uClass.(*tg.User); ok {
+							logger.Debug(logger.Sync, "[Int ID %d] Found user %d (@%s) in entities", integrationID, u.ID, u.Username)
+							if u.ID == userID {
+								user = u
+							}
+						}
+					}
+				}
+			} else {
+				logger.Debug(logger.Sync, "[Int ID %d] MessagesGetMessages failed: %v", integrationID, err)
 			}
 
-			if len(usersRes) > 0 {
-				if u, ok := usersRes[0].(*tg.User); ok {
-					user = u
+			if user == nil {
+				// Final fallback: direct fetch (might fail without access hash)
+				usersRes, err := api.UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUser{
+					UserID: userID,
+				}})
+				if err == nil && len(usersRes) > 0 {
+					if u, ok := usersRes[0].(*tg.User); ok {
+						user = u
+					}
 				}
 			}
 		}
@@ -536,10 +595,19 @@ func (m *Manager) SyncHistory(ctx context.Context, api *tg.Client, user *tg.User
 	// Telegram might return different types of message lists
 	var messages []tg.MessageClass
 
+	// If user is missing access hash, try to fetch it from DB
+	if user.AccessHash == 0 {
+		var stored models.Contact
+		err := database.DB.Get(&stored, "SELECT * FROM contacts WHERE id = ?", contactID)
+		if err == nil {
+			user.AccessHash = stored.AccessHash
+		}
+	}
+
 	// Determine peer type
 	var peer tg.InputPeerClass
 	if strings.HasPrefix(user.Username, "channel_") {
-		peer = &tg.InputPeerChannel{ChannelID: user.ID}
+		peer = &tg.InputPeerChannel{ChannelID: user.ID, AccessHash: user.AccessHash}
 	} else if strings.HasPrefix(user.Username, "chat_") {
 		peer = &tg.InputPeerChat{ChatID: user.ID}
 	} else {
@@ -597,6 +665,113 @@ func (m *Manager) SyncHistory(ctx context.Context, api *tg.Client, user *tg.User
 
 type dbStateStorage struct {
 	integrationID int64
+}
+
+func (s *dbStateStorage) GetState(ctx context.Context, userID int64) (updates.State, bool, error) {
+	var state struct {
+		Pts  int `db:"pts"`
+		Qts  int `db:"qts"`
+		Seq  int `db:"seq"`
+		Date int `db:"date"`
+	}
+	err := database.DB.Get(&state, "SELECT pts, qts, seq, date FROM tg_state WHERE integration_id = ?", s.integrationID)
+	if err != nil {
+		return updates.State{}, false, nil
+	}
+	logger.Debug(logger.Sync, "[Int ID %d] Loaded update state: PTS=%d, QTS=%d, Seq=%d", s.integrationID, state.Pts, state.Qts, state.Seq)
+	return updates.State{Pts: state.Pts, Qts: state.Qts, Seq: state.Seq, Date: state.Date}, true, nil
+}
+
+func (s *dbStateStorage) SetState(ctx context.Context, userID int64, state updates.State) error {
+	logger.Debug(logger.Sync, "[Int ID %d] Saving update state: PTS=%d, QTS=%d, Seq=%d", s.integrationID, state.Pts, state.Qts, state.Seq)
+	_, err := database.DB.Exec(`
+		INSERT INTO tg_state (integration_id, pts, qts, seq, date) 
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(integration_id) DO UPDATE SET 
+			pts = excluded.pts, 
+			qts = excluded.qts, 
+			seq = excluded.seq, 
+			date = excluded.date`,
+		s.integrationID, state.Pts, state.Qts, state.Seq, state.Date)
+	return err
+}
+
+func (s *dbStateStorage) SetPts(ctx context.Context, userID int64, pts int) error {
+	_, err := database.DB.Exec("UPDATE tg_state SET pts = ? WHERE integration_id = ?", pts, s.integrationID)
+	return err
+}
+
+func (s *dbStateStorage) SetQts(ctx context.Context, userID int64, qts int) error {
+	_, err := database.DB.Exec("UPDATE tg_state SET qts = ? WHERE integration_id = ?", qts, s.integrationID)
+	return err
+}
+
+func (s *dbStateStorage) SetDate(ctx context.Context, userID int64, date int) error {
+	_, err := database.DB.Exec("UPDATE tg_state SET date = ? WHERE integration_id = ?", date, s.integrationID)
+	return err
+}
+
+func (s *dbStateStorage) SetSeq(ctx context.Context, userID int64, seq int) error {
+	_, err := database.DB.Exec("UPDATE tg_state SET seq = ? WHERE integration_id = ?", seq, s.integrationID)
+	return err
+}
+
+func (s *dbStateStorage) SetDateSeq(ctx context.Context, userID int64, date, seq int) error {
+	_, err := database.DB.Exec("UPDATE tg_state SET date = ?, seq = ? WHERE integration_id = ?", date, seq, s.integrationID)
+	return err
+}
+
+func (s *dbStateStorage) GetChannelPts(ctx context.Context, userID, channelID int64) (int, bool, error) {
+	var pts int
+	err := database.DB.Get(&pts, "SELECT pts FROM tg_channels WHERE integration_id = ? AND channel_id = ?", s.integrationID, channelID)
+	if err != nil {
+		return 0, false, nil
+	}
+	return pts, true, nil
+}
+
+func (s *dbStateStorage) SetChannelPts(ctx context.Context, userID, channelID int64, pts int) error {
+	_, err := database.DB.Exec(`
+		INSERT INTO tg_channels (integration_id, channel_id, pts) 
+		VALUES (?, ?, ?)
+		ON CONFLICT(integration_id, channel_id) DO UPDATE SET pts = excluded.pts`,
+		s.integrationID, channelID, pts)
+	return err
+}
+
+func (s *dbStateStorage) ForEachChannels(ctx context.Context, userID int64, f func(ctx context.Context, channelID int64, pts int) error) error {
+	var channels []struct {
+		ChannelID int64 `db:"channel_id"`
+		Pts       int   `db:"pts"`
+	}
+	err := database.DB.Select(&channels, "SELECT channel_id, pts FROM tg_channels WHERE integration_id = ?", s.integrationID)
+	if err != nil {
+		return err
+	}
+	for _, ch := range channels {
+		if err := f(ctx, ch.ChannelID, ch.Pts); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *dbStateStorage) SetChannelAccessHash(ctx context.Context, userID, channelID, accessHash int64) error {
+	// Use contacts table for access hashes if it's a known peer, but we also want to store it specifically for updates manager
+	_, err := database.DB.Exec(`
+		UPDATE contacts SET access_hash = ? 
+		WHERE integration_id = ? AND external_id = ?`,
+		accessHash, s.integrationID, fmt.Sprintf("%d", channelID))
+	return err
+}
+
+func (s *dbStateStorage) GetChannelAccessHash(ctx context.Context, userID, channelID int64) (int64, bool, error) {
+	var hash int64
+	err := database.DB.Get(&hash, "SELECT access_hash FROM contacts WHERE integration_id = ? AND external_id = ?", s.integrationID, fmt.Sprintf("%d", channelID))
+	if err != nil {
+		return 0, false, nil
+	}
+	return hash, hash != 0, nil
 }
 
 func (s *dbStateStorage) LoadState(ctx context.Context) (updates.State, error) {

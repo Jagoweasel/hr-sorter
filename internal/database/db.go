@@ -56,6 +56,7 @@ func InitDB(path string) {
 		first_name TEXT,
 		last_name TEXT,
 		username TEXT,
+		access_hash INTEGER DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (integration_id) REFERENCES integrations(id) ON DELETE CASCADE
 	);
@@ -109,6 +110,14 @@ func InitDB(path string) {
 		qts INTEGER,
 		seq INTEGER,
 		date INTEGER,
+		FOREIGN KEY (integration_id) REFERENCES integrations(id) ON DELETE CASCADE
+	);
+	
+	CREATE TABLE IF NOT EXISTS tg_channels (
+		integration_id INTEGER,
+		channel_id INTEGER,
+		pts INTEGER,
+		PRIMARY KEY (integration_id, channel_id),
 		FOREIGN KEY (integration_id) REFERENCES integrations(id) ON DELETE CASCADE
 	);`
 
@@ -184,4 +193,16 @@ func InitDB(path string) {
 		}
 		log.Println("[DB] Migration finished.")
 	}
+
+	// Migration: Add access_hash to contacts if it doesn't exist
+	var hasAccessHash bool
+	err = DB.Get(&hasAccessHash, "SELECT COUNT(*) FROM pragma_table_info('contacts') WHERE name='access_hash'")
+	if err == nil && !hasAccessHash {
+		log.Println("[DB] Migrating contacts: adding access_hash column...")
+		DB.MustExec("ALTER TABLE contacts ADD COLUMN access_hash INTEGER DEFAULT 0")
+		log.Println("[DB] Migration finished.")
+	}
+
+	// Ensure NO nulls in access_hash if it was already there without default
+	DB.MustExec("UPDATE contacts SET access_hash = 0 WHERE access_hash IS NULL")
 }
