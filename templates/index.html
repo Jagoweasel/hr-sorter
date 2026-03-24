@@ -46,10 +46,27 @@
                         class="bg-gray-50 border-2 border-gray-100 rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
                         hx-get="/contacts"
                         hx-target="#contact-list"
-                        hx-include="[name='account_id'], [name='platform']">
+                        hx-include="[name='account_id'], [name='platform'], [name='hide_screened']">
                     <option value="false">Hide Declines</option>
                     <option value="true">Show All</option>
                 </select>
+            </div>
+
+            <div class="flex flex-col">
+                <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Screening</label>
+                <div class="flex items-center space-x-2">
+                    <select name="hide_screened" 
+                            class="bg-gray-50 border-2 border-gray-100 rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
+                            hx-get="/contacts"
+                            hx-target="#contact-list"
+                            hx-include="[name='account_id'], [name='platform'], [name='show_declines']">
+                        <option value="true">Hide Filtered</option>
+                        <option value="false">Show All</option>
+                    </select>
+                    <button onclick="openFilterModal()" class="p-2 bg-gray-50 hover:bg-gray-100 border-2 border-gray-100 rounded-lg transition-colors text-gray-500" title="Manage Filters">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -95,7 +112,55 @@
             </div>
         </div>
     </div>
+    </div>
 </div>
+
+<!-- Modal: Filter Management -->
+<div id="filter-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-[300]" onclick="if(event.target === this) closeFilterModal()">
+    <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-lg relative" onclick="event.stopPropagation()">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-xl font-black text-gray-900 tracking-tight">Message Filters (HH)</h2>
+            <button onclick="closeFilterModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <p class="text-xs text-gray-500 mb-6 bg-blue-50 p-3 rounded-xl border border-blue-100">
+            Contacts whose <span class="font-bold">last message</span> contains any of these phrases will be hidden when "Hide Filtered" is active.
+        </p>
+
+        <form hx-post="/filters/add" hx-target="#filter-list-content" class="mb-6 flex space-x-2">
+            <input type="text" name="pattern" placeholder="e.g. we will call you" required class="flex-1 border-2 border-gray-100 rounded-xl px-4 py-2 text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none transition-colors">
+            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200">Add</button>
+        </form>
+
+        <div id="filter-list-content" hx-get="/filters" hx-trigger="load" class="max-h-96 overflow-y-auto pr-2">
+            <!-- Loaded via HTMX -->
+        </div>
+    </div>
+</div>
+
+<script>
+    function openFilterModal() {
+        document.getElementById('filter-modal').classList.remove('hidden');
+    }
+    function closeFilterModal() {
+        document.getElementById('filter-modal').classList.add('hidden');
+        // Refresh contact list in case filters changed
+        const contactList = document.getElementById('contact-list');
+        if (contactList) {
+            htmx.trigger(contactList, 'refresh');
+        }
+    }
+    
+    // Add a custom refresh trigger for htmx
+    document.addEventListener('DOMContentLoaded', () => {
+        document.body.addEventListener('refresh', () => {
+            const list = document.getElementById('contact-list');
+            if (list) htmx.ajax('GET', '/contacts', {target: '#contact-list', values: htmx.values(document.querySelector('[name="account_id"]'))});
+        });
+    });
+</script>
 
 <style>
     /* Custom Scrollbar for a cleaner look */

@@ -69,3 +69,10 @@ type InterviewStage struct {
 	IsCompleted bool       `db:"is_completed" json:"is_completed"`
 	OrderIndex  int        `db:"order_index" json:"order_index"`
 }
+
+type MessageFilter struct {
+	ID        int64     `db:"id" json:"id"`
+	Pattern   string    `db:"pattern" json:"pattern"`
+	IsActive  bool      `db:"is_active" json:"is_active"`
+	CreatedAt time.Time `db:"created_at" json:"created_at"`
+}

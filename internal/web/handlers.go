@@ -50,6 +50,10 @@ func RegisterRoutes(mux *http.ServeMux, manager *tgclient.Manager, hhMan *hhclie
 	mux.HandleFunc("/stages/add", handleAddStage)
 	mux.HandleFunc("/sequences/move", handleMoveSequence)
 	mux.HandleFunc("/sequences/delete", handleDeleteSequence)
+	mux.HandleFunc("/filters", handleGetFilters)
+	mux.HandleFunc("/filters/add", handleAddFilter)
+	mux.HandleFunc("/filters/delete", handleDeleteFilter)
+	mux.HandleFunc("/filters/toggle", handleToggleFilter)
 }
 
 func handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -381,10 +385,11 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 	activeAccountID := r.URL.Query().Get("account_id")
 	platformFilter := r.URL.Query().Get("platform") // "tg", "hh", or empty for both
 	showDeclines := r.URL.Query().Get("show_declines") == "true"
+	hideScreened := r.URL.Query().Get("hide_screened") == "true"
 
 	query := `
 		SELECT c.*, 
-		       COALESCE((SELECT text FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1), 'No messages yet') as last_message,
+		       COALESCE((SELECT text FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1), '') as last_message,
 			   COALESCE((SELECT datetime(timestamp) FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1), datetime(c.created_at)) as last_time,
 			   EXISTS(SELECT 1 FROM sequence_contacts WHERE contact_id = c.id) as in_sequence,
 			   COALESCE((SELECT s.status FROM sequences s JOIN sequence_contacts sc ON s.id = sc.sequence_id WHERE sc.contact_id = c.id LIMIT 1), '') as seq_status
@@ -405,7 +410,25 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 		// Filter out HH declines
 		query += " AND NOT (c.platform = 'hh' AND (c.username = 'Отказ' OR c.username = 'discard'))"
 	}
+	if hideScreened {
+		// Filter out contacts whose LAST message matches any active filter pattern
+		// Only for HH as requested
+		query += ` AND NOT (c.platform = 'hh' AND EXISTS (
+			SELECT 1 FROM messages m2 
+			CROSS JOIN message_filters f ON f.is_active = 1
+			WHERE m2.contact_id = c.id 
+			AND lower(m2.text) LIKE '%' || lower(f.pattern) || '%'
+			AND m2.id = (SELECT id FROM messages WHERE contact_id = m2.contact_id ORDER BY timestamp DESC LIMIT 1)
+		))`
+	}
 	query += " ORDER BY last_time DESC"
+
+	deref := func(s *string) string {
+		if s == nil {
+			return ""
+		}
+		return *s
+	}
 
 	type ContactWithLastMsg struct {
 		models.Contact
@@ -422,8 +445,13 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 
 	for _, c := range contacts {
 		lastMsg := strings.ReplaceAll(c.LastMessage, "\n", " ")
-		if len(lastMsg) > 30 {
-			lastMsg = lastMsg[:27] + "..."
+		if lastMsg == "" {
+			// Fallback: show status if no messages
+			lastMsg = "[" + deref(c.Username) + "]"
+		}
+
+		if len(lastMsg) > 40 {
+			lastMsg = lastMsg[:37] + "..."
 		}
 
 		statusIndicator := ""
@@ -445,13 +473,6 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 		platformIcon := `<span class="text-blue-400" title="Telegram">
 			<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.02-1.96 1.25-5.54 3.69-.52.35-.97.52-1.35.51-.42-.01-1.24-.24-1.84-.44-.74-.24-1.33-.37-1.28-.79.03-.22.33-.44.89-.67 3.49-1.52 5.82-2.52 6.99-3.01 3.32-1.39 4.02-1.63 4.47-1.63.1 0 .32.02.46.14.12.1.15.23.16.33.01.07.02.21.01.35z"/></svg>
 		</span>`
-
-		deref := func(s *string) string {
-			if s == nil {
-				return ""
-			}
-			return *s
-		}
 
 		nameDisplay := fmt.Sprintf("%s %s", deref(c.FirstName), deref(c.LastName))
 		subDisplay := "@" + deref(c.Username)
@@ -1248,4 +1269,62 @@ func handleDeleteSequence(w http.ResponseWriter, r *http.Request) {
 	logger.Debug(logger.AddSequence, "Deleted sequence ID %s (%s)", seqID, seq.CompanyName)
 
 	http.Redirect(w, r, getRedirectURL(r), 303)
+}
+
+func handleGetFilters(w http.ResponseWriter, r *http.Request) {
+	var filters []models.MessageFilter
+	err := database.DB.Select(&filters, "SELECT * FROM message_filters ORDER BY created_at DESC")
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	w.Write([]byte(`<div class="space-y-3">`))
+	for _, f := range filters {
+		activeClass := "bg-green-100 text-green-700"
+		if !f.IsActive {
+			activeClass = "bg-gray-100 text-gray-500"
+		}
+		fmt.Fprintf(w, `
+			<div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100 group">
+				<div class="flex items-center space-x-3">
+					<button hx-post="/filters/toggle?id=%d" hx-target="#filter-list-content" class="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest %s">
+						%s
+					</button>
+					<span class="text-sm font-bold text-gray-700">%s</span>
+				</div>
+				<button hx-post="/filters/delete?id=%d" hx-target="#filter-list-content" hx-confirm="Delete pattern?" class="opacity-0 group-hover:opacity-100 p-1 text-red-400 hover:bg-red-50 rounded-lg transition-all">
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+				</button>
+			</div>
+		`, f.ID, activeClass, map[bool]string{true: "Active", false: "Off"}[f.IsActive], html.EscapeString(f.Pattern), f.ID)
+	}
+	if len(filters) == 0 {
+		w.Write([]byte(`<p class="text-center text-gray-400 italic text-sm py-4">No filters defined yet</p>`))
+	}
+	w.Write([]byte(`</div>`))
+}
+
+func handleAddFilter(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", 405)
+		return
+	}
+	pattern := r.FormValue("pattern")
+	if pattern != "" {
+		database.DB.Exec("INSERT INTO message_filters (pattern) VALUES (?)", pattern)
+	}
+	handleGetFilters(w, r)
+}
+
+func handleDeleteFilter(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	database.DB.Exec("DELETE FROM message_filters WHERE id = ?", id)
+	handleGetFilters(w, r)
+}
+
+func handleToggleFilter(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	database.DB.Exec("UPDATE message_filters SET is_active = NOT is_active WHERE id = ?", id)
+	handleGetFilters(w, r)
 }

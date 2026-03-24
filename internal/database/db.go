@@ -117,6 +117,13 @@ func InitDB(path string) {
 		FOREIGN KEY (integration_id) REFERENCES integrations(id) ON DELETE CASCADE
 	);
 	
+	CREATE TABLE IF NOT EXISTS message_filters (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		pattern TEXT NOT NULL,
+		is_active BOOLEAN DEFAULT 1,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
 	CREATE TABLE IF NOT EXISTS tg_channels (
 		integration_id INTEGER,
 		channel_id INTEGER,
