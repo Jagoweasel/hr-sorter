@@ -387,11 +387,14 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 	platformFilter := r.URL.Query().Get("platform") // "tg", "hh", or empty for both
 	showDeclines := r.URL.Query().Get("show_declines") == "true"
 	hideScreened := r.URL.Query().Get("hide_screened") == "true"
+	hideUnanswered := r.URL.Query().Get("hide_unanswered") == "true"
 
 	query := `
 		SELECT c.*, 
 		       COALESCE((SELECT text FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1), '') as last_message,
 			   COALESCE((SELECT datetime(timestamp) FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1), datetime(c.created_at)) as last_time,
+			   COALESCE((SELECT is_incoming FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1), 0) as last_is_incoming,
+			   (SELECT COUNT(*) FROM messages WHERE contact_id = c.id) as msg_count,
 			   EXISTS(SELECT 1 FROM sequence_contacts WHERE contact_id = c.id) as in_sequence,
 			   COALESCE((SELECT s.status FROM sequences s JOIN sequence_contacts sc ON s.id = sc.sequence_id WHERE sc.contact_id = c.id LIMIT 1), '') as seq_status
 		FROM contacts c
@@ -432,8 +435,10 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 
 	type ContactWithLastMsg struct {
 		models.Contact
-		LastMessage string `db:"last_message"`
-		LastTime    string `db:"last_time"`
+		LastMessage    string `db:"last_message"`
+		LastTime       string `db:"last_time"`
+		LastIsIncoming bool   `db:"last_is_incoming"`
+		MsgCount       int    `db:"msg_count"`
 	}
 	var allContacts []ContactWithLastMsg
 	err := database.DB.Select(&allContacts, query, args...)
@@ -455,17 +460,28 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 
 	var filteredContacts []ContactWithLastMsg
 	for _, c := range allContacts {
-		if hideScreened && c.Platform == "hh" && len(activePatterns) > 0 {
-			normMsg := normalize(c.LastMessage)
-			isScreened := false
-			for _, p := range activePatterns {
-				if strings.Contains(normMsg, p) {
-					isScreened = true
-					break
+		if c.Platform == "hh" {
+			// 1. Response Filter (Unanswered)
+			if hideUnanswered {
+				// Hide if no messages OR last message was NOT from employer (i.e. from applicant)
+				if c.MsgCount == 0 || !c.LastIsIncoming {
+					continue
 				}
 			}
-			if isScreened {
-				continue
+
+			// 2. Screening Filter
+			if hideScreened && len(activePatterns) > 0 {
+				normMsg := normalize(c.LastMessage)
+				isScreened := false
+				for _, p := range activePatterns {
+					if strings.Contains(normMsg, p) {
+						isScreened = true
+						break
+					}
+				}
+				if isScreened {
+					continue
+				}
 			}
 		}
 		filteredContacts = append(filteredContacts, c)
