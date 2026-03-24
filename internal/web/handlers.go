@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"hr-sorter/internal/database"
 	"hr-sorter/internal/hhclient"
@@ -410,17 +411,6 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 		// Filter out HH declines
 		query += " AND NOT (c.platform = 'hh' AND (c.username = 'Отказ' OR c.username = 'discard'))"
 	}
-	if hideScreened {
-		// Filter out contacts whose LAST message matches any active filter pattern
-		// Only for HH as requested
-		query += ` AND NOT (c.platform = 'hh' AND EXISTS (
-			SELECT 1 FROM messages m2 
-			CROSS JOIN message_filters f ON f.is_active = 1
-			WHERE m2.contact_id = c.id 
-			AND lower(m2.text) LIKE '%' || lower(f.pattern) || '%'
-			AND m2.id = (SELECT id FROM messages WHERE contact_id = m2.contact_id ORDER BY timestamp DESC LIMIT 1)
-		))`
-	}
 	query += " ORDER BY last_time DESC"
 
 	deref := func(s *string) string {
@@ -430,20 +420,58 @@ func handleContacts(w http.ResponseWriter, r *http.Request) {
 		return *s
 	}
 
+	// Normalizer for whitespace and casing
+	normalize := func(s string) string {
+		// Replace all whitespace (newlines, tabs, various Unicode spaces) with a single space
+		f := func(r rune) bool {
+			return unicode.IsSpace(r)
+		}
+		words := strings.FieldsFunc(s, f)
+		return strings.ToLower(strings.Join(words, " "))
+	}
+
 	type ContactWithLastMsg struct {
 		models.Contact
 		LastMessage string `db:"last_message"`
 		LastTime    string `db:"last_time"`
 	}
-	var contacts []ContactWithLastMsg
-	err := database.DB.Select(&contacts, query, args...)
+	var allContacts []ContactWithLastMsg
+	err := database.DB.Select(&allContacts, query, args...)
 	if err != nil {
 		log.Printf("Web: Error fetching contacts: %v", err)
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	for _, c := range contacts {
+	// Load active filters if screening is requested
+	var activePatterns []string
+	if hideScreened {
+		var filters []models.MessageFilter
+		database.DB.Select(&filters, "SELECT pattern FROM message_filters WHERE is_active = 1")
+		for _, f := range filters {
+			activePatterns = append(activePatterns, normalize(f.Pattern))
+		}
+	}
+
+	var filteredContacts []ContactWithLastMsg
+	for _, c := range allContacts {
+		if hideScreened && c.Platform == "hh" && len(activePatterns) > 0 {
+			normMsg := normalize(c.LastMessage)
+			isScreened := false
+			for _, p := range activePatterns {
+				if strings.Contains(normMsg, p) {
+					isScreened = true
+					break
+				}
+			}
+			if isScreened {
+				continue
+			}
+		}
+		filteredContacts = append(filteredContacts, c)
+	}
+
+	for _, c := range filteredContacts {
 		lastMsg := strings.ReplaceAll(c.LastMessage, "\n", " ")
 		if lastMsg == "" {
 			// Fallback: show status if no messages

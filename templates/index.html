@@ -9,7 +9,7 @@
                         class="bg-gray-50 border-2 border-gray-100 rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
                         hx-get="/contacts"
                         hx-target="#contact-list"
-                        hx-include="[name='platform'], [name='show_declines']">
+                        hx-include="[name='platform'], [name='show_declines'], [name='hide_screened']">
                     <option value="">All Accounts</option>
                     {{ range . }}
                     <option value="{{ .ID }}">{{ .Name }}</option>
@@ -19,21 +19,22 @@
 
             <div class="flex flex-col">
                 <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Platform Filter</label>
+                <input type="hidden" name="platform" id="platform-filter-input" value="">
                 <div class="flex items-center space-x-2" id="plat-filters">
                     <button class="px-3 py-2 rounded-lg border-2 border-blue-500 bg-blue-50 transition-colors plat-btn active"
-                            hx-get="/contacts" hx-target="#contact-list" hx-include="[name='account_id'], [name='show_declines']" hx-vals='{"platform": ""}'
-                            onclick="document.querySelectorAll('.plat-btn').forEach(b => b.classList.remove('border-blue-500', 'bg-blue-50')); this.classList.add('border-blue-500', 'bg-blue-50')">
+                            hx-get="/contacts" hx-target="#contact-list" hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened']"
+                            onclick="setPlatformFilter('', this)">
                         <span class="text-[10px] font-black uppercase">All</span>
                     </button>
                     <button class="p-2 rounded-lg border-2 border-gray-100 hover:border-blue-500 transition-colors flex items-center space-x-2 plat-btn"
-                            hx-get="/contacts" hx-target="#contact-list" hx-include="[name='account_id'], [name='show_declines']" hx-vals='{"platform": "tg"}'
-                            onclick="document.querySelectorAll('.plat-btn').forEach(b => b.classList.remove('border-blue-500', 'bg-blue-50')); this.classList.add('border-blue-500', 'bg-blue-50')">
+                            hx-get="/contacts" hx-target="#contact-list" hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened']"
+                            onclick="setPlatformFilter('tg', this)">
                         <svg class="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.02-1.96 1.25-5.54 3.69-.52.35-.97.52-1.35.51-.42-.01-1.24-.24-1.84-.44-.74-.24-1.33-.37-1.28-.79.03-.22.33-.44.89-.67 3.49-1.52 5.82-2.52 6.99-3.01 3.32-1.39 4.02-1.63 4.47-1.63.1 0 .32.02.46.14.12.1.15.23.16.33.01.07.02.21.01.35z"/></svg>
                         <span class="text-[10px] font-black uppercase">TG</span>
                     </button>
                     <button class="p-2 rounded-lg border-2 border-gray-100 hover:border-blue-500 transition-colors flex items-center space-x-2 plat-btn"
-                            hx-get="/contacts" hx-target="#contact-list" hx-include="[name='account_id'], [name='show_declines']" hx-vals='{"platform": "hh"}'
-                            onclick="document.querySelectorAll('.plat-btn').forEach(b => b.classList.remove('border-blue-500', 'bg-blue-50')); this.classList.add('border-blue-500', 'bg-blue-50')">
+                            hx-get="/contacts" hx-target="#contact-list" hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened']"
+                            onclick="setPlatformFilter('hh', this)">
                         <span class="text-red-500 font-black text-[10px] border border-red-200 px-1 rounded bg-red-50">HH</span>
                         <span class="text-[10px] font-black uppercase">HH</span>
                     </button>
@@ -83,7 +84,7 @@
                  hx-get="/contacts" 
                  hx-trigger="load, every 15s" 
                  hx-swap="innerHTML" 
-                 hx-include="[name='account_id'], [name='platform'], [name='show_declines']"
+                 hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened']"
                  class="flex-1 overflow-y-auto divide-y divide-gray-100">
                 <div class="flex flex-col items-center justify-center h-full text-gray-400 p-8 space-y-4">
                     <svg class="w-12 h-12 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -141,6 +142,16 @@
 </div>
 
 <script>
+    function setPlatformFilter(val, btn) {
+        document.getElementById('platform-filter-input').value = val;
+        document.querySelectorAll('.plat-btn').forEach(b => {
+            b.classList.remove('border-blue-500', 'bg-blue-50');
+            b.classList.add('border-gray-100');
+        });
+        btn.classList.add('border-blue-500', 'bg-blue-50');
+        btn.classList.remove('border-gray-100');
+    }
+
     function openFilterModal() {
         document.getElementById('filter-modal').classList.remove('hidden');
     }
@@ -149,7 +160,7 @@
         // Refresh contact list in case filters changed
         const contactList = document.getElementById('contact-list');
         if (contactList) {
-            htmx.trigger(contactList, 'refresh');
+            htmx.trigger(contactList, 'load'); // Trigger a reload
         }
     }
     
@@ -157,7 +168,23 @@
     document.addEventListener('DOMContentLoaded', () => {
         document.body.addEventListener('refresh', () => {
             const list = document.getElementById('contact-list');
-            if (list) htmx.ajax('GET', '/contacts', {target: '#contact-list', values: htmx.values(document.querySelector('[name="account_id"]'))});
+            if (list) {
+                // Manually trigger htmx request with all current values
+                const accountId = document.querySelector('[name="account_id"]').value;
+                const platform = document.getElementById('platform-filter-input').value;
+                const showDeclines = document.querySelector('[name="show_declines"]').value;
+                const hideScreened = document.querySelector('[name="hide_screened"]').value;
+                
+                htmx.ajax('GET', '/contacts', {
+                    target: '#contact-list', 
+                    values: {
+                        account_id: accountId,
+                        platform: platform,
+                        show_declines: showDeclines,
+                        hide_screened: hideScreened
+                    }
+                });
+            }
         });
     });
 </script>
