@@ -12,6 +12,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"hr-sorter/internal/database"
+	"hr-sorter/internal/hhclient"
 	"hr-sorter/internal/logger"
 	"hr-sorter/internal/models"
 	"hr-sorter/internal/tgclient"
@@ -51,29 +52,38 @@ func main() {
 	log.Println("[Main] Database initialized successfully.")
 
 	manager := tgclient.NewManager()
+	hhManager := hhclient.NewManager()
 
-	// Fetch active TG integrations from active accounts
+	// Fetch active TG/HH integrations from active accounts
 	var integrations []models.Integration
 	err := database.DB.Select(&integrations, `
 		SELECT i.* FROM integrations i
 		JOIN accounts a ON i.account_id = a.id
-		WHERE i.platform = 'tg' AND i.status IN ('active', 'pending_auth') AND a.status = 'active'
+		WHERE i.status IN ('active', 'pending_auth') AND a.status = 'active'
 	`)
 	if err != nil {
 		log.Fatalf("[Main] Failed to fetch integrations: %v", err)
 	}
-	log.Printf("[Main] Found %d active TG integrations.", len(integrations))
+	log.Printf("[Main] Found %d active integrations.", len(integrations))
 
 	// Create root context for signal handling
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	for _, integration := range integrations {
-		go func(i models.Integration) {
-			if err := manager.StartIntegration(ctx, i); err != nil {
-				log.Printf("[Main] Integration %s failed: %v", i.Identifier, err)
-			}
-		}(integration)
+		if integration.Platform == "tg" {
+			go func(i models.Integration) {
+				if err := manager.StartIntegration(ctx, i); err != nil {
+					log.Printf("[Main] TG Integration %s failed: %v", i.Identifier, err)
+				}
+			}(integration)
+		} else if integration.Platform == "hh" {
+			go func(i models.Integration) {
+				if err := hhManager.StartIntegration(ctx, i); err != nil {
+					log.Printf("[Main] HH Integration %s failed: %v", i.Identifier, err)
+				}
+			}(integration)
+		}
 	}
 
 	mux := http.NewServeMux()

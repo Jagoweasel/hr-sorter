@@ -41,6 +41,10 @@ func InitDB(path string) {
 		identifier TEXT NOT NULL,
 		api_id INTEGER,
 		api_hash TEXT,
+		access_token TEXT,
+		refresh_token TEXT,
+		expires_at DATETIME,
+		user_agent TEXT,
 		status TEXT NOT NULL DEFAULT 'pending_auth',
 		session_path TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -200,6 +204,18 @@ func InitDB(path string) {
 	if err == nil && !hasAccessHash {
 		log.Println("[DB] Migrating contacts: adding access_hash column...")
 		DB.MustExec("ALTER TABLE contacts ADD COLUMN access_hash INTEGER DEFAULT 0")
+		log.Println("[DB] Migration finished.")
+	}
+
+	// Migration: Add HH columns to integrations if they don't exist
+	var hasHHColumns bool
+	err = DB.Get(&hasHHColumns, "SELECT COUNT(*) FROM pragma_table_info('integrations') WHERE name='access_token'")
+	if err == nil && !hasHHColumns {
+		log.Println("[DB] Migrating integrations: adding HH session columns...")
+		DB.MustExec("ALTER TABLE integrations ADD COLUMN access_token TEXT")
+		DB.MustExec("ALTER TABLE integrations ADD COLUMN refresh_token TEXT")
+		DB.MustExec("ALTER TABLE integrations ADD COLUMN expires_at DATETIME")
+		DB.MustExec("ALTER TABLE integrations ADD COLUMN user_agent TEXT")
 		log.Println("[DB] Migration finished.")
 	}
 

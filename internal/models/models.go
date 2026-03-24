@@ -10,15 +10,19 @@ type Account struct {
 }
 
 type Integration struct {
-	ID          int64     `db:"id" json:"id"`
-	AccountID   int64     `db:"account_id" json:"account_id"`
-	Platform    string    `db:"platform" json:"platform"` // "tg", "hh"
-	Identifier  string    `db:"identifier" json:"identifier"`
-	APIID       int       `db:"api_id" json:"api_id"`
-	APIHash     string    `db:"api_hash" json:"api_hash"`
-	Status      string    `db:"status" json:"status"` // "active", "pending_auth", "inactive"
-	SessionPath string    `db:"session_path" json:"session_path"`
-	CreatedAt   time.Time `db:"created_at" json:"created_at"`
+	ID           int64      `db:"id" json:"id"`
+	AccountID    int64      `db:"account_id" json:"account_id"`
+	Platform     string     `db:"platform" json:"platform"` // "tg", "hh"
+	Identifier   string     `db:"identifier" json:"identifier"`
+	APIID        int        `db:"api_id" json:"api_id"`
+	APIHash      string     `db:"api_hash" json:"api_hash"`
+	AccessToken  *string    `db:"access_token" json:"access_token"`
+	RefreshToken *string    `db:"refresh_token" json:"refresh_token"`
+	ExpiresAt    *time.Time `db:"expires_at" json:"expires_at"`
+	UserAgent    *string    `db:"user_agent" json:"user_agent"`
+	Status       string     `db:"status" json:"status"` // "active", "pending_auth", "inactive"
+	SessionPath  string     `db:"session_path" json:"session_path"`
+	CreatedAt    time.Time  `db:"created_at" json:"created_at"`
 }
 
 type Contact struct {

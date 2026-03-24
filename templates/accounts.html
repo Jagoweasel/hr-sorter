@@ -189,6 +189,26 @@
     </div>
 </div>
 
+<!-- Modal: HH Auth Code Entry -->
+<div id="auth-hh-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-[300]" onclick="if(event.target === this) { /* don't close */ }">
+    <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm relative" onclick="event.stopPropagation()">
+        <h2 class="text-xl font-black text-gray-900 tracking-tight mb-2">HeadHunter Auth</h2>
+        <p class="text-sm text-gray-500 mb-6">1. <a id="hh-auth-link" href="#" target="_blank" class="text-blue-600 font-bold underline">Click here to login</a><br>2. Copy the 'code' from the redirected URL<br>3. Paste it below:</p>
+        <form id="auth-hh-form" class="space-y-4">
+            <input type="hidden" name="integration_id" id="auth-hh-integration-id">
+            <div>
+                <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Authorization Code</label>
+                <input type="text" name="code" required class="block w-full border-2 border-gray-100 rounded-xl p-3 text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none transition-colors text-center" placeholder="Paste code here" autofocus>
+            </div>
+            <div class="flex justify-between space-x-3 pt-2">
+                <button type="button" onclick="closeAllModals()" class="px-4 py-2 text-[10px] font-black text-gray-400 uppercase">Cancel</button>
+                <button type="submit" class="px-6 py-2 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-red-700">Link HH</button>
+            </div>
+        </form>
+        <div id="hh-auth-error" class="mt-4 text-center text-red-500 text-xs font-bold hidden"></div>
+    </div>
+</div>
+
 <script>
     // Store the last created integration ID (set after form submission)
     let pendingIntegrationId = null;
@@ -247,11 +267,14 @@
                 }
             }
 
-            if (data.status === 'awaiting_code' && document.getElementById('auth-code-modal').classList.contains('hidden')) {
+            if (data.status === 'awaiting_code' && data.platform === 'tg' && document.getElementById('auth-code-modal').classList.contains('hidden')) {
                 showCodeModal(integrationId, data.identifier);
                 clearInterval(authPollingInterval);
-            } else if (data.status === 'awaiting_password' && document.getElementById('auth-password-modal').classList.contains('hidden')) {
+            } else if (data.status === 'awaiting_password' && data.platform === 'tg' && document.getElementById('auth-password-modal').classList.contains('hidden')) {
                 showPasswordModal(integrationId, data.identifier);
+                clearInterval(authPollingInterval);
+            } else if (data.status === 'pending_auth' && data.platform === 'hh' && document.getElementById('auth-hh-modal').classList.contains('hidden')) {
+                showHHModal(integrationId, data.auth_url);
                 clearInterval(authPollingInterval);
             } else if (data.status === 'active') {
                 clearInterval(authPollingInterval);
@@ -272,18 +295,53 @@
         }
     }
     
+    function showHHModal(integrationId, authURL) {
+        document.getElementById('auth-hh-integration-id').value = integrationId;
+        document.getElementById('hh-auth-link').href = authURL;
+        document.getElementById('auth-hh-modal').classList.remove('hidden');
+    }
+
     function closeAllModals() {
+        document.getElementById('auth-hh-modal').classList.add('hidden');
         document.getElementById('auth-code-modal').classList.add('hidden');
         document.getElementById('auth-password-modal').classList.add('hidden');
         document.querySelector('#auth-code-form input[name="code"]').value = '';
         document.querySelector('#auth-password-form input[name="password"]').value = '';
+        document.querySelector('#auth-hh-form input[name="code"]').value = '';
         document.getElementById('auth-error').classList.add('hidden');
         document.getElementById('password-error').classList.add('hidden');
+        document.getElementById('hh-auth-error').classList.add('hidden');
         if (pendingIntegrationId) {
             startAuthPolling(pendingIntegrationId);
         }
     }
     
+    document.getElementById('auth-hh-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        const intId = formData.get('integration_id');
+        
+        try {
+            const resp = await fetch('/integrations/submit-hh-code', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await resp.json();
+            
+            if (result.ok) {
+                document.getElementById('hh-auth-error').classList.add('hidden');
+                document.getElementById('auth-hh-modal').classList.add('hidden');
+                setTimeout(() => startAuthPolling(intId), 1000);
+            } else {
+                document.getElementById('hh-auth-error').textContent = result.error || 'Invalid HH code';
+                document.getElementById('hh-auth-error').classList.remove('hidden');
+            }
+        } catch (e) {
+            document.getElementById('hh-auth-error').textContent = 'Network error';
+            document.getElementById('hh-auth-error').classList.remove('hidden');
+        }
+    });
+
     function showCodeModal(integrationId, phone) {
         document.getElementById('auth-integration-id').value = integrationId;
         document.getElementById('auth-phone').textContent = phone;

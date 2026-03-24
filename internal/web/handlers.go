@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"hr-sorter/internal/database"
+	"hr-sorter/internal/hhclient"
 	"hr-sorter/internal/logger"
 	"hr-sorter/internal/models"
 	"hr-sorter/internal/tgclient"
@@ -36,6 +37,7 @@ func RegisterRoutes(mux *http.ServeMux, manager *tgclient.Manager, ctx context.C
 	mux.HandleFunc("/integrations/status", handleIntegrationStatus)
 	mux.HandleFunc("/integrations/submit-code", handleSubmitCode)
 	mux.HandleFunc("/integrations/submit-password", handleSubmitPassword)
+	mux.HandleFunc("/integrations/submit-hh-code", handleSubmitHHCode)
 	mux.HandleFunc("/pipeline", handlePipeline)
 	mux.HandleFunc("/contacts/", handleContactActions) // Catch-all for /contacts/{id}/actions etc
 	mux.HandleFunc("/sequences/create", handleCreateSequence)
@@ -131,15 +133,17 @@ func handleCreateIntegration(w http.ResponseWriter, r *http.Request) {
 
 	status := "pending_auth"
 	sessionPath := ""
+	var userAgent *string
 	if platform == "tg" {
 		sessionDir := "sessions"
 		sessionPath = fmt.Sprintf("%s/%s.json", sessionDir, identifier)
 	} else if platform == "hh" {
-		status = "inactive"
+		ua := hhclient.GenerateAndroidUserAgent()
+		userAgent = &ua
 	}
 
-	res, err := database.DB.Exec("INSERT INTO integrations (account_id, platform, identifier, api_id, api_hash, status, session_path) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		accID, platform, identifier, apiID, apiHash, status, sessionPath)
+	res, err := database.DB.Exec("INSERT INTO integrations (account_id, platform, identifier, api_id, api_hash, status, session_path, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		accID, platform, identifier, apiID, apiHash, status, sessionPath, userAgent)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -201,11 +205,19 @@ func handleIntegrationStatus(w http.ResponseWriter, r *http.Request) {
 	var integration models.Integration
 	err := database.DB.Get(&integration, "SELECT * FROM integrations WHERE id = ?", id)
 	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status": "error"}`))
 		return
 	}
 
-	w.Write([]byte(fmt.Sprintf(`{"status": "%s", "identifier": "%s"}`, integration.Status, integration.Identifier)))
+	authURL := ""
+	if integration.Platform == "hh" && integration.Status == "pending_auth" {
+		authURL = hhclient.GetAuthorizeURL()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, `{"status": "%s", "identifier": "%s", "platform": "%s", "auth_url": "%s"}`,
+		integration.Status, integration.Identifier, integration.Platform, authURL)
 }
 
 func handleSubmitCode(w http.ResponseWriter, r *http.Request) {
@@ -225,6 +237,33 @@ func handleSubmitCode(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.Write([]byte(`{"ok": false, "error": "no pending auth request"}`))
 	}
+}
+
+func handleSubmitHHCode(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", 405)
+		return
+	}
+
+	idStr := r.FormValue("integration_id")
+	code := r.FormValue("code")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+
+	token, err := hhclient.ExchangeToken(code)
+	if err != nil {
+		w.Write([]byte(fmt.Sprintf(`{"ok": false, "error": "%v"}`, err)))
+		return
+	}
+
+	expiresAt := time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
+	_, err = database.DB.Exec("UPDATE integrations SET access_token = ?, refresh_token = ?, expires_at = ?, status = 'active' WHERE id = ?",
+		token.AccessToken, token.RefreshToken, expiresAt, id)
+	if err != nil {
+		w.Write([]byte(fmt.Sprintf(`{"ok": false, "error": "DB error: %v"}`, err)))
+		return
+	}
+
+	w.Write([]byte(`{"ok": true}`))
 }
 
 func handleSubmitPassword(w http.ResponseWriter, r *http.Request) {
