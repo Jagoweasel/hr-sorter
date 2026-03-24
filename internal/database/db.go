@@ -101,6 +101,15 @@ func InitDB(path string) {
 		is_completed BOOLEAN DEFAULT 0,
 		order_index INTEGER,
 		FOREIGN KEY (sequence_id) REFERENCES sequences(id) ON DELETE CASCADE
+	);
+	
+	CREATE TABLE IF NOT EXISTS tg_state (
+		integration_id INTEGER PRIMARY KEY,
+		pts INTEGER,
+		qts INTEGER,
+		seq INTEGER,
+		date INTEGER,
+		FOREIGN KEY (integration_id) REFERENCES integrations(id) ON DELETE CASCADE
 	);`
 
 	log.Println("[DB] Verifying schema...")

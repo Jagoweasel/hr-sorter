@@ -356,7 +356,7 @@ func handleMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Fprint(w, `<div class="flex flex-col space-y-2 p-2">`)
+	fmt.Fprintf(w, `<div class="flex flex-col space-y-2 p-2" hx-get="/messages/%s" hx-trigger="every 3s" hx-swap="outerHTML">`, id)
 	for _, m := range messages {
 		align := "items-start"
 		bgColor := "bg-blue-100"
