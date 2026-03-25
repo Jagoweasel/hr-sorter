@@ -26,6 +26,10 @@ type Handler struct {
 
 	// Services
 	accService *service.AccountService
+	intService *service.IntegrationService
+	seqService *service.SequenceService
+	conService *service.ContactService
+	fltService *service.FilterService
 }
 
 func NewHandler(
@@ -39,6 +43,10 @@ func NewHandler(
 	seqRepo *repository.SequenceRepository,
 	fltRepo *repository.FilterRepository,
 	accService *service.AccountService,
+	intService *service.IntegrationService,
+	seqService *service.SequenceService,
+	conService *service.ContactService,
+	fltService *service.FilterService,
 ) *Handler {
 	return &Handler{
 		rootCtx:    ctx,
@@ -51,6 +59,10 @@ func NewHandler(
 		seqRepo:    seqRepo,
 		fltRepo:    fltRepo,
 		accService: accService,
+		intService: intService,
+		seqService: seqService,
+		conService: conService,
+		fltService: fltService,
 	}
 }
 

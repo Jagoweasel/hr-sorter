@@ -41,20 +41,27 @@ func (h *Handler) handleGetFilters(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleAddFilter(w http.ResponseWriter, r *http.Request) {
 	pattern := r.FormValue("pattern")
-	if pattern != "" {
-		h.fltRepo.Create(r.Context(), pattern)
+	if err := h.fltService.AddFilter(r.Context(), pattern); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
 	}
 	h.handleGetFilters(w, r)
 }
 
 func (h *Handler) handleDeleteFilter(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
-	h.fltRepo.Delete(r.Context(), id)
+	if err := h.fltService.DeleteFilter(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 	h.handleGetFilters(w, r)
 }
 
 func (h *Handler) handleToggleFilter(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
-	h.fltRepo.Toggle(r.Context(), id)
+	if err := h.fltService.ToggleFilter(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 	h.handleGetFilters(w, r)
 }

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"unicode"
 )
 
 func (h *Handler) handleContacts(w http.ResponseWriter, r *http.Request) {
@@ -16,43 +15,13 @@ func (h *Handler) handleContacts(w http.ResponseWriter, r *http.Request) {
 	hideScreened := r.URL.Query().Get("hide_screened") == "true"
 	hideUnanswered := r.URL.Query().Get("hide_unanswered") == "true"
 
-	allContacts, err := h.conRepo.GetAll(r.Context(), activeAccountID, platformFilter, showDeclines)
+	filteredContacts, err := h.conService.GetFilteredContacts(r.Context(), activeAccountID, platformFilter, showDeclines, hideScreened, hideUnanswered)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	var activePatterns []string
-	if hideScreened {
-		patterns, _ := h.fltRepo.GetActivePatterns(r.Context())
-		for _, p := range patterns {
-			activePatterns = append(activePatterns, normalize(p))
-		}
-	}
-
-	for _, c := range allContacts {
-		if c.Platform == "hh" {
-			if hideUnanswered {
-				if c.MsgCount == 0 || !c.LastIsIncoming {
-					continue
-				}
-			}
-
-			if hideScreened && len(activePatterns) > 0 {
-				normMsg := normalize(c.LastMessage)
-				isScreened := false
-				for _, p := range activePatterns {
-					if strings.Contains(normMsg, p) {
-						isScreened = true
-						break
-					}
-				}
-				if isScreened {
-					continue
-				}
-			}
-		}
-
+	for _, c := range filteredContacts {
 		lastMsg := strings.ReplaceAll(c.LastMessage, "\n", " ")
 		if lastMsg == "" {
 			lastMsg = "[" + deref(c.Username) + "]"
@@ -244,10 +213,4 @@ func deref(s *string) string {
 		return ""
 	}
 	return *s
-}
-
-func normalize(s string) string {
-	f := func(r rune) bool { return unicode.IsSpace(r) }
-	words := strings.FieldsFunc(s, f)
-	return strings.ToLower(strings.Join(words, " "))
 }

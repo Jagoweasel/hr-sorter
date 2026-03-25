@@ -2,15 +2,12 @@ package web
 
 import (
 	"fmt"
-	"hr-sorter/internal/logger"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 )
 
 func (h *Handler) handleCreateSequence(w http.ResponseWriter, r *http.Request) {
-	logger.Debug(logger.AddSequence, "handleCreateSequence triggered")
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", 405)
 		return
@@ -21,70 +18,10 @@ func (h *Handler) handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	contactID := r.FormValue("contact_id")
 	initialDateStr := r.FormValue("initial_date")
 
-	logger.Debug(logger.AddSequence, "Creating sequence for Company='%s', Vacancy='%s', ContactID='%s'", company, vacancy, contactID)
-
-	tx, err := h.seqRepo.BeginTx(r.Context())
-	if err != nil {
-		logger.Debug(logger.AddSequence, "Error starting transaction: %v", err)
-		http.Error(w, "Database error", 500)
+	if _, err := h.seqService.CreateSequence(r.Context(), company, vacancy, contactID, initialDateStr); err != nil {
+		http.Error(w, err.Error(), 500)
 		return
 	}
-	defer tx.Rollback()
-
-	// Find the account associated with this contact
-	var accountID *int64
-	if contactID != "" {
-		accID, err := h.conRepo.GetAccountIDByContactID(r.Context(), contactID)
-		if err == nil {
-			accountID = accID
-			logger.Debug(logger.AddSequence, "Found account ID %d from contact", *accID)
-		}
-	}
-
-	if accountID == nil {
-		activeAccounts, err := h.accRepo.GetActive(r.Context())
-		if err == nil && len(activeAccounts) > 0 {
-			id := activeAccounts[0].ID
-			accountID = &id
-			logger.Debug(logger.AddSequence, "Using first active account ID %d", id)
-		} else {
-			allAccounts, err := h.accRepo.GetAll(r.Context())
-			if err == nil && len(allAccounts) > 0 {
-				id := allAccounts[0].ID
-				accountID = &id
-				logger.Debug(logger.AddSequence, "Fallback to any account ID %d", id)
-			}
-		}
-	}
-
-	seqID, err := h.seqRepo.Create(r.Context(), tx, accountID, company, vacancy, "initial")
-	if err != nil {
-		logger.Debug(logger.AddSequence, "Error inserting sequence: %v", err)
-		http.Error(w, "Database error", 500)
-		return
-	}
-	logger.Debug(logger.AddSequence, "Sequence created with ID %d", seqID)
-
-	if contactID != "" {
-		err = h.seqRepo.LinkContact(r.Context(), tx, seqID, contactID)
-		if err != nil {
-			logger.Debug(logger.AddSequence, "Error linking contact: %v", err)
-		}
-	}
-
-	initialDate, _ := time.Parse("2006-01-02T15:04", initialDateStr)
-	h.seqRepo.CreateStage(r.Context(), tx, seqID, "Initial Contact", initialDate, true, 0)
-	h.seqRepo.CreateStage(r.Context(), tx, seqID, "HR Screening", nil, false, 1)
-	h.seqRepo.CreateStage(r.Context(), tx, seqID, "Technical Interview", nil, false, 2)
-	h.seqRepo.CreateStage(r.Context(), tx, seqID, "Final Interview", nil, false, 3)
-	h.seqRepo.CreateStage(r.Context(), tx, seqID, "Offer", nil, false, 4)
-
-	if err := tx.Commit(); err != nil {
-		logger.Debug(logger.AddSequence, "Error committing transaction: %v", err)
-		http.Error(w, "Commit failed", 500)
-		return
-	}
-	logger.Debug(logger.AddSequence, "Transaction committed successfully for sequence %d", seqID)
 
 	if r.Header.Get("HX-Request") != "" {
 		w.Header().Set("HX-Redirect", h.getRedirectURL(r))
@@ -95,9 +32,14 @@ func (h *Handler) handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleAddToSequence(w http.ResponseWriter, r *http.Request) {
-	seqID := r.FormValue("sequence_id")
+	seqIDStr := r.FormValue("sequence_id")
 	contactID := r.FormValue("contact_id")
-	h.seqRepo.LinkContact(r.Context(), nil, seqID, contactID)
+	seqID, _ := strconv.ParseInt(seqIDStr, 10, 64)
+
+	if err := h.seqRepo.LinkContact(r.Context(), nil, seqID, contactID); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 
 	if r.Header.Get("HX-Request") != "" {
 		w.Header().Set("HX-Redirect", h.getRedirectURL(r))
@@ -111,53 +53,9 @@ func (h *Handler) handleUpdateStage(w http.ResponseWriter, r *http.Request) {
 	stageID := r.URL.Query().Get("id")
 	completed := r.URL.Query().Get("completed") == "true"
 
-	stage, err := h.seqRepo.GetStageByID(r.Context(), stageID)
-	if err != nil {
-		http.Error(w, "Stage not found", 404)
+	if err := h.seqService.UpdateStageCompletion(r.Context(), stageID, completed); err != nil {
+		http.Error(w, err.Error(), 500)
 		return
-	}
-
-	if !completed {
-		// If unmarking a stage, check if it's a standard stage.
-		// Standard stages are NOT deleted.
-		standard := false
-		lowerName := strings.ToLower(stage.Name)
-		standards := []string{"initial contact", "hr screening", "technical interview", "final interview", "offer"}
-		for _, s := range standards {
-			if lowerName == s {
-				standard = true
-				break
-			}
-		}
-
-		if !standard {
-			h.seqRepo.DeleteStage(r.Context(), stageID)
-			logger.Debug(logger.History, "Deleted custom stage ID %s ('%s') because it was unmarked", stageID, stage.Name)
-		} else {
-			h.seqRepo.UpdateStageStatus(r.Context(), stageID, false)
-		}
-	} else {
-		h.seqRepo.UpdateStageStatus(r.Context(), stageID, true)
-	}
-
-	// Auto status update logic
-	last, _ := h.seqRepo.GetLastCompletedStage(r.Context(), stage.SequenceID)
-	if last != nil {
-		name := strings.ToLower(last.Name)
-		newStatus := "initial"
-		if strings.Contains(name, "offer") {
-			newStatus = "offer"
-		} else if strings.Contains(name, "final") {
-			newStatus = "final"
-		} else if strings.Contains(name, "tech") {
-			newStatus = "tech"
-		} else if strings.Contains(name, "screen") {
-			newStatus = "screening"
-		}
-		h.seqRepo.UpdateStatus(r.Context(), stage.SequenceID, newStatus)
-	} else {
-		// No completed stages, revert to initial
-		h.seqRepo.UpdateStatus(r.Context(), stage.SequenceID, "initial")
 	}
 
 	http.Redirect(w, r, h.getRedirectURL(r), 303)
@@ -165,132 +63,26 @@ func (h *Handler) handleUpdateStage(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleAddStage(w http.ResponseWriter, r *http.Request) {
 	seqIDStr := r.URL.Query().Get("sequence_id")
-	category := r.URL.Query().Get("category") // screening, tech, final, offer
+	category := r.URL.Query().Get("category")
 	name := r.URL.Query().Get("name")
-
 	seqID, _ := strconv.ParseInt(seqIDStr, 10, 64)
 
-	if name == "" {
-		label := category
-		if category == "tech" {
-			label = "Technical Interview"
-		} else if category == "screening" {
-			label = "HR Screening"
-		} else if category == "final" {
-			label = "Final Interview"
-		} else if category == "offer" {
-			label = "Offer"
-		}
-
-		count, _ := h.seqRepo.GetStageCountByCategory(r.Context(), seqID, label, category)
-		name = fmt.Sprintf("%s %d", strings.Title(label), count+1)
-	}
-
-	// Determine insertion point based on hierarchy
-	stages, _ := h.seqRepo.GetStages(r.Context(), seqID)
-
-	hierarchy := map[string]int{
-		"initial":   0,
-		"screening": 1,
-		"tech":      2,
-		"final":     3,
-		"offer":     4,
-	}
-	newRank := hierarchy[category]
-
-	insertAt := 0
-	if len(stages) > 0 {
-		insertAt = stages[len(stages)-1].OrderIndex + 1
-		for _, s := range stages {
-			sName := strings.ToLower(s.Name)
-			sRank := 0
-			if strings.Contains(sName, "offer") {
-				sRank = 4
-			} else if strings.Contains(sName, "final") {
-				sRank = 3
-			} else if strings.Contains(sName, "tech") {
-				sRank = 2
-			} else if strings.Contains(sName, "screen") {
-				sRank = 1
-			}
-
-			if sRank <= newRank {
-				insertAt = s.OrderIndex + 1
-			} else {
-				// We found a stage that should come after the new one
-				insertAt = s.OrderIndex
-				break
-			}
-		}
-	}
-
-	// Shift subsequent stages
-	h.seqRepo.ShiftStages(r.Context(), seqID, insertAt)
-
-	err := h.seqRepo.CreateStage(r.Context(), nil, seqID, name, nil, true, insertAt)
-
-	if err == nil {
-		logger.Debug(logger.History, "Manually added stage '%s' to sequence %d at index %d", name, seqID, insertAt)
-		// Update sequence status
-		status := category
-		if category == "initial" {
-			status = "initial"
-		}
-		h.seqRepo.UpdateStatus(r.Context(), seqID, status)
+	if err := h.seqService.AddStage(r.Context(), seqID, category, name); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
 	}
 
 	http.Redirect(w, r, h.getRedirectURL(r), 303)
 }
 
 func (h *Handler) handleMoveSequence(w http.ResponseWriter, r *http.Request) {
-	seqID := r.URL.Query().Get("id")
+	seqIDStr := r.URL.Query().Get("id")
 	status := r.URL.Query().Get("status")
-	logger.Debug(logger.History, "handleMoveSequence: ID=%s, TargetStatus=%s", seqID, status)
+	seqID, _ := strconv.ParseInt(seqIDStr, 10, 64)
 
-	h.seqRepo.UpdateStatus(r.Context(), seqID, status)
-
-	// Synchronize stages with the new status
-	hierarchy := map[string]int{
-		"initial":   0,
-		"screening": 1,
-		"tech":      2,
-		"final":     3,
-		"offer":     4,
-		"accepted":  5,
-		"rejected":  0, // We'll handle rejected separately
-	}
-
-	targetRank, ok := hierarchy[status]
-	if ok && status != "rejected" {
-		stages, err := h.seqRepo.GetStages(r.Context(), parseID(seqID))
-		if err == nil {
-			for _, s := range stages {
-				sName := strings.ToLower(s.Name)
-				sRank := 0
-				if strings.Contains(sName, "offer") {
-					sRank = 4
-				} else if strings.Contains(sName, "final") {
-					sRank = 3
-				} else if strings.Contains(sName, "tech") {
-					sRank = 2
-				} else if strings.Contains(sName, "screen") {
-					sRank = 1
-				}
-
-				if sRank <= targetRank {
-					h.seqRepo.UpdateStageStatus(r.Context(), s.ID, true)
-				} else {
-					h.seqRepo.UpdateStageStatus(r.Context(), s.ID, false)
-				}
-			}
-		}
-	}
-
-	if status == "rejected" {
-		incomplete, _ := h.seqRepo.GetFirstIncompleteStage(r.Context(), seqID)
-		if incomplete != nil {
-			h.seqRepo.UpdateStageStatus(r.Context(), incomplete.ID, true)
-		}
+	if err := h.seqService.MoveSequence(r.Context(), seqID, status); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
 	}
 
 	http.Redirect(w, r, h.getRedirectURL(r), 303)
@@ -298,7 +90,10 @@ func (h *Handler) handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleDeleteSequence(w http.ResponseWriter, r *http.Request) {
 	seqID := r.URL.Query().Get("id")
-	h.seqRepo.Delete(r.Context(), seqID)
+	if err := h.seqRepo.Delete(r.Context(), seqID); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 	http.Redirect(w, r, h.getRedirectURL(r), 303)
 }
 
@@ -344,9 +139,4 @@ func (h *Handler) getRedirectURL(r *http.Request) string {
 		return "/pipeline"
 	}
 	return "/"
-}
-
-func parseID(id string) int64 {
-	val, _ := strconv.ParseInt(id, 10, 64)
-	return val
 }
