@@ -75,8 +75,9 @@ func (h *Handler) handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	initialDate, _ := time.Parse("2006-01-02T15:04", initialDateStr)
 	h.seqRepo.CreateStage(r.Context(), tx, seqID, "Initial Contact", initialDate, true, 0)
 	h.seqRepo.CreateStage(r.Context(), tx, seqID, "HR Screening", nil, false, 1)
-	h.seqRepo.CreateStage(r.Context(), tx, seqID, "Final Interview", nil, false, 2)
-	h.seqRepo.CreateStage(r.Context(), tx, seqID, "Offer", nil, false, 3)
+	h.seqRepo.CreateStage(r.Context(), tx, seqID, "Technical Interview", nil, false, 2)
+	h.seqRepo.CreateStage(r.Context(), tx, seqID, "Final Interview", nil, false, 3)
+	h.seqRepo.CreateStage(r.Context(), tx, seqID, "Offer", nil, false, 4)
 
 	if err := tx.Commit(); err != nil {
 		logger.Debug(logger.AddSequence, "Error committing transaction: %v", err)
@@ -115,7 +116,29 @@ func (h *Handler) handleUpdateStage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Stage not found", 404)
 		return
 	}
-	h.seqRepo.UpdateStageStatus(r.Context(), stageID, completed)
+
+	if !completed {
+		// If unmarking a stage, check if it's a standard stage.
+		// Standard stages are NOT deleted.
+		standard := false
+		lowerName := strings.ToLower(stage.Name)
+		standards := []string{"initial contact", "hr screening", "technical interview", "final interview", "offer"}
+		for _, s := range standards {
+			if lowerName == s {
+				standard = true
+				break
+			}
+		}
+
+		if !standard {
+			h.seqRepo.DeleteStage(r.Context(), stageID)
+			logger.Debug(logger.History, "Deleted custom stage ID %s ('%s') because it was unmarked", stageID, stage.Name)
+		} else {
+			h.seqRepo.UpdateStageStatus(r.Context(), stageID, false)
+		}
+	} else {
+		h.seqRepo.UpdateStageStatus(r.Context(), stageID, true)
+	}
 
 	// Auto status update logic
 	last, _ := h.seqRepo.GetLastCompletedStage(r.Context(), stage.SequenceID)
@@ -132,6 +155,9 @@ func (h *Handler) handleUpdateStage(w http.ResponseWriter, r *http.Request) {
 			newStatus = "screening"
 		}
 		h.seqRepo.UpdateStatus(r.Context(), stage.SequenceID, newStatus)
+	} else {
+		// No completed stages, revert to initial
+		h.seqRepo.UpdateStatus(r.Context(), stage.SequenceID, "initial")
 	}
 
 	http.Redirect(w, r, h.getRedirectURL(r), 303)
@@ -219,7 +245,46 @@ func (h *Handler) handleAddStage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 	seqID := r.URL.Query().Get("id")
 	status := r.URL.Query().Get("status")
+	logger.Debug(logger.History, "handleMoveSequence: ID=%s, TargetStatus=%s", seqID, status)
+
 	h.seqRepo.UpdateStatus(r.Context(), seqID, status)
+
+	// Synchronize stages with the new status
+	hierarchy := map[string]int{
+		"initial":   0,
+		"screening": 1,
+		"tech":      2,
+		"final":     3,
+		"offer":     4,
+		"accepted":  5,
+		"rejected":  0, // We'll handle rejected separately
+	}
+
+	targetRank, ok := hierarchy[status]
+	if ok && status != "rejected" {
+		stages, err := h.seqRepo.GetStages(r.Context(), parseID(seqID))
+		if err == nil {
+			for _, s := range stages {
+				sName := strings.ToLower(s.Name)
+				sRank := 0
+				if strings.Contains(sName, "offer") {
+					sRank = 4
+				} else if strings.Contains(sName, "final") {
+					sRank = 3
+				} else if strings.Contains(sName, "tech") {
+					sRank = 2
+				} else if strings.Contains(sName, "screen") {
+					sRank = 1
+				}
+
+				if sRank <= targetRank {
+					h.seqRepo.UpdateStageStatus(r.Context(), s.ID, true)
+				} else {
+					h.seqRepo.UpdateStageStatus(r.Context(), s.ID, false)
+				}
+			}
+		}
+	}
 
 	if status == "rejected" {
 		incomplete, _ := h.seqRepo.GetFirstIncompleteStage(r.Context(), seqID)
@@ -279,4 +344,9 @@ func (h *Handler) getRedirectURL(r *http.Request) string {
 		return "/pipeline"
 	}
 	return "/"
+}
+
+func parseID(id string) int64 {
+	val, _ := strconv.ParseInt(id, 10, 64)
+	return val
 }
