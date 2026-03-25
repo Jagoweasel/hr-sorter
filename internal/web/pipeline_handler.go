@@ -4,7 +4,6 @@ import (
 	"hr-sorter/internal/logger"
 	"hr-sorter/internal/models"
 	"hr-sorter/internal/repository"
-	"html/template"
 	"log"
 	"net/http"
 )
@@ -126,22 +125,5 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 		ColumnDefs: columnDefs,
 	}
 
-	tmpl := template.New("layout.html").Funcs(template.FuncMap{
-		"add": func(a, b int) int { return a + b },
-		"sub": func(a, b int) int { return a - b },
-		"lastStage": func(history []models.InterviewStage) string {
-			if len(history) == 0 {
-				return "None"
-			}
-			return history[len(history)-1].Name
-		},
-		"slice": func(s string, start, end int) string {
-			if len(s) < end {
-				return s[start:]
-			}
-			return s[start:end]
-		},
-	})
-	tmpl = template.Must(tmpl.ParseFiles("templates/layout.html", "templates/pipeline.html"))
-	tmpl.ExecuteTemplate(w, "layout.html", data)
+	h.templates.RenderWithStatus(w, "pipeline.html", http.StatusOK, data)
 }

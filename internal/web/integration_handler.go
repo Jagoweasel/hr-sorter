@@ -24,6 +24,11 @@ func (h *Handler) handleCreateIntegration(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Location", "/accounts")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	http.Redirect(w, r, "/accounts", 303)
 }
 
@@ -33,6 +38,11 @@ func (h *Handler) handleToggleIntegration(w http.ResponseWriter, r *http.Request
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Location", "/accounts")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	http.Redirect(w, r, "/accounts", 303)
 }
 
@@ -40,6 +50,11 @@ func (h *Handler) handleDeleteIntegration(w http.ResponseWriter, r *http.Request
 	idStr := r.URL.Query().Get("id")
 	if err := h.intService.DeleteIntegration(r.Context(), idStr); err != nil {
 		http.Error(w, err.Error(), 500)
+		return
+	}
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Location", "/accounts")
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 	http.Redirect(w, r, "/accounts", 303)
@@ -60,8 +75,17 @@ func (h *Handler) handleIntegrationStatus(w http.ResponseWriter, r *http.Request
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"status": "%s", "identifier": "%s", "platform": "%s", "auth_url": "%s"}`,
-		integration.Status, integration.Identifier, integration.Platform, authURL)
+	h.templates.Render(w, "fragments/status.json", struct {
+		Status     string `json:"status"`
+		Identifier string `json:"identifier"`
+		Platform   string `json:"platform"`
+		AuthURL    string `json:"auth_url"`
+	}{
+		Status:     integration.Status,
+		Identifier: integration.Identifier,
+		Platform:   integration.Platform,
+		AuthURL:    authURL,
+	})
 }
 
 func (h *Handler) handleSubmitCode(w http.ResponseWriter, r *http.Request) {

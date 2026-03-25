@@ -60,6 +60,12 @@ func main() {
 	manager := tgclient.NewManager()
 	hhManager := hhclient.NewManager()
 
+	// Initialize Template Manager
+	tm, err := web.NewTemplateManager()
+	if err != nil {
+		log.Fatalf("[Main] Failed to initialize templates: %v", err)
+	}
+
 	// Initialize repositories
 	accRepo := repository.NewAccountRepository(database.DB)
 	intRepo := repository.NewIntegrationRepository(database.DB)
@@ -103,7 +109,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	handler := web.NewHandler(ctx, manager, hhManager, accRepo, intRepo, conRepo, msgRepo, seqRepo, fltRepo, accService, intService, seqService, conService, fltService)
+	handler := web.NewHandler(ctx, manager, hhManager, tm, accRepo, intRepo, conRepo, msgRepo, seqRepo, fltRepo, accService, intService, seqService, conService, fltService)
 	handler.RegisterRoutes(mux)
 
 	port := os.Getenv("HTTP_PORT")

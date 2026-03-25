@@ -1,7 +1,6 @@
 package web
 
 import (
-	"html/template"
 	"net/http"
 )
 
@@ -17,9 +16,5 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tmpl := template.Must(template.ParseFiles(
-		"templates/layout.html",
-		"templates/index.html",
-	))
-	tmpl.ExecuteTemplate(w, "layout.html", accounts)
+	h.templates.RenderWithStatus(w, "index.html", http.StatusOK, accounts)
 }

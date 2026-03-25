@@ -1,0 +1,24 @@
+<div class="fixed inset-0 bg-black/20 backdrop-blur-[1px] flex items-center justify-center z-[100]" id="modal" onclick="if(event.target === this) htmx.remove('#modal')">
+    <div class="bg-white border shadow-2xl rounded-2xl p-2 w-64 overflow-hidden" onclick="event.stopPropagation()">
+        <div class="px-4 py-3 border-b mb-1">
+            <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Recruiter Actions</p>
+        </div>
+        <button class="w-full text-left px-4 py-3 hover:bg-blue-50 text-blue-700 font-bold text-sm transition-colors rounded-xl flex items-center justify-between group"
+                hx-get="/contacts/{{ .ID }}/create-sequence-modal"
+                hx-target="#modal-container"
+                hx-on:htmx:after-request="htmx.remove('#modal')">
+            Start Sequence
+            <span class="opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+        </button>
+        <button class="w-full text-left px-4 py-3 hover:bg-blue-50 text-gray-700 font-bold text-sm transition-colors rounded-xl flex items-center justify-between group"
+                hx-get="/contacts/{{ .ID }}/add-to-sequence-modal"
+                hx-target="#modal-container"
+                hx-on:htmx:after-request="htmx.remove('#modal')">
+            Add to Existing
+            <span class="opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+        </button>
+        <div class="p-2 border-t mt-1">
+            <button onclick="htmx.remove('#modal')" class="w-full py-2 text-[10px] font-black text-gray-400 uppercase hover:text-gray-600 transition-colors">Cancel</button>
+        </div>
+    </div>
+</div>

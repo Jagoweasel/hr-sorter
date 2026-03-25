@@ -1,7 +1,6 @@
 package web
 
 import (
-	"html/template"
 	"net/http"
 )
 
@@ -12,11 +11,7 @@ func (h *Handler) handleAccounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tmpl := template.Must(template.ParseFiles(
-		"templates/layout.html",
-		"templates/accounts.html",
-	))
-	tmpl.ExecuteTemplate(w, "layout.html", data)
+	h.templates.RenderWithStatus(w, "accounts.html", http.StatusOK, data)
 }
 
 func (h *Handler) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
@@ -30,6 +25,11 @@ func (h *Handler) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Location", "/accounts")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	http.Redirect(w, r, "/accounts", 303)
 }
 
@@ -40,6 +40,11 @@ func (h *Handler) handleToggleAccount(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Location", "/accounts")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	http.Redirect(w, r, "/accounts", 303)
 }
 
@@ -48,6 +53,11 @@ func (h *Handler) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	err := h.accService.DeleteAccount(r.Context(), id)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
+		return
+	}
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Location", "/accounts")
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 	http.Redirect(w, r, "/accounts", 303)

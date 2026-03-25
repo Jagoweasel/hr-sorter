@@ -91,7 +91,7 @@
         <div class="col-span-12 lg:col-span-4 bg-white rounded-xl shadow-lg flex flex-col overflow-hidden border border-gray-200">
             <div id="contact-list" 
                  hx-get="/contacts" 
-                 hx-trigger="load, every 15s" 
+                 hx-trigger="load, every 15s, refreshContacts from:body" 
                  hx-swap="innerHTML" 
                  hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened'], [name='hide_unanswered']"
                  class="flex-1 overflow-y-auto divide-y divide-gray-100">
@@ -139,12 +139,12 @@
             Contacts whose <span class="font-bold">last message</span> contains any of these phrases will be hidden when "Hide Filtered" is active.
         </p>
 
-        <form hx-post="/filters/add" hx-target="#filter-list-content" class="mb-6 flex space-x-2">
+        <form hx-post="/filters/add" class="mb-6 flex space-x-2">
             <input type="text" name="pattern" placeholder="e.g. we will call you" required class="flex-1 border-2 border-gray-100 rounded-xl px-4 py-2 text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none transition-colors">
             <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200">Add</button>
         </form>
 
-        <div id="filter-list-content" hx-get="/filters" hx-trigger="load" class="max-h-96 overflow-y-auto pr-2">
+        <div id="filter-list-content" hx-get="/filters" hx-trigger="load, refreshFilters from:body" class="max-h-96 overflow-y-auto pr-2">
             <!-- Loaded via HTMX -->
         </div>
     </div>

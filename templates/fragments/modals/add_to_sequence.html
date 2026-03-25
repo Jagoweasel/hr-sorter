@@ -1,0 +1,24 @@
+<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[110]" id="modal" onclick="if(event.target === this) htmx.remove('#modal')">
+    <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-md relative" onclick="event.stopPropagation()">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-xl font-black text-gray-900 tracking-tight">Link Recruiter</h2>
+        </div>
+        <form hx-post="/sequences/add-contact" hx-target="body">
+            <input type="hidden" name="contact_id" value="{{ .ContactID }}">
+            <div class="space-y-4">
+                <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Select Active Sequence</label>
+                <select name="sequence_id" required class="block w-full border-2 border-gray-100 rounded-xl p-3 text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none transition-colors">
+                    {{ range .Sequences }}
+                        {{ if and (ne .Status "accepted") (ne .Status "rejected") }}
+                        <option value="{{ .ID }}">{{ .CompanyName }} — {{ .VacancyName }}</option>
+                        {{ end }}
+                    {{ end }}
+                </select>
+            </div>
+            <div class="mt-8 flex justify-end space-x-3">
+                <button type="button" onclick="htmx.remove('#modal')" class="px-5 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Cancel</button>
+                <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg hover:bg-blue-700 transition-colors">Confirm Link</button>
+            </div>
+        </form>
+    </div>
+</div>

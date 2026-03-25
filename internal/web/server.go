@@ -16,6 +16,9 @@ type Handler struct {
 	tgManager *tgclient.Manager
 	hhManager *hhclient.Manager
 
+	// Templates
+	templates *TemplateManager
+
 	// Repositories
 	accRepo *repository.AccountRepository
 	intRepo *repository.IntegrationRepository
@@ -36,6 +39,7 @@ func NewHandler(
 	ctx context.Context,
 	tgManager *tgclient.Manager,
 	hhManager *hhclient.Manager,
+	templates *TemplateManager,
 	accRepo *repository.AccountRepository,
 	intRepo *repository.IntegrationRepository,
 	conRepo *repository.ContactRepository,
@@ -52,6 +56,7 @@ func NewHandler(
 		rootCtx:    ctx,
 		tgManager:  tgManager,
 		hhManager:  hhManager,
+		templates:  templates,
 		accRepo:    accRepo,
 		intRepo:    intRepo,
 		conRepo:    conRepo,

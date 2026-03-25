@@ -1,7 +1,6 @@
 package web
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -24,7 +23,7 @@ func (h *Handler) handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Redirect", h.getRedirectURL(r))
+		w.Header().Set("HX-Location", h.getRedirectURL(r))
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -42,7 +41,7 @@ func (h *Handler) handleAddToSequence(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Redirect", h.getRedirectURL(r))
+		w.Header().Set("HX-Location", h.getRedirectURL(r))
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -99,32 +98,7 @@ func (h *Handler) handleDeleteSequence(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleAddStageModal(w http.ResponseWriter, r *http.Request) {
 	seqID := r.URL.Query().Get("sequence_id")
-	fmt.Fprintf(w, `
-		<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[110]" id="modal" onclick="if(event.target === this) htmx.remove('#modal')">
-			<div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-xs relative" onclick="event.stopPropagation()">
-				<h2 class="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 text-center">New Workflow Step</h2>
-				<div class="grid grid-cols-1 gap-2">
-					<button hx-get="/stages/add?sequence_id=%s&category=screening" hx-target="body" 
-					        class="px-4 py-3 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl text-xs font-black uppercase tracking-widest transition-colors">
-						Screening +
-					</button>
-					<button hx-get="/stages/add?sequence_id=%s&category=tech" hx-target="body"
-					        class="px-4 py-3 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-xl text-xs font-black uppercase tracking-widest transition-colors">
-						Technical +
-					</button>
-					<button hx-get="/stages/add?sequence_id=%s&category=final" hx-target="body"
-					        class="px-4 py-3 bg-pink-50 text-pink-700 hover:bg-pink-100 rounded-xl text-xs font-black uppercase tracking-widest transition-colors">
-						Final Interview +
-					</button>
-					<button hx-get="/stages/add?sequence_id=%s&category=offer" hx-target="body"
-					        class="px-4 py-3 bg-yellow-50 text-yellow-700 hover:bg-yellow-100 rounded-xl text-xs font-black uppercase tracking-widest transition-colors">
-						Offer +
-					</button>
-				</div>
-				<button onclick="htmx.remove('#modal')" class="w-full mt-6 py-2 text-[9px] font-black text-gray-400 hover:text-gray-600 uppercase tracking-widest">Close</button>
-			</div>
-		</div>
-	`, seqID, seqID, seqID, seqID)
+	h.templates.RenderWithStatus(w, "fragments/modals/add_stage.html", http.StatusOK, map[string]string{"SequenceID": seqID})
 }
 
 func (h *Handler) getRedirectURL(r *http.Request) string {

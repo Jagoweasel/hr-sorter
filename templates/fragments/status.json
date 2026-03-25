@@ -1,0 +1,1 @@
+{"status": "{{ .Status }}", "identifier": "{{ .Identifier }}", "platform": "{{ .Platform }}", "auth_url": "{{ .AuthURL }}"}
