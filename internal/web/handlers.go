@@ -711,10 +711,10 @@ func handlePipeline(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create account groups
-	var groups []AccountGroup
+	var groups []*AccountGroup
 
 	// Group for sequences without an account
-	orphanGroup := AccountGroup{
+	orphanGroup := &AccountGroup{
 		Account: nil,
 	}
 	for _, def := range columnDefs {
@@ -725,14 +725,14 @@ func handlePipeline(w http.ResponseWriter, r *http.Request) {
 	accountMap := make(map[int64]*AccountGroup)
 	for i := range allAccounts {
 		acc := allAccounts[i]
-		group := AccountGroup{
+		group := &AccountGroup{
 			Account: &acc,
 		}
 		for _, def := range columnDefs {
 			group.Columns = append(group.Columns, PipelineColumn{ColumnDef: def})
 		}
 		groups = append(groups, group)
-		accountMap[acc.ID] = &groups[len(groups)-1]
+		accountMap[acc.ID] = group
 	}
 
 	// Distribute sequences
@@ -742,7 +742,7 @@ func handlePipeline(w http.ResponseWriter, r *http.Request) {
 			targetGroup = accountMap[*s.AccountID]
 		}
 		if targetGroup == nil {
-			targetGroup = &orphanGroup
+			targetGroup = orphanGroup
 		}
 
 		targetGroup.Sequences = append(targetGroup.Sequences, s)
@@ -760,7 +760,7 @@ func handlePipeline(w http.ResponseWriter, r *http.Request) {
 
 	data := struct {
 		View       string
-		Groups     []AccountGroup
+		Groups     []*AccountGroup
 		ColumnDefs []ColumnDef
 	}{
 		View:       view,
@@ -831,15 +831,39 @@ func handleContactActions(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(path, "/create-sequence-modal") {
 		contactID := strings.TrimPrefix(strings.TrimSuffix(path, "/create-sequence-modal"), "/contacts/")
 
+		var contact models.Contact
+		err := database.DB.Get(&contact, "SELECT * FROM contacts WHERE id = ?", contactID)
+		if err != nil {
+			logger.Debug(logger.AddSequence, "Error fetching contact for modal: %v", err)
+		}
+
+		deref := func(s *string) string {
+			if s == nil {
+				return ""
+			}
+			return *s
+		}
+
+		companyName := ""
+		vacancyName := "Senior Go Dev"
+		if contact.Platform == "hh" {
+			companyName = deref(contact.FirstName)
+			vacancyName = deref(contact.LastName)
+		}
+
 		// Get earliest message date
 		var firstMsgDate string
-		err := database.DB.Get(&firstMsgDate, "SELECT COALESCE(datetime(MIN(timestamp)), datetime('now')) FROM messages WHERE contact_id = ?", contactID)
+		err = database.DB.Get(&firstMsgDate, "SELECT COALESCE(datetime(MIN(timestamp)), datetime('now')) FROM messages WHERE contact_id = ?", contactID)
 		if err != nil {
 			firstMsgDate = time.Now().Format("2006-01-02T15:04")
 		} else {
 			// Convert to HTML datetime-local format
-			t, _ := time.Parse("2006-01-02 15:04:05", firstMsgDate)
-			firstMsgDate = t.Format("2006-01-02T15:04")
+			t, err := time.Parse("2006-01-02 15:04:05", firstMsgDate)
+			if err != nil {
+				firstMsgDate = time.Now().Format("2006-01-02T15:04")
+			} else {
+				firstMsgDate = t.Format("2006-01-02T15:04")
+			}
 		}
 
 		fmt.Fprintf(w, `
@@ -857,11 +881,11 @@ func handleContactActions(w http.ResponseWriter, r *http.Request) {
 							<div class="grid grid-cols-2 gap-6">
 								<div>
 									<label class="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Company</label>
-									<input type="text" name="company_name" required class="block w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 focus:ring-0 transition-colors text-sm font-bold bg-gray-50" placeholder="Google">
+									<input type="text" name="company_name" value="%s" required class="block w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 focus:ring-0 transition-colors text-sm font-bold bg-gray-50" placeholder="Google">
 								</div>
 								<div>
 									<label class="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Vacancy</label>
-									<input type="text" name="vacancy_name" value="Senior Go Dev" required class="block w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 focus:ring-0 transition-colors text-sm font-bold bg-gray-50" placeholder="Senior Go Dev">
+									<input type="text" name="vacancy_name" value="%s" required class="block w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 focus:ring-0 transition-colors text-sm font-bold bg-gray-50" placeholder="Senior Go Dev">
 								</div>
 							</div>
 							<div>
@@ -876,7 +900,7 @@ func handleContactActions(w http.ResponseWriter, r *http.Request) {
 					</form>
 				</div>
 			</div>
-		`, contactID, firstMsgDate)
+		`, contactID, html.EscapeString(companyName), html.EscapeString(vacancyName), firstMsgDate)
 		return
 	}
 
@@ -978,9 +1002,9 @@ func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	var accountID *int64
 	var foundID int64
 	err = tx.Get(&foundID, `
-		SELECT i.account_id FROM messages m 
-		JOIN integrations i ON m.integration_id = i.id 
-		WHERE m.contact_id = ? AND i.account_id IS NOT NULL LIMIT 1
+		SELECT i.account_id FROM contacts c 
+		JOIN integrations i ON c.integration_id = i.id 
+		WHERE c.id = ? AND i.account_id IS NOT NULL LIMIT 1
 	`, contactID)
 	if err == nil {
 		accountID = &foundID
@@ -1002,6 +1026,7 @@ func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	res, err := tx.Exec("INSERT INTO sequences (account_id, company_name, vacancy_name, status) VALUES (?, ?, ?, ?)", accountID, company, vacancy, "initial")
 	if err != nil {
 		logger.Debug(logger.AddSequence, "Error inserting sequence: %v", err)
+		http.Error(w, fmt.Sprintf("Error inserting sequence: %v", err), 500)
 		return
 	}
 
@@ -1048,11 +1073,11 @@ func handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	logger.Debug(logger.AddSequence, "Transaction committed successfully for sequence %d", seqID)
 
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Redirect", "/pipeline")
+		w.Header().Set("HX-Redirect", getRedirectURL(r))
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	http.Redirect(w, r, "/pipeline", 303)
+	http.Redirect(w, r, getRedirectURL(r), 303)
 }
 
 func handleAddToSequence(w http.ResponseWriter, r *http.Request) {
@@ -1064,10 +1089,12 @@ func handleAddToSequence(w http.ResponseWriter, r *http.Request) {
 	seqID := r.FormValue("sequence_id")
 	contactID := r.FormValue("contact_id")
 
+	logger.Debug(logger.AddSequence, "handleAddToSequence: Adding contact %s to sequence %s", contactID, seqID)
+
 	_, err := database.DB.Exec("INSERT OR IGNORE INTO sequence_contacts (sequence_id, contact_id) VALUES (?, ?)", seqID, contactID)
 	if err != nil {
 		logger.Debug(logger.AddSequence, "Error adding contact %s to sequence %s: %v", contactID, seqID, err)
-		http.Error(w, err.Error(), 500)
+		http.Error(w, fmt.Sprintf("Error adding contact: %v", err), 500)
 		return
 	}
 
@@ -1085,19 +1112,25 @@ func handleAddToSequence(w http.ResponseWriter, r *http.Request) {
 	logger.LogChain(seq.ID, seq.CompanyName, names, seq.Status)
 
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Redirect", "/")
+		w.Header().Set("HX-Redirect", getRedirectURL(r))
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	http.Redirect(w, r, "/", 303)
+	http.Redirect(w, r, getRedirectURL(r), 303)
 }
 
 func getRedirectURL(r *http.Request) string {
 	referer := r.Header.Get("Referer")
+	if referer == "" {
+		return "/"
+	}
 	if strings.Contains(referer, "view=timeline") {
 		return "/pipeline?view=timeline"
 	}
-	return "/pipeline"
+	if strings.Contains(referer, "pipeline") {
+		return "/pipeline"
+	}
+	return "/"
 }
 
 func handleUpdateStage(w http.ResponseWriter, r *http.Request) {
