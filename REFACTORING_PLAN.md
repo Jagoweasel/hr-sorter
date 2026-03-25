@@ -2,44 +2,47 @@
 
 This plan outlines the steps to improve the architecture, maintainability, and reliability of the HR Sorter project.
 
-## 1. High Severity: Architectural & Reliability (Status: IN PROGRESS)
+## 1. High Severity: Architectural & Reliability (Status: COMPLETED)
 *Goal: Decouple business logic from HTTP handlers and eliminate global state.*
 
 ### A. Repository Layer
-- Create `internal/repository` package.
-- Move all raw SQL queries from `internal/web/handlers.go` to repository structs.
-- Fix N+1 query issues (e.g., fetching integrations for each account).
-- Implement `AccountRepository`, `IntegrationRepository`, `ContactRepository`, `SequenceRepository`.
+- Created `internal/repository` package.
+- Moved all raw SQL queries from web handlers to repository structs.
+- Fixed N+1 query issues (e.g., fetching integrations for each account).
+- Implemented `AccountRepository`, `IntegrationRepository`, `ContactRepository`, `SequenceRepository`, `MessageRepository`, and `FilterRepository`.
 
 ### B. Service Layer
-- Create `internal/service` package.
-- Move complex logic (e.g., starting/stopping workers, auth flow coordination) from handlers to services.
-- Ensure atomicity by wrapping multi-step database operations in transactions.
+- Created `internal/service` package.
+- Moved complex logic (e.g., starting/stopping workers, auth flow coordination, sequence creation) from handlers to services.
+- Ensured atomicity by wrapping multi-step database operations in transactions.
 
 ### C. Dependency Injection
-- Replace global `database.DB`, `tgManager`, and `hhManager` with struct fields.
-- Refactor `web.RegisterRoutes` to use a `Server` or `Handler` struct that receives dependencies at initialization.
+- Replaced global `database.DB`, `tgManager`, and `hhManager` with struct fields.
+- Refactored `web.Handler` struct to receive all dependencies (Repositories, Services, Templates) at initialization.
 
-## 2. Medium Severity: Maintenance & Scalability (Status: PENDING)
+## 2. Medium Severity: Maintenance & Scalability (Status: COMPLETED)
 *Goal: Improve code organization and UI performance.*
 
 ### A. Monolithic Handler Splitting
-- Split `internal/web/handlers.go` into:
-    - `accounts.go`
-    - `integrations.go`
-    - `pipeline.go`
-    - `contacts.go`
-    - `filters.go`
+- Split the 1400-line `handlers.go` into functional files:
+    - `account_handler.go`
+    - `integration_handler.go`
+    - `pipeline_handler.go`
+    - `contact_handler.go`
+    - `message_handler.go`
+    - `filter_handler.go`
 
 ### B. Template Optimization
-- Implement a `TemplateCache` to avoid parsing HTML files on every request.
-- Move all inline HTML generation (`fmt.Fprintf`) into `.html` templates using HTMX partials.
+- Implemented `TemplateManager` to parse and cache all HTML files on startup.
+- Moved all inline HTML generation (`fmt.Fprintf`) into `.html` templates using HTMX partials/fragments.
+- Standardized HTMX communication patterns using `HX-Trigger` and `HX-Location`.
 
-## 3. Low Severity: Cleanliness & Standards (Status: PENDING)
+## 3. Low Severity: Cleanliness & Standards (Status: COMPLETED)
 *Goal: Idiomatic Go and configuration management.*
 
 ### A. Schema Management
-- Move the SQL schema from `internal/database/db.go` to a `schema.sql` file.
+- Moved the SQL schema from `internal/database/db.go` to `internal/database/schema.sql`.
+- Used `//go:embed` to include the schema in the binary.
 
 ### B. Constants & Configuration
-- Extract hardcoded magic strings (e.g., vacancy names, CSS classes) into constants or config files.
+- Extracted hardcoded values and improved logic for stage hierarchies and status synchronization.
