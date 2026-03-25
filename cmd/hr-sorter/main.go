@@ -15,6 +15,8 @@ import (
 	"hr-sorter/internal/hhclient"
 	"hr-sorter/internal/logger"
 	"hr-sorter/internal/models"
+	"hr-sorter/internal/repository"
+	"hr-sorter/internal/service"
 	"hr-sorter/internal/tgclient"
 	"hr-sorter/internal/web"
 )
@@ -58,13 +60,19 @@ func main() {
 	manager := tgclient.NewManager()
 	hhManager := hhclient.NewManager()
 
+	// Initialize repositories
+	accRepo := repository.NewAccountRepository(database.DB)
+	intRepo := repository.NewIntegrationRepository(database.DB)
+	conRepo := repository.NewContactRepository(database.DB)
+	msgRepo := repository.NewMessageRepository(database.DB)
+	seqRepo := repository.NewSequenceRepository(database.DB)
+	fltRepo := repository.NewFilterRepository(database.DB)
+
+	// Initialize services
+	accService := service.NewAccountService(accRepo, intRepo, manager, hhManager)
+
 	// Fetch active TG/HH integrations from active accounts
-	var integrations []models.Integration
-	err := database.DB.Select(&integrations, `
-		SELECT i.* FROM integrations i
-		JOIN accounts a ON i.account_id = a.id
-		WHERE i.status IN ('active', 'pending_auth') AND a.status = 'active'
-	`)
+	integrations, err := intRepo.GetActiveAndPending(context.Background())
 	if err != nil {
 		log.Fatalf("[Main] Failed to fetch integrations: %v", err)
 	}
@@ -91,7 +99,8 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	web.RegisterRoutes(mux, manager, hhManager, ctx)
+	handler := web.NewHandler(ctx, manager, hhManager, accRepo, intRepo, conRepo, msgRepo, seqRepo, fltRepo, accService)
+	handler.RegisterRoutes(mux)
 
 	port := os.Getenv("HTTP_PORT")
 	if port == "" {

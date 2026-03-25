@@ -1,0 +1,147 @@
+package web
+
+import (
+	"hr-sorter/internal/logger"
+	"hr-sorter/internal/models"
+	"hr-sorter/internal/repository"
+	"html/template"
+	"log"
+	"net/http"
+)
+
+type ColumnDef struct {
+	ID          string
+	Label       string
+	ColorClass  string
+	BorderClass string
+}
+
+type AccountGroup struct {
+	Account   *models.Account
+	Columns   []PipelineColumn
+	Sequences []repository.SequenceWithDetails
+}
+
+type PipelineColumn struct {
+	ColumnDef
+	Sequences []repository.SequenceWithDetails
+}
+
+func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
+	view := r.URL.Query().Get("view")
+	if view == "" {
+		view = "kanban"
+	}
+
+	activeAccountID := r.URL.Query().Get("account_id")
+
+	allAccounts, _ := h.accRepo.GetAll(r.Context())
+	sequences, err := h.seqRepo.GetAll(r.Context(), activeAccountID)
+	if err != nil {
+		log.Printf("Web: Error fetching sequences: %v", err)
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	var detailedSeqs []repository.SequenceWithDetails
+	for _, s := range sequences {
+		recruiters, _ := h.seqRepo.GetRecruiters(r.Context(), s.ID)
+		stages, _ := h.seqRepo.GetStages(r.Context(), s.ID)
+
+		var history []models.InterviewStage
+		var historyNames []string
+		for _, st := range stages {
+			if st.IsCompleted {
+				history = append(history, st)
+				historyNames = append(historyNames, st.Name)
+			}
+		}
+
+		detailedSeqs = append(detailedSeqs, repository.SequenceWithDetails{
+			Sequence:   s,
+			Recruiters: recruiters,
+			Stages:     stages,
+			History:    history,
+			IsRejected: s.Status == "rejected",
+			IsAccepted: s.Status == "accepted",
+		})
+		logger.LogChain(s.ID, s.CompanyName, historyNames, s.Status)
+	}
+
+	columnDefs := []ColumnDef{
+		{ID: "initial", Label: "Initial", ColorClass: "bg-blue-50", BorderClass: "border-blue-200"},
+		{ID: "screening", Label: "Screening", ColorClass: "bg-indigo-50", BorderClass: "border-indigo-200"},
+		{ID: "tech", Label: "Technical", ColorClass: "bg-purple-50", BorderClass: "border-purple-200"},
+		{ID: "final", Label: "Final Interview", ColorClass: "bg-pink-50", BorderClass: "border-pink-200"},
+		{ID: "offer", Label: "Offer", ColorClass: "bg-yellow-50", BorderClass: "border-yellow-200"},
+		{ID: "accepted", Label: "Accepted", ColorClass: "bg-green-50", BorderClass: "border-green-200"},
+		{ID: "rejected", Label: "Rejected", ColorClass: "bg-red-50", BorderClass: "border-red-200"},
+	}
+
+	var groups []*AccountGroup
+	orphanGroup := &AccountGroup{Account: nil}
+	for _, def := range columnDefs {
+		orphanGroup.Columns = append(orphanGroup.Columns, PipelineColumn{ColumnDef: def})
+	}
+
+	accountMap := make(map[int64]*AccountGroup)
+	for i := range allAccounts {
+		acc := allAccounts[i]
+		group := &AccountGroup{Account: &acc}
+		for _, def := range columnDefs {
+			group.Columns = append(group.Columns, PipelineColumn{ColumnDef: def})
+		}
+		groups = append(groups, group)
+		accountMap[acc.ID] = group
+	}
+
+	for _, s := range detailedSeqs {
+		var targetGroup *AccountGroup
+		if s.AccountID != nil {
+			targetGroup = accountMap[*s.AccountID]
+		}
+		if targetGroup == nil {
+			targetGroup = orphanGroup
+		}
+
+		targetGroup.Sequences = append(targetGroup.Sequences, s)
+		for i := range targetGroup.Columns {
+			if s.Status == targetGroup.Columns[i].ID {
+				targetGroup.Columns[i].Sequences = append(targetGroup.Columns[i].Sequences, s)
+			}
+		}
+	}
+
+	if len(orphanGroup.Sequences) > 0 {
+		groups = append(groups, orphanGroup)
+	}
+
+	data := struct {
+		View       string
+		Groups     []*AccountGroup
+		ColumnDefs []ColumnDef
+	}{
+		View:       view,
+		Groups:     groups,
+		ColumnDefs: columnDefs,
+	}
+
+	tmpl := template.New("layout.html").Funcs(template.FuncMap{
+		"add": func(a, b int) int { return a + b },
+		"sub": func(a, b int) int { return a - b },
+		"lastStage": func(history []models.InterviewStage) string {
+			if len(history) == 0 {
+				return "None"
+			}
+			return history[len(history)-1].Name
+		},
+		"slice": func(s string, start, end int) string {
+			if len(s) < end {
+				return s[start:]
+			}
+			return s[start:end]
+		},
+	})
+	tmpl = template.Must(tmpl.ParseFiles("templates/layout.html", "templates/pipeline.html"))
+	tmpl.ExecuteTemplate(w, "layout.html", data)
+}
