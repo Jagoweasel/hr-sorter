@@ -33,6 +33,7 @@ type Handler struct {
 	seqService *service.SequenceService
 	conService *service.ContactService
 	fltService *service.FilterService
+	repService *service.ReportService
 }
 
 func NewHandler(
@@ -51,6 +52,7 @@ func NewHandler(
 	seqService *service.SequenceService,
 	conService *service.ContactService,
 	fltService *service.FilterService,
+	repService *service.ReportService,
 ) *Handler {
 	return &Handler{
 		rootCtx:    ctx,
@@ -68,11 +70,13 @@ func NewHandler(
 		seqService: seqService,
 		conService: conService,
 		fltService: fltService,
+		repService: repService,
 	}
 }
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/", h.handleIndex)
+	mux.HandleFunc("/reports", h.handleReports)
 	mux.HandleFunc("/contacts", h.handleContacts)
 	mux.HandleFunc("/messages/", h.handleMessages)
 	mux.HandleFunc("/accounts", h.handleAccounts)

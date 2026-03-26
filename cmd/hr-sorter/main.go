@@ -80,6 +80,7 @@ func main() {
 	seqService := service.NewSequenceService(seqRepo, conRepo, accRepo)
 	conService := service.NewContactService(conRepo, fltRepo)
 	fltService := service.NewFilterService(fltRepo)
+	repService := service.NewReportService(seqRepo)
 
 	// Fetch active TG/HH integrations from active accounts
 	integrations, err := intRepo.GetActiveAndPending(context.Background())
@@ -109,7 +110,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	handler := web.NewHandler(ctx, manager, hhManager, tm, accRepo, intRepo, conRepo, msgRepo, seqRepo, fltRepo, accService, intService, seqService, conService, fltService)
+	handler := web.NewHandler(ctx, manager, hhManager, tm, accRepo, intRepo, conRepo, msgRepo, seqRepo, fltRepo, accService, intService, seqService, conService, fltService, repService)
 	handler.RegisterRoutes(mux)
 
 	port := os.Getenv("HTTP_PORT")

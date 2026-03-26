@@ -143,3 +143,82 @@ func (r *SequenceRepository) GetFirstIncompleteStage(ctx context.Context, sequen
 func (r *SequenceRepository) BeginTx(ctx context.Context) (*sqlx.Tx, error) {
 	return r.db.BeginTxx(ctx, nil)
 }
+
+type StatusCount struct {
+	Status string `db:"status"`
+	Count  int    `db:"count"`
+}
+
+type VacancyStats struct {
+	VacancyName string `db:"vacancy_name"`
+	Status      string `db:"status"`
+	Count       int    `db:"count"`
+}
+
+type CompanyStats struct {
+	CompanyName string `db:"company_name"`
+	Status      string `db:"status"`
+	Count       int    `db:"count"`
+}
+
+type PlatformStats struct {
+	Platform string `db:"platform"`
+	Count    int    `db:"count"`
+}
+
+func (r *SequenceRepository) GetStatusCounts(ctx context.Context, accountID string) ([]StatusCount, error) {
+	var counts []StatusCount
+	query := "SELECT status, count(*) as count FROM sequences"
+	var args []interface{}
+	if accountID != "" {
+		query += " WHERE account_id = ?"
+		args = append(args, accountID)
+	}
+	query += " GROUP BY status"
+	err := r.db.SelectContext(ctx, &counts, query, args...)
+	return counts, err
+}
+
+func (r *SequenceRepository) GetVacancyStats(ctx context.Context, accountID string) ([]VacancyStats, error) {
+	var stats []VacancyStats
+	query := "SELECT vacancy_name, status, count(*) as count FROM sequences"
+	var args []interface{}
+	if accountID != "" {
+		query += " WHERE account_id = ?"
+		args = append(args, accountID)
+	}
+	query += " GROUP BY vacancy_name, status"
+	err := r.db.SelectContext(ctx, &stats, query, args...)
+	return stats, err
+}
+
+func (r *SequenceRepository) GetCompanyStats(ctx context.Context, accountID string) ([]CompanyStats, error) {
+	var stats []CompanyStats
+	query := "SELECT company_name, status, count(*) as count FROM sequences"
+	var args []interface{}
+	if accountID != "" {
+		query += " WHERE account_id = ?"
+		args = append(args, accountID)
+	}
+	query += " GROUP BY company_name, status"
+	err := r.db.SelectContext(ctx, &stats, query, args...)
+	return stats, err
+}
+
+func (r *SequenceRepository) GetPlatformStats(ctx context.Context, accountID string) ([]PlatformStats, error) {
+	var stats []PlatformStats
+	query := `
+		SELECT i.platform, count(DISTINCT s.id) as count 
+		FROM sequences s
+		JOIN sequence_contacts sc ON s.id = sc.sequence_id
+		JOIN contacts c ON sc.contact_id = c.id
+		JOIN integrations i ON c.integration_id = i.id`
+	var args []interface{}
+	if accountID != "" {
+		query += " WHERE s.account_id = ?"
+		args = append(args, accountID)
+	}
+	query += " GROUP BY i.platform"
+	err := r.db.SelectContext(ctx, &stats, query, args...)
+	return stats, err
+}

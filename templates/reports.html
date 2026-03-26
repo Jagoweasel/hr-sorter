@@ -1,0 +1,126 @@
+{{ define "content" }}
+<div class="space-y-6">
+    <!-- Header & Filter -->
+    <div class="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm">
+        <h2 class="text-2xl font-bold text-gray-800">Reports Dashboard</h2>
+        <form method="GET" action="/reports" class="flex gap-2">
+            <select name="account_id" onchange="this.form.submit()" class="rounded border-gray-300 text-sm">
+                <option value="">All Accounts</option>
+                {{ range .Accounts }}
+                <option value="{{ .ID }}" {{ if eq (printf "%d" .ID) $.ActiveAcc }}selected{{ end }}>{{ .Name }}</option>
+                {{ end }}
+            </select>
+        </form>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-blue-500">
+            <p class="text-sm text-gray-500 uppercase font-semibold">Total Responses</p>
+            <p class="text-3xl font-bold">{{ .Report.TotalResponses }}</p>
+        </div>
+        <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-indigo-500">
+            <p class="text-sm text-gray-500 uppercase font-semibold">Conv. Rate (Intv/Offer)</p>
+            <p class="text-3xl font-bold">{{ printf "%.1f%%" .Report.ConversionRate }}</p>
+        </div>
+        <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-green-500">
+            <p class="text-sm text-gray-500 uppercase font-semibold">Hire Rate (Total)</p>
+            <p class="text-3xl font-bold">{{ printf "%.1f%%" .Report.AcceptanceRate }}</p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Recruitment Funnel -->
+        <div class="bg-white p-6 rounded-lg shadow-sm">
+            <h3 class="text-lg font-semibold mb-4 border-b pb-2">Recruitment Funnel</h3>
+            <div class="space-y-4">
+                {{ range .Report.Funnel }}
+                <div>
+                    <div class="flex justify-between mb-1 text-sm">
+                        <span class="font-medium text-gray-700">{{ .Label }}</span>
+                        <span class="text-gray-500">{{ .Count }} ({{ printf "%.0f%%" .Percentage }})</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div class="bg-blue-600 h-2.5 rounded-full" style="width: {{ .Percentage }}%"></div>
+                    </div>
+                </div>
+                {{ end }}
+            </div>
+        </div>
+
+        <!-- Platform Breakdown -->
+        <div class="bg-white p-6 rounded-lg shadow-sm">
+            <h3 class="text-lg font-semibold mb-4 border-b pb-2">Responses by Platform</h3>
+            <div class="flex items-center justify-around h-48">
+                {{ range .Report.PlatformStats }}
+                <div class="text-center">
+                    <div class="text-4xl font-bold text-blue-600">{{ .Count }}</div>
+                    <div class="text-sm text-gray-500 uppercase">{{ .Platform }}</div>
+                </div>
+                {{ else }}
+                <p class="text-gray-400 italic">No platform data available</p>
+                {{ end }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Table Breakdowns -->
+    <div class="grid grid-cols-1 gap-6">
+        <!-- Vacancy Stats -->
+        <div class="bg-white p-6 rounded-lg shadow-sm overflow-x-auto">
+            <h3 class="text-lg font-semibold mb-4 border-b pb-2">Performance by Vacancy</h3>
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead>
+                    <tr class="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        <th class="px-4 py-2">Vacancy</th>
+                        <th class="px-4 py-2">Total</th>
+                        <th class="px-4 py-2">Screening+</th>
+                        <th class="px-4 py-2">Offer+</th>
+                        <th class="px-4 py-2">Accepted</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {{ range $name, $stats := .Report.VacancyStats }}
+                    <tr class="text-sm">
+                        <td class="px-4 py-2 font-medium">{{ $name }}</td>
+                        <td class="px-4 py-2">{{ index $stats "initial" | add (index $stats "screening") | add (index $stats "tech") | add (index $stats "final") | add (index $stats "offer") | add (index $stats "accepted") | add (index $stats "rejected") }}</td>
+                        <td class="px-4 py-2">{{ index $stats "screening" | add (index $stats "tech") | add (index $stats "final") | add (index $stats "offer") | add (index $stats "accepted") }}</td>
+                        <td class="px-4 py-2">{{ index $stats "offer" | add (index $stats "accepted") }}</td>
+                        <td class="px-4 py-2">
+                            <span class="px-2 py-1 rounded-full bg-green-100 text-green-800 text-xs font-bold">
+                                {{ index $stats "accepted" }}
+                            </span>
+                        </td>
+                    </tr>
+                    {{ end }}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Company Stats -->
+        <div class="bg-white p-6 rounded-lg shadow-sm overflow-x-auto">
+            <h3 class="text-lg font-semibold mb-4 border-b pb-2">Performance by Company</h3>
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead>
+                    <tr class="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        <th class="px-4 py-2">Company</th>
+                        <th class="px-4 py-2">Total</th>
+                        <th class="px-4 py-2">Offers</th>
+                        <th class="px-4 py-2">Accepted</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {{ range $name, $stats := .Report.CompanyStats }}
+                    <tr class="text-sm">
+                        <td class="px-4 py-2 font-medium">{{ $name }}</td>
+                        <td class="px-4 py-2">{{ index $stats "initial" | add (index $stats "screening") | add (index $stats "tech") | add (index $stats "final") | add (index $stats "offer") | add (index $stats "accepted") | add (index $stats "rejected") }}</td>
+                        <td class="px-4 py-2">{{ index $stats "offer" | add (index $stats "accepted") }}</td>
+                        <td class="px-4 py-2">{{ index $stats "accepted" }}</td>
+                    </tr>
+                    {{ end }}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{{ end }}

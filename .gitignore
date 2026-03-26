@@ -2,3 +2,4 @@
 hr-sorter.db
 sessions/**
 .env
+tmp
