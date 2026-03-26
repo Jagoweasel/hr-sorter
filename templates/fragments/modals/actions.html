@@ -14,10 +14,28 @@
                 hx-get="/contacts/{{ .ID }}/add-to-sequence-modal"
                 hx-target="#modal-container"
                 hx-on:htmx:after-request="htmx.remove('#modal')">
-            Add to Existing
+                Add to Existing
             <span class="opacity-0 group-hover:opacity-100 transition-opacity">→</span>
         </button>
+        {{ if .IsIgnored }}
+        <button class="w-full text-left px-4 py-3 hover:bg-green-50 text-green-700 font-bold text-sm transition-colors rounded-xl flex items-center justify-between group"
+                hx-post="/contacts/{{ .ID }}/restore"
+                hx-swap="none"
+                hx-on:htmx:after-request="htmx.remove('#modal')">
+            Restore Recruiter
+            <span class="opacity-0 group-hover:opacity-100 transition-opacity">↺</span>
+        </button>
+        {{ else }}
+        <button class="w-full text-left px-4 py-3 hover:bg-red-50 text-red-700 font-bold text-sm transition-colors rounded-xl flex items-center justify-between group"
+                hx-post="/contacts/{{ .ID }}/ignore"
+                hx-swap="none"
+                hx-on:htmx:after-request="htmx.remove('#modal')">
+            Ignore Recruiter
+            <span class="opacity-0 group-hover:opacity-100 transition-opacity">✕</span>
+        </button>
+        {{ end }}
         <div class="p-2 border-t mt-1">
+
             <button onclick="htmx.remove('#modal')" class="w-full py-2 text-[10px] font-black text-gray-400 uppercase hover:text-gray-600 transition-colors">Cancel</button>
         </div>
     </div>

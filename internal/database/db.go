@@ -2,6 +2,7 @@ package database
 
 import (
 	_ "embed"
+	"encoding/json"
 	"log"
 	"os"
 	"strconv"
@@ -124,6 +125,41 @@ func InitDB(path string) {
 		log.Println("[DB] Migration finished.")
 	}
 
+	// Migration: Add is_ignored to contacts if it doesn't exist
+	var hasIsIgnored bool
+	err = DB.Get(&hasIsIgnored, "SELECT COUNT(*) FROM pragma_table_info('contacts') WHERE name='is_ignored'")
+	if err == nil && !hasIsIgnored {
+		log.Println("[DB] Migrating contacts: adding is_ignored column...")
+		DB.MustExec("ALTER TABLE contacts ADD COLUMN is_ignored BOOLEAN DEFAULT 0")
+		log.Println("[DB] Migration finished.")
+	}
+
 	// Ensure NO nulls in access_hash if it was already there without default
 	DB.MustExec("UPDATE contacts SET access_hash = 0 WHERE access_hash IS NULL")
+
+	SeedFilters()
+}
+
+func SeedFilters() {
+	path := "filters.json"
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		log.Printf("[DB] Error reading filters.json: %v", err)
+		return
+	}
+
+	var patterns []string
+	if err := json.Unmarshal(data, &patterns); err != nil {
+		log.Printf("[DB] Error unmarshaling filters.json: %v", err)
+		return
+	}
+
+	log.Printf("[DB] Seeding %d filters...", len(patterns))
+	for _, p := range patterns {
+		_, _ = DB.Exec("INSERT OR IGNORE INTO message_filters (pattern, is_active) VALUES (?, 1)", p)
+	}
 }

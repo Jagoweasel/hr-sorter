@@ -34,6 +34,7 @@ type Contact struct {
 	LastName      *string   `db:"last_name" json:"last_name"`
 	Username      *string   `db:"username" json:"username"`
 	AccessHash    int64     `db:"access_hash" json:"access_hash"`
+	IsIgnored     bool      `db:"is_ignored" json:"is_ignored"`
 	CreatedAt     time.Time `db:"created_at" json:"created_at"`
 	// UI fields
 	InSequence bool   `db:"in_sequence" json:"in_sequence"`

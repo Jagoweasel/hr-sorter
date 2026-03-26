@@ -93,6 +93,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/pipeline", h.handlePipeline)
 	mux.HandleFunc("/contacts/", h.handleContactActions)
 	mux.HandleFunc("/sequences/create", h.handleCreateSequence)
+	mux.HandleFunc("/sequences/bulk-add", h.handleBulkAdd)
 	mux.HandleFunc("/sequences/add-contact", h.handleAddToSequence)
 	mux.HandleFunc("/sequences/add-stage-modal", h.handleAddStageModal)
 	mux.HandleFunc("/stages/update", h.handleUpdateStage)
@@ -101,6 +102,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/sequences/delete", h.handleDeleteSequence)
 	mux.HandleFunc("/filters", h.handleGetFilters)
 	mux.HandleFunc("/filters/add", h.handleAddFilter)
+	mux.HandleFunc("/filters/export", h.handleExportFilters)
 	mux.HandleFunc("/filters/delete", h.handleDeleteFilter)
 	mux.HandleFunc("/filters/toggle", h.handleToggleFilter)
 }

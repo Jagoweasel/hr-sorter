@@ -92,3 +92,8 @@ func (r *ContactRepository) GetAccountIDByContactID(ctx context.Context, contact
 	}
 	return &accountID, nil
 }
+
+func (r *ContactRepository) UpdateIgnored(ctx context.Context, id interface{}, ignored bool) error {
+	_, err := r.db.ExecContext(ctx, "UPDATE contacts SET is_ignored = ? WHERE id = ?", ignored, id)
+	return err
+}

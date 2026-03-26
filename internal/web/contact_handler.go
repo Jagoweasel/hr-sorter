@@ -12,8 +12,9 @@ func (h *Handler) handleContacts(w http.ResponseWriter, r *http.Request) {
 	showDeclines := r.URL.Query().Get("show_declines") == "true"
 	hideScreened := r.URL.Query().Get("hide_screened") == "true"
 	hideUnanswered := r.URL.Query().Get("hide_unanswered") == "true"
+	showIgnored := r.URL.Query().Get("show_ignored") == "true"
 
-	filteredContacts, err := h.conService.GetFilteredContacts(r.Context(), activeAccountID, platformFilter, showDeclines, hideScreened, hideUnanswered)
+	filteredContacts, err := h.conService.GetFilteredContacts(r.Context(), activeAccountID, platformFilter, showDeclines, hideScreened, hideUnanswered, showIgnored)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -22,11 +23,39 @@ func (h *Handler) handleContacts(w http.ResponseWriter, r *http.Request) {
 	h.templates.RenderWithStatus(w, "fragments/contact_list.html", http.StatusOK, filteredContacts)
 }
 
+func (h *Handler) handleIgnoreContact(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	// Expected: /contacts/{id}/ignore or /contacts/{id}/restore
+	action := "ignore"
+	if strings.HasSuffix(path, "/restore") {
+		action = "restore"
+	}
+
+	id := strings.TrimPrefix(path, "/contacts/")
+	id = strings.TrimSuffix(id, "/"+action)
+
+	ignored := action == "ignore"
+	if err := h.conService.UpdateIgnored(r.Context(), id, ignored); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	// Trigger refresh of contact list
+	w.Header().Set("HX-Trigger", "refreshContacts")
+	w.WriteHeader(http.StatusOK)
+}
+
 func (h *Handler) handleContactActions(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
+	if strings.HasSuffix(path, "/ignore") || strings.HasSuffix(path, "/restore") {
+		h.handleIgnoreContact(w, r)
+		return
+	}
+
 	if strings.HasSuffix(path, "/actions") {
 		id := strings.TrimPrefix(strings.TrimSuffix(path, "/actions"), "/contacts/")
-		h.templates.RenderWithStatus(w, "fragments/modals/actions.html", http.StatusOK, map[string]string{"ID": id})
+		contact, _ := h.conRepo.GetByID(r.Context(), id)
+		h.templates.RenderWithStatus(w, "fragments/modals/actions.html", http.StatusOK, contact)
 		return
 	}
 

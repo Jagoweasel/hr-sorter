@@ -30,6 +30,27 @@ func (h *Handler) handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, h.getRedirectURL(r), 303)
 }
 
+func (h *Handler) handleBulkAdd(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", 405)
+		return
+	}
+
+	accountID := r.FormValue("account_id")
+	platform := r.FormValue("platform")
+	showDeclines := r.FormValue("show_declines") == "true"
+	hideScreened := r.FormValue("hide_screened") == "true"
+	hideUnanswered := r.FormValue("hide_unanswered") == "true"
+
+	if _, err := h.seqService.BulkCreateSequences(r.Context(), accountID, platform, showDeclines, hideScreened, hideUnanswered); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	w.Header().Set("HX-Trigger", "refreshContacts")
+	w.WriteHeader(http.StatusOK)
+}
+
 func (h *Handler) handleAddToSequence(w http.ResponseWriter, r *http.Request) {
 	seqIDStr := r.FormValue("sequence_id")
 	contactID := r.FormValue("contact_id")

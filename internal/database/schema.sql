@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS contacts (
     last_name TEXT,
     username TEXT,
     access_hash INTEGER DEFAULT 0,
+    is_ignored BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (integration_id) REFERENCES integrations(id) ON DELETE CASCADE
 );

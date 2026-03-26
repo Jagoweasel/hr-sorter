@@ -10,17 +10,53 @@ import (
 )
 
 type SequenceService struct {
-	seqRepo *repository.SequenceRepository
-	conRepo *repository.ContactRepository
-	accRepo *repository.AccountRepository
+	seqRepo    *repository.SequenceRepository
+	conRepo    *repository.ContactRepository
+	accRepo    *repository.AccountRepository
+	conService *ContactService
 }
 
-func NewSequenceService(seqRepo *repository.SequenceRepository, conRepo *repository.ContactRepository, accRepo *repository.AccountRepository) *SequenceService {
+func NewSequenceService(seqRepo *repository.SequenceRepository, conRepo *repository.ContactRepository, accRepo *repository.AccountRepository, conService *ContactService) *SequenceService {
 	return &SequenceService{
-		seqRepo: seqRepo,
-		conRepo: conRepo,
-		accRepo: accRepo,
+		seqRepo:    seqRepo,
+		conRepo:    conRepo,
+		accRepo:    accRepo,
+		conService: conService,
 	}
+}
+
+func (s *SequenceService) BulkCreateSequences(ctx context.Context, accountID, platform string, showDeclines, hideScreened, hideUnanswered bool) (int, error) {
+	contacts, err := s.conService.GetFilteredContacts(ctx, accountID, platform, showDeclines, hideScreened, hideUnanswered, false)
+	if err != nil {
+		return 0, err
+	}
+
+	count := 0
+	now := time.Now().Format("2006-01-02T15:04")
+
+	for _, c := range contacts {
+		if c.InSequence {
+			continue
+		}
+
+		company := ""
+		vacancy := "Senior Go Dev"
+		if c.Platform == "hh" {
+			if c.FirstName != nil {
+				company = *c.FirstName
+			}
+			if c.LastName != nil {
+				vacancy = *c.LastName
+			}
+		}
+
+		_, err := s.CreateSequence(ctx, company, vacancy, fmt.Sprintf("%d", c.ID), now)
+		if err == nil {
+			count++
+		}
+	}
+
+	return count, nil
 }
 
 func (s *SequenceService) CreateSequence(ctx context.Context, company, vacancy, contactID, initialDateStr string) (int64, error) {

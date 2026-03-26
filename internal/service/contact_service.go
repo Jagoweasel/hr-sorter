@@ -19,7 +19,7 @@ func NewContactService(conRepo *repository.ContactRepository, fltRepo *repositor
 	}
 }
 
-func (s *ContactService) GetFilteredContacts(ctx context.Context, accountID, platform string, showDeclines, hideScreened, hideUnanswered bool) ([]repository.ContactWithLastMsg, error) {
+func (s *ContactService) GetFilteredContacts(ctx context.Context, accountID, platform string, showDeclines, hideScreened, hideUnanswered, showIgnored bool) ([]repository.ContactWithLastMsg, error) {
 	allContacts, err := s.conRepo.GetAll(ctx, accountID, platform, showDeclines)
 	if err != nil {
 		return nil, err
@@ -35,6 +35,10 @@ func (s *ContactService) GetFilteredContacts(ctx context.Context, accountID, pla
 
 	var filtered []repository.ContactWithLastMsg
 	for _, c := range allContacts {
+		if c.IsIgnored != showIgnored {
+			continue
+		}
+
 		if c.Platform == "hh" {
 			if hideUnanswered {
 				if c.MsgCount == 0 || !c.LastIsIncoming {
@@ -66,4 +70,8 @@ func normalize(s string) string {
 	f := func(r rune) bool { return unicode.IsSpace(r) }
 	words := strings.FieldsFunc(s, f)
 	return strings.ToLower(strings.Join(words, " "))
+}
+
+func (s *ContactService) UpdateIgnored(ctx context.Context, id interface{}, ignored bool) error {
+	return s.conRepo.UpdateIgnored(ctx, id, ignored)
 }
