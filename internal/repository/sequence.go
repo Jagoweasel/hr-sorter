@@ -9,11 +9,12 @@ import (
 
 type SequenceWithDetails struct {
 	models.Sequence
-	Recruiters []models.Contact
-	Stages     []models.InterviewStage
-	History    []models.InterviewStage
-	IsRejected bool
-	IsAccepted bool
+	AccountName string
+	Recruiters  []models.Contact
+	Stages      []models.InterviewStage
+	History     []models.InterviewStage
+	IsRejected  bool
+	IsAccepted  bool
 }
 
 type SequenceRepository struct {
@@ -54,14 +55,20 @@ func (r *SequenceRepository) UpdateDetails(ctx context.Context, id interface{}, 
 }
 
 func (r *SequenceRepository) GetAllFullDetails(ctx context.Context, accountID string) ([]SequenceWithDetails, error) {
-	var sequences []models.Sequence
-	query := "SELECT * FROM sequences"
+	var sequences []struct {
+		models.Sequence
+		AccountName string `db:"account_name"`
+	}
+	query := `
+		SELECT s.*, COALESCE(a.name, 'Unknown') as account_name 
+		FROM sequences s 
+		LEFT JOIN accounts a ON s.account_id = a.id`
 	var args []interface{}
 	if accountID != "" {
-		query += " WHERE account_id = ?"
+		query += " WHERE s.account_id = ?"
 		args = append(args, accountID)
 	}
-	query += " ORDER BY created_at DESC"
+	query += " ORDER BY s.created_at DESC"
 	err := r.db.SelectContext(ctx, &sequences, query, args...)
 	if err != nil {
 		return nil, err
@@ -80,12 +87,13 @@ func (r *SequenceRepository) GetAllFullDetails(ctx context.Context, accountID st
 		}
 
 		detailed = append(detailed, SequenceWithDetails{
-			Sequence:   s,
-			Recruiters: recruiters,
-			Stages:     stages,
-			History:    history,
-			IsRejected: s.Status == "rejected",
-			IsAccepted: s.Status == "accepted",
+			Sequence:    s.Sequence,
+			AccountName: s.AccountName,
+			Recruiters:  recruiters,
+			Stages:      stages,
+			History:     history,
+			IsRejected:  s.Status == "rejected",
+			IsAccepted:  s.Status == "accepted",
 		})
 	}
 

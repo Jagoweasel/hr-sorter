@@ -1,6 +1,6 @@
 <div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[200]" id="modal" onclick="if(event.target === this) htmx.remove('#modal')">
     <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-lg relative" onclick="event.stopPropagation()">
-        <h2 class="text-xl font-black text-gray-900 tracking-tight mb-6">Edit Candidate Details</h2>
+        <h2 class="text-xl font-black text-gray-900 tracking-tight mb-6">Edit Interview Sequence</h2>
         <form action="/sequences/update" method="POST" class="grid grid-cols-2 gap-4">
             <input type="hidden" name="id" value="{{ .ID }}">
             
@@ -20,13 +20,13 @@
             </div>
 
             <div class="col-span-2">
-                <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Rejection Reason</label>
+                <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Rejection / Drop Reason</label>
                 <input type="text" name="rejection_reason" value="{{ deref .RejectionReason }}" class="block w-full border-2 border-gray-100 rounded-xl p-3 text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none transition-colors" placeholder="e.g. Budget mismatch, Lack of Go experience">
             </div>
 
             <div class="col-span-2">
-                <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Summary Comment</label>
-                <textarea name="summary_comment" rows="3" class="block w-full border-2 border-gray-100 rounded-xl p-3 text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none transition-colors" placeholder="Arbitrary notes about the applicant...">{{ deref .SummaryComment }}</textarea>
+                <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Sequence Notes (Internal)</label>
+                <textarea name="summary_comment" rows="3" class="block w-full border-2 border-gray-100 rounded-xl p-3 text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none transition-colors" placeholder="Arbitrary notes about this specific interview process...">{{ deref .SummaryComment }}</textarea>
             </div>
 
             <div class="col-span-2 flex justify-end space-x-3 pt-4 border-t mt-2">
