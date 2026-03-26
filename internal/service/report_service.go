@@ -118,9 +118,13 @@ func (s *ReportService) ExportSummarizedXLSX(ctx context.Context, accountID stri
 		},
 	})
 	styleBold, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}})
-	styleDone, _ := f.NewStyle(&excelize.Style{Fill: excelize.Fill{Type: "pattern", Color: []string{"#D1FAE5"}, Pattern: 1}})
+	styleDone, _ := f.NewStyle(&excelize.Style{Fill: excelize.Fill{Type: "pattern", Color: []string{"#D1FAE5"}, Pattern: 1}, Border: []excelize.Border{{Type: "left", Color: "000000", Style: 1}, {Type: "top", Color: "000000", Style: 1}, {Type: "bottom", Color: "000000", Style: 1}, {Type: "right", Color: "000000", Style: 1}}})
 
-	// 1. Global Sheets
+	// 1. Overview Sheet
+	sheetOverview := "Overview"
+	f.SetSheetName("Sheet1", sheetOverview)
+
+	currentRow := 1
 	accountName := "All Accounts"
 	if accountID != "" {
 		acc, _ := s.accRepo.GetByID(ctx, accountID)
@@ -129,21 +133,46 @@ func (s *ReportService) ExportSummarizedXLSX(ctx context.Context, accountID stri
 		}
 	}
 
-	s.addReportSheets(f, "", accountName, detailed, styleHeader, styleTableHead, styleBold, styleDone)
+	// Write Overall Summary to Overview
+	currentRow = s.writeOverviewSection(f, sheetOverview, "Recruitment Report: "+accountName, detailed, currentRow, styleHeader, styleTableHead)
 
-	// 2. Per-Applicant Sheets if "All" is selected
-	if accountID == "" {
-		byAccount := make(map[string][]repository.SequenceWithDetails)
-		for _, sd := range detailed {
-			byAccount[sd.AccountName] = append(byAccount[sd.AccountName], sd)
-		}
+	// If multiple accounts, add vertical breakdowns
+	byAccount := make(map[string][]repository.SequenceWithDetails)
+	for _, sd := range detailed {
+		byAccount[sd.AccountName] = append(byAccount[sd.AccountName], sd)
+	}
 
+	if accountID == "" && len(byAccount) > 1 {
+		currentRow += 2 // Gap
 		for name, accSeqs := range byAccount {
-			s.addReportSheets(f, name, name, accSeqs, styleHeader, styleTableHead, styleBold, styleDone)
+			currentRow = s.writeOverviewSection(f, sheetOverview, "Applicant Summary: "+name, accSeqs, currentRow, styleHeader, styleTableHead)
+			currentRow += 2 // Gap between applicants
 		}
 	}
 
-	f.DeleteSheet("Sheet1")
+	// 2. Global Detailed and Timeline
+	sheetDetailed := "Detailed Applicants"
+	f.NewSheet(sheetDetailed)
+	s.writeDetailedTable(f, sheetDetailed, detailed, styleTableHead)
+
+	sheetTimeline := "Timeline"
+	f.NewSheet(sheetTimeline)
+	s.writeTimelineRows(f, sheetTimeline, detailed, styleBold, styleDone)
+
+	// 3. Per-Applicant Sheets if "All" is selected
+	if accountID == "" && len(byAccount) > 1 {
+		for name, accSeqs := range byAccount {
+			detSheet := truncateSheetName(name + " - Detailed")
+			timeSheet := truncateSheetName(name + " - Timeline")
+
+			f.NewSheet(detSheet)
+			s.writeDetailedTable(f, detSheet, accSeqs, styleTableHead)
+
+			f.NewSheet(timeSheet)
+			s.writeTimelineRows(f, timeSheet, accSeqs, styleBold, styleDone)
+		}
+	}
+
 	f.SetActiveSheet(0)
 	var buf bytes.Buffer
 	if err := f.Write(&buf); err != nil {
@@ -152,52 +181,54 @@ func (s *ReportService) ExportSummarizedXLSX(ctx context.Context, accountID stri
 	return buf.Bytes(), nil
 }
 
-func (s *ReportService) addReportSheets(f *excelize.File, suffix, title string, data []repository.SequenceWithDetails, styleHeader, styleTableHead, styleBold, styleDone int) {
-	prefix := ""
-	if suffix != "" {
-		prefix = suffix + " - "
-	}
-
-	overviewName := truncateSheetName(prefix + "Overview")
-	detailedName := truncateSheetName(prefix + "Detailed")
-	timelineName := truncateSheetName(prefix + "Timeline")
-
+func (s *ReportService) writeOverviewSection(f *excelize.File, sheet, title string, data []repository.SequenceWithDetails, startRow int, styleHeader, styleTableHead int) int {
 	reportData := s.GetReportDataFromSequences(data)
 
-	// Overview
-	f.NewSheet(overviewName)
-	f.SetCellValue(overviewName, "A1", "Recruitment Report: "+title)
-	f.MergeCell(overviewName, "A1", "B1")
-	f.SetCellStyle(overviewName, "A1", "B1", styleHeader)
-	f.SetCellValue(overviewName, "A3", "Metric")
-	f.SetCellValue(overviewName, "B3", "Value")
-	f.SetCellStyle(overviewName, "A3", "B3", styleTableHead)
-	f.SetCellValue(overviewName, "A4", "Total Responses")
-	f.SetCellValue(overviewName, "B4", reportData.TotalResponses)
-	f.SetCellValue(overviewName, "A5", "Interview-to-Offer Conversion")
-	f.SetCellValue(overviewName, "B5", fmt.Sprintf("%.1f%%", reportData.ConversionRate))
-	f.SetCellValue(overviewName, "A6", "Hire Rate (Total)")
-	f.SetCellValue(overviewName, "B6", fmt.Sprintf("%.1f%%", reportData.AcceptanceRate))
+	row := startRow
+	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), title)
+	f.MergeCell(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row))
+	f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row), styleHeader)
 
-	f.SetCellValue(overviewName, "A8", "Recruitment Funnel")
-	f.SetCellStyle(overviewName, "A8", "A8", styleTableHead)
-	f.SetCellValue(overviewName, "A9", "Stage")
-	f.SetCellValue(overviewName, "B9", "Count")
-	f.SetCellStyle(overviewName, "A9", "B9", styleTableHead)
-	for i, step := range reportData.Funnel {
-		row := i + 10
-		f.SetCellValue(overviewName, fmt.Sprintf("A%d", row), step.Label)
-		f.SetCellValue(overviewName, fmt.Sprintf("B%d", row), step.Count)
+	row += 2
+	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), "Metric")
+	f.SetCellValue(sheet, fmt.Sprintf("B%d", row), "Value")
+	f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row), styleTableHead)
+
+	row++
+	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), "Total Responses")
+	f.SetCellValue(sheet, fmt.Sprintf("B%d", row), reportData.TotalResponses)
+	row++
+	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), "Interview-to-Offer Conversion")
+	f.SetCellValue(sheet, fmt.Sprintf("B%d", row), fmt.Sprintf("%.1f%%", reportData.ConversionRate))
+	row++
+	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), "Hire Rate (Total)")
+	f.SetCellValue(sheet, fmt.Sprintf("B%d", row), fmt.Sprintf("%.1f%%", reportData.AcceptanceRate))
+
+	row += 2
+	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), "Recruitment Funnel")
+	f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), styleTableHead)
+	row++
+	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), "Stage")
+	f.SetCellValue(sheet, fmt.Sprintf("B%d", row), "Count")
+	f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row), styleTableHead)
+
+	for _, step := range reportData.Funnel {
+		row++
+		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), step.Label)
+		f.SetCellValue(sheet, fmt.Sprintf("B%d", row), step.Count)
 	}
 
-	// Detailed
-	f.NewSheet(detailedName)
+	return row
+}
+
+func (s *ReportService) writeDetailedTable(f *excelize.File, sheet string, data []repository.SequenceWithDetails, styleTableHead int) {
 	headers := []string{"Recruiter TG", "Company", "Date", "Applicant (Account)", "Vacancy Link", "Last Stage", "Status", "Reason", "Comment"}
 	for i, h := range headers {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
-		f.SetCellValue(detailedName, cell, h)
+		f.SetCellValue(sheet, cell, h)
 	}
-	f.SetCellStyle(detailedName, "A1", "I1", styleTableHead)
+	f.SetCellStyle(sheet, "A1", "I1", styleTableHead)
+
 	for i, sd := range data {
 		row := i + 2
 		tgName := ""
@@ -215,34 +246,38 @@ func (s *ReportService) addReportSheets(f *excelize.File, suffix, title string, 
 			status = "decline"
 		}
 
-		f.SetCellValue(detailedName, fmt.Sprintf("A%d", row), tgName)
-		f.SetCellValue(detailedName, fmt.Sprintf("B%d", row), sd.CompanyName)
-		f.SetCellValue(detailedName, fmt.Sprintf("C%d", row), sd.CreatedAt.Format("2006-01-02"))
-		f.SetCellValue(detailedName, fmt.Sprintf("D%d", row), sd.AccountName)
-		f.SetCellValue(detailedName, fmt.Sprintf("E%d", row), deref(sd.VacancyLink))
-		f.SetCellValue(detailedName, fmt.Sprintf("F%d", row), lastStage)
-		f.SetCellValue(detailedName, fmt.Sprintf("G%d", row), status)
-		f.SetCellValue(detailedName, fmt.Sprintf("H%d", row), deref(sd.RejectionReason))
-		f.SetCellValue(detailedName, fmt.Sprintf("I%d", row), deref(sd.SummaryComment))
+		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), tgName)
+		f.SetCellValue(sheet, fmt.Sprintf("B%d", row), sd.CompanyName)
+		f.SetCellValue(sheet, fmt.Sprintf("C%d", row), sd.CreatedAt.Format("2006-01-02"))
+		f.SetCellValue(sheet, fmt.Sprintf("D%d", row), sd.AccountName)
+		f.SetCellValue(sheet, fmt.Sprintf("E%d", row), deref(sd.VacancyLink))
+		f.SetCellValue(sheet, fmt.Sprintf("F%d", row), lastStage)
+		f.SetCellValue(sheet, fmt.Sprintf("G%d", row), status)
+		f.SetCellValue(sheet, fmt.Sprintf("H%d", row), deref(sd.RejectionReason))
+		f.SetCellValue(sheet, fmt.Sprintf("I%d", row), deref(sd.SummaryComment))
 	}
+	f.SetColWidth(sheet, "A", "I", 20)
+}
 
-	// Timeline
-	f.NewSheet(timelineName)
+func (s *ReportService) writeTimelineRows(f *excelize.File, sheet string, data []repository.SequenceWithDetails, styleBold, styleDone int) {
 	for i, sd := range data {
 		row := i + 1
-		f.SetCellValue(timelineName, fmt.Sprintf("A%d", row), sd.AccountName)
-		f.SetCellValue(timelineName, fmt.Sprintf("B%d", row), sd.CompanyName)
-		f.SetCellStyle(timelineName, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row), styleBold)
+		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), sd.AccountName)
+		f.SetCellValue(sheet, fmt.Sprintf("B%d", row), sd.CompanyName)
+		f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row), styleBold)
 
 		// Skip cell C (col 3)
 		colIdx := 4
 		for _, st := range sd.History {
 			cell, _ := excelize.CoordinatesToCellName(colIdx, row)
-			f.SetCellValue(timelineName, cell, st.Name)
-			f.SetCellStyle(timelineName, cell, cell, styleDone)
+			f.SetCellValue(sheet, cell, st.Name)
+			f.SetCellStyle(sheet, cell, cell, styleDone)
 			colIdx++
 		}
 	}
+	f.SetColWidth(sheet, "A", "B", 25)
+	f.SetColWidth(sheet, "C", "C", 5)
+	f.SetColWidth(sheet, "D", "Z", 15)
 }
 
 func truncateSheetName(name string) string {
