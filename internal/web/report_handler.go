@@ -32,3 +32,18 @@ func (h *Handler) handleReports(w http.ResponseWriter, r *http.Request) {
 
 	h.templates.RenderWithStatus(w, "reports.html", http.StatusOK, dataInterface)
 }
+
+func (h *Handler) handleExportXLSX(w http.ResponseWriter, r *http.Request) {
+	accountID := r.URL.Query().Get("account_id")
+
+	data, err := h.repService.ExportSummarizedXLSX(r.Context(), accountID)
+	if err != nil {
+		log.Printf("Web: Error exporting XLSX: %v", err)
+		http.Error(w, "Error generating export", 500)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", "attachment; filename=recruitment_report.xlsx")
+	w.Write(data)
+}

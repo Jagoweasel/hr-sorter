@@ -22,6 +22,10 @@
                class="px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all text-gray-500 hover:text-gray-700">
                 Bulk Mode
             </button>
+            <div id="bulk-select-all-container" class="hidden flex items-center space-x-1 px-2 border-r border-gray-300 mr-1">
+                <input type="checkbox" id="bulk-select-all" onchange="selectAllVisible(this)" class="w-3 h-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <label for="bulk-select-all" class="text-[9px] font-black text-gray-500 uppercase tracking-tight cursor-pointer">All</label>
+            </div>
             <button id="bulk-delete-btn" hx-post="/sequences/bulk-delete" hx-include="#bulk-form" hx-confirm="Delete selected sequences?"
                     class="hidden px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all bg-red-500 text-white shadow-sm hover:bg-red-600">
                 Delete Selected
@@ -282,6 +286,7 @@
         const containers = document.querySelectorAll('.bulk-checkbox-container');
         const paddings = document.querySelectorAll('.bulk-checkbox-container-padding');
         const deleteBtn = document.getElementById('bulk-delete-btn');
+        const selectAllContainer = document.getElementById('bulk-select-all-container');
         const toggleBtn = document.getElementById('bulk-toggle');
         
         const isHidden = containers[0]?.classList.contains('hidden');
@@ -291,15 +296,30 @@
         
         if (isHidden) {
             deleteBtn.classList.remove('hidden');
+            selectAllContainer.classList.remove('hidden');
+            selectAllContainer.classList.add('flex');
             toggleBtn.classList.add('bg-white', 'text-blue-600', 'shadow-sm');
             toggleBtn.classList.remove('text-gray-500');
         } else {
             deleteBtn.classList.add('hidden');
+            selectAllContainer.classList.add('hidden');
+            selectAllContainer.classList.remove('flex');
             toggleBtn.classList.remove('bg-white', 'text-blue-600', 'shadow-sm');
             toggleBtn.classList.add('text-gray-500');
             // Uncheck all
             document.querySelectorAll('input[name="sequence_ids"]').forEach(i => i.checked = false);
+            document.getElementById('bulk-select-all').checked = false;
         }
+    }
+
+    function selectAllVisible(master) {
+        const checkboxes = document.querySelectorAll('input[name="sequence_ids"]');
+        checkboxes.forEach(cb => {
+            const card = cb.closest('.group\\/card');
+            if (card && window.getComputedStyle(card).display !== 'none') {
+                cb.checked = master.checked;
+            }
+        });
     }
 
     function applyFilters() {

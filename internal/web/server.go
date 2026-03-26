@@ -77,6 +77,7 @@ func NewHandler(
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/", h.handleIndex)
 	mux.HandleFunc("/reports", h.handleReports)
+	mux.HandleFunc("/reports/export/xlsx", h.handleExportXLSX)
 	mux.HandleFunc("/contacts", h.handleContacts)
 	mux.HandleFunc("/messages/", h.handleMessages)
 	mux.HandleFunc("/accounts", h.handleAccounts)

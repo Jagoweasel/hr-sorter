@@ -40,7 +40,7 @@ func (r *ContactRepository) GetAll(ctx context.Context, accountID, platform stri
 			   (SELECT COUNT(*) FROM messages WHERE contact_id = c.id) as msg_count,
 			   EXISTS(SELECT 1 FROM sequence_contacts WHERE contact_id = c.id) as in_sequence,
 			   COALESCE((SELECT s.status FROM sequences s JOIN sequence_contacts sc ON s.id = sc.sequence_id WHERE sc.contact_id = c.id LIMIT 1), '') as seq_status,
-			   COALESCE((SELECT GROUP_CONCAT(sequence_id) FROM sequence_contacts WHERE contact_id = c.id), '') as sequence_ids
+			   COALESCE((SELECT GROUP_CONCAT(sc.sequence_id || ':' || s.status) FROM sequence_contacts sc JOIN sequences s ON sc.sequence_id = s.id WHERE sc.contact_id = c.id), '') as sequence_ids
 		FROM contacts c
 		JOIN integrations i ON c.integration_id = i.id
 		WHERE 1=1`
