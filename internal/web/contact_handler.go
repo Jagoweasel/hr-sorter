@@ -13,8 +13,9 @@ func (h *Handler) handleContacts(w http.ResponseWriter, r *http.Request) {
 	hideScreened := r.URL.Query().Get("hide_screened") == "true"
 	hideUnanswered := r.URL.Query().Get("hide_unanswered") == "true"
 	showIgnored := r.URL.Query().Get("show_ignored") == "true"
+	sequenceFilter := r.URL.Query().Get("sequence_filter")
 
-	filteredContacts, err := h.conService.GetFilteredContacts(r.Context(), activeAccountID, platformFilter, showDeclines, hideScreened, hideUnanswered, showIgnored)
+	filteredContacts, err := h.conService.GetFilteredContacts(r.Context(), activeAccountID, platformFilter, showDeclines, hideScreened, hideUnanswered, showIgnored, sequenceFilter)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return

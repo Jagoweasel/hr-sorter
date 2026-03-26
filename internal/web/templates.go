@@ -71,6 +71,12 @@ func NewTemplateManager() (*TemplateManager, error) {
 			}
 			return dict, nil
 		},
+		"split": func(s, sep string) []string {
+			if s == "" {
+				return nil
+			}
+			return strings.Split(s, sep)
+		},
 	}
 
 	layoutPath := filepath.Join("templates", "layout.html")

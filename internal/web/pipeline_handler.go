@@ -33,6 +33,8 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 	}
 
 	activeAccountID := r.URL.Query().Get("account_id")
+	hideRejected := r.URL.Query().Get("hide_rejected") == "true"
+	hideAccepted := r.URL.Query().Get("hide_accepted") == "true"
 
 	allAccounts, _ := h.accRepo.GetAll(r.Context())
 	sequences, err := h.seqRepo.GetAll(r.Context(), activeAccountID)
@@ -44,6 +46,13 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 
 	var detailedSeqs []repository.SequenceWithDetails
 	for _, s := range sequences {
+		if hideRejected && s.Status == "rejected" {
+			continue
+		}
+		if hideAccepted && s.Status == "accepted" {
+			continue
+		}
+
 		recruiters, _ := h.seqRepo.GetRecruiters(r.Context(), s.ID)
 		stages, _ := h.seqRepo.GetStages(r.Context(), s.ID)
 
@@ -116,13 +125,17 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		View       string
-		Groups     []*AccountGroup
-		ColumnDefs []ColumnDef
+		View         string
+		Groups       []*AccountGroup
+		ColumnDefs   []ColumnDef
+		HideRejected bool
+		HideAccepted bool
 	}{
-		View:       view,
-		Groups:     groups,
-		ColumnDefs: columnDefs,
+		View:         view,
+		Groups:       groups,
+		ColumnDefs:   columnDefs,
+		HideRejected: hideRejected,
+		HideAccepted: hideAccepted,
 	}
 
 	h.templates.RenderWithStatus(w, "pipeline.html", http.StatusOK, data)

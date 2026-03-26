@@ -9,7 +9,7 @@
                         class="bg-gray-50 border-2 border-gray-100 rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
                         hx-get="/contacts"
                         hx-target="#contact-list"
-                        hx-include="[name='platform'], [name='show_declines'], [name='hide_screened'], [name='hide_unanswered']">
+                        hx-include="[name='platform'], [name='show_declines'], [name='hide_screened'], [name='hide_unanswered'], [name='sequence_filter']">
                     <option value="">All Accounts</option>
                     {{ range . }}
                     <option value="{{ .ID }}">{{ .Name }}</option>
@@ -44,7 +44,7 @@
                         class="bg-gray-50 border-2 border-gray-100 rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
                         hx-get="/contacts"
                         hx-target="#contact-list"
-                        hx-include="[name='account_id'], [name='platform'], [name='hide_screened'], [name='hide_unanswered']">
+                        hx-include="[name='account_id'], [name='platform'], [name='hide_screened'], [name='hide_unanswered'], [name='sequence_filter']">
                     <option value="false">Hide Declines</option>
                     <option value="true">Show All</option>
                 </select>
@@ -57,7 +57,7 @@
                             class="bg-gray-50 border-2 border-gray-100 rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
                             hx-get="/contacts"
                             hx-target="#contact-list"
-                            hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_unanswered']">
+                            hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_unanswered'], [name='sequence_filter']">
                         <option value="true">Hide Filtered</option>
                         <option value="false">Show All</option>
                     </select>
@@ -73,7 +73,7 @@
                         class="bg-gray-50 border-2 border-gray-100 rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
                         hx-get="/contacts"
                         hx-target="#contact-list"
-                        hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened'], [name='show_ignored']">
+                        hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened'], [name='show_ignored'], [name='sequence_filter']">
                     <option value="false">Show All</option>
                     <option value="true">Hide Unanswered</option>
                 </select>
@@ -85,9 +85,22 @@
                         class="bg-gray-50 border-2 border-gray-100 rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
                         hx-get="/contacts"
                         hx-target="#contact-list"
-                        hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened'], [name='hide_unanswered']">
+                        hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened'], [name='hide_unanswered'], [name='sequence_filter']">
                     <option value="false">Active</option>
                     <option value="true">Ignored</option>
+                </select>
+            </div>
+
+            <div class="flex flex-col">
+                <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Pipeline</label>
+                <select name="sequence_filter" 
+                        class="bg-gray-50 border-2 border-gray-100 rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
+                        hx-get="/contacts"
+                        hx-target="#contact-list"
+                        hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened'], [name='hide_unanswered'], [name='show_ignored']">
+                    <option value="">All</option>
+                    <option value="with">In Pipeline</option>
+                    <option value="without">Not in Pipeline</option>
                 </select>
             </div>
         </div>
@@ -95,7 +108,7 @@
         <div class="flex items-center space-x-4">
             <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-colors shadow-lg shadow-blue-100 flex items-center space-x-2"
                     hx-post="/sequences/bulk-add"
-                    hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened'], [name='hide_unanswered']"
+                    hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened'], [name='hide_unanswered'], [name='sequence_filter']"
                     hx-confirm="Add all visible unfiltered contacts to pipeline?"
                     hx-swap="none">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
@@ -240,6 +253,7 @@
                 const hideScreened = document.querySelector('[name="hide_screened"]').value;
                 const hideUnanswered = document.querySelector('[name="hide_unanswered"]').value;
                 const showIgnored = document.querySelector('[name="show_ignored"]').value;
+                const sequenceFilter = document.querySelector('[name="sequence_filter"]').value;
                 
                 htmx.ajax('GET', '/contacts', {
                     target: '#contact-list', 
@@ -249,7 +263,8 @@
                         show_declines: showDeclines,
                         hide_screened: hideScreened,
                         hide_unanswered: hideUnanswered,
-                        show_ignored: showIgnored
+                        show_ignored: showIgnored,
+                        sequence_filter: sequenceFilter
                     }
                 });
             }

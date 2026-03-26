@@ -26,7 +26,7 @@ func NewSequenceService(seqRepo *repository.SequenceRepository, conRepo *reposit
 }
 
 func (s *SequenceService) BulkCreateSequences(ctx context.Context, accountID, platform string, showDeclines, hideScreened, hideUnanswered bool) (int, error) {
-	contacts, err := s.conService.GetFilteredContacts(ctx, accountID, platform, showDeclines, hideScreened, hideUnanswered, false)
+	contacts, err := s.conService.GetFilteredContacts(ctx, accountID, platform, showDeclines, hideScreened, hideUnanswered, false, "")
 	if err != nil {
 		return 0, err
 	}

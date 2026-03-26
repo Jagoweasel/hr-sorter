@@ -19,7 +19,7 @@ func NewContactService(conRepo *repository.ContactRepository, fltRepo *repositor
 	}
 }
 
-func (s *ContactService) GetFilteredContacts(ctx context.Context, accountID, platform string, showDeclines, hideScreened, hideUnanswered, showIgnored bool) ([]repository.ContactWithLastMsg, error) {
+func (s *ContactService) GetFilteredContacts(ctx context.Context, accountID, platform string, showDeclines, hideScreened, hideUnanswered, showIgnored bool, sequenceFilter string) ([]repository.ContactWithLastMsg, error) {
 	allContacts, err := s.conRepo.GetAll(ctx, accountID, platform, showDeclines)
 	if err != nil {
 		return nil, err
@@ -34,6 +34,13 @@ func (s *ContactService) GetFilteredContacts(ctx context.Context, accountID, pla
 	var filtered []repository.ContactWithLastMsg
 	for _, c := range allContacts {
 		if c.IsIgnored != showIgnored {
+			continue
+		}
+
+		if sequenceFilter == "with" && !c.InSequence {
+			continue
+		}
+		if sequenceFilter == "without" && c.InSequence {
 			continue
 		}
 

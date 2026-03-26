@@ -18,6 +18,7 @@ type ContactWithLastMsg struct {
 	LastIsIncoming bool   `db:"last_is_incoming"`
 	MsgCount       int    `db:"msg_count"`
 	IsFiltered     bool   `db:"-"`
+	SequenceIDs    string `db:"sequence_ids"`
 }
 
 func NewContactRepository(db *sqlx.DB) *ContactRepository {
@@ -38,7 +39,8 @@ func (r *ContactRepository) GetAll(ctx context.Context, accountID, platform stri
 			   COALESCE((SELECT is_incoming FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1), 0) as last_is_incoming,
 			   (SELECT COUNT(*) FROM messages WHERE contact_id = c.id) as msg_count,
 			   EXISTS(SELECT 1 FROM sequence_contacts WHERE contact_id = c.id) as in_sequence,
-			   COALESCE((SELECT s.status FROM sequences s JOIN sequence_contacts sc ON s.id = sc.sequence_id WHERE sc.contact_id = c.id LIMIT 1), '') as seq_status
+			   COALESCE((SELECT s.status FROM sequences s JOIN sequence_contacts sc ON s.id = sc.sequence_id WHERE sc.contact_id = c.id LIMIT 1), '') as seq_status,
+			   COALESCE((SELECT GROUP_CONCAT(sequence_id) FROM sequence_contacts WHERE contact_id = c.id), '') as sequence_ids
 		FROM contacts c
 		JOIN integrations i ON c.integration_id = i.id
 		WHERE 1=1`
