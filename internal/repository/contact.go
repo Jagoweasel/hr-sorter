@@ -17,6 +17,7 @@ type ContactWithLastMsg struct {
 	LastTime       string `db:"last_time"`
 	LastIsIncoming bool   `db:"last_is_incoming"`
 	MsgCount       int    `db:"msg_count"`
+	IsFiltered     bool   `db:"-"`
 }
 
 func NewContactRepository(db *sqlx.DB) *ContactRepository {

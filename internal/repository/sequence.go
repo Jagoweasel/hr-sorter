@@ -48,6 +48,11 @@ func (r *SequenceRepository) UpdateStatus(ctx context.Context, id interface{}, s
 	return err
 }
 
+func (r *SequenceRepository) UpdateDetails(ctx context.Context, id interface{}, company, vacancy string) error {
+	_, err := r.db.ExecContext(ctx, "UPDATE sequences SET company_name = ?, vacancy_name = ? WHERE id = ?", company, vacancy, id)
+	return err
+}
+
 func (r *SequenceRepository) Delete(ctx context.Context, id interface{}) error {
 	_, err := r.db.ExecContext(ctx, "DELETE FROM sequences WHERE id = ?", id)
 	return err

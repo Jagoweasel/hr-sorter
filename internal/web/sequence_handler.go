@@ -108,10 +108,56 @@ func (h *Handler) handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, h.getRedirectURL(r), 303)
 }
 
+func (h *Handler) handleEditSequenceModal(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	seq, err := h.seqRepo.GetByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	h.templates.RenderWithStatus(w, "fragments/modals/edit_sequence.html", http.StatusOK, seq)
+}
+
+func (h *Handler) handleUpdateSequence(w http.ResponseWriter, r *http.Request) {
+	id := r.FormValue("id")
+	company := r.FormValue("company_name")
+	vacancy := r.FormValue("vacancy_name")
+
+	if err := h.seqRepo.UpdateDetails(r.Context(), id, company, vacancy); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Location", h.getRedirectURL(r))
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, h.getRedirectURL(r), 303)
+}
+
 func (h *Handler) handleDeleteSequence(w http.ResponseWriter, r *http.Request) {
 	seqID := r.URL.Query().Get("id")
 	if err := h.seqRepo.Delete(r.Context(), seqID); err != nil {
 		http.Error(w, err.Error(), 500)
+		return
+	}
+	http.Redirect(w, r, h.getRedirectURL(r), 303)
+}
+
+func (h *Handler) handleBulkDeleteSequences(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	ids := r.Form["sequence_ids"]
+	for _, id := range ids {
+		_ = h.seqRepo.Delete(r.Context(), id)
+	}
+
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Location", h.getRedirectURL(r))
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 	http.Redirect(w, r, h.getRedirectURL(r), 303)

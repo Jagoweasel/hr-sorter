@@ -84,6 +84,11 @@ func (r *AccountRepository) UpdateStatus(ctx context.Context, id interface{}, st
 	return err
 }
 
+func (r *AccountRepository) UpdateName(ctx context.Context, id interface{}, name string) error {
+	_, err := r.db.ExecContext(ctx, "UPDATE accounts SET name = ? WHERE id = ?", name, id)
+	return err
+}
+
 func (r *AccountRepository) Delete(ctx context.Context, id interface{}) error {
 	_, err := r.db.ExecContext(ctx, "DELETE FROM accounts WHERE id = ?", id)
 	return err

@@ -26,11 +26,9 @@ func (s *ContactService) GetFilteredContacts(ctx context.Context, accountID, pla
 	}
 
 	var activePatterns []string
-	if hideScreened {
-		patterns, _ := s.fltRepo.GetActivePatterns(ctx)
-		for _, p := range patterns {
-			activePatterns = append(activePatterns, normalize(p))
-		}
+	patterns, _ := s.fltRepo.GetActivePatterns(ctx)
+	for _, p := range patterns {
+		activePatterns = append(activePatterns, normalize(p))
 	}
 
 	var filtered []repository.ContactWithLastMsg
@@ -40,24 +38,25 @@ func (s *ContactService) GetFilteredContacts(ctx context.Context, accountID, pla
 		}
 
 		if c.Platform == "hh" {
+			// Calculate IsFiltered
+			if len(activePatterns) > 0 {
+				normMsg := normalize(c.LastMessage)
+				for _, p := range activePatterns {
+					if strings.Contains(normMsg, p) {
+						c.IsFiltered = true
+						break
+					}
+				}
+			}
+
 			if hideUnanswered {
 				if c.MsgCount == 0 || !c.LastIsIncoming {
 					continue
 				}
 			}
 
-			if hideScreened && len(activePatterns) > 0 {
-				normMsg := normalize(c.LastMessage)
-				isScreened := false
-				for _, p := range activePatterns {
-					if strings.Contains(normMsg, p) {
-						isScreened = true
-						break
-					}
-				}
-				if isScreened {
-					continue
-				}
+			if hideScreened && c.IsFiltered {
+				continue
 			}
 		}
 		filtered = append(filtered, c)
