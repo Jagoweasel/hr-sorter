@@ -209,6 +209,27 @@
     
     // Add a custom refresh trigger for htmx
     document.addEventListener('DOMContentLoaded', () => {
+        // Auto-select contact from URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const autoContactId = urlParams.get('contact_id');
+
+        if (autoContactId) {
+            document.body.addEventListener('htmx:afterSettle', function handler(evt) {
+                if (evt.detail.target.id === 'contact-list') {
+                    const targetEl = document.getElementById(`contact-${autoContactId}`);
+                    if (targetEl) {
+                        targetEl.click();
+                        targetEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        // Clean up URL without refreshing
+                        const newUrl = window.location.pathname;
+                        window.history.replaceState({}, '', newUrl);
+                        // Remove listener after success
+                        document.body.removeEventListener('htmx:afterSettle', handler);
+                    }
+                }
+            });
+        }
+
         document.body.addEventListener('refresh', () => {
             const list = document.getElementById('contact-list');
             if (list) {

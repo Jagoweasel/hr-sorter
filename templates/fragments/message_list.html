@@ -1,4 +1,8 @@
-<div class="flex flex-col space-y-2 p-2" hx-get="/messages/{{ .ContactID }}" hx-trigger="every 3s" hx-swap="outerHTML">
+<div class="flex flex-col space-y-2 p-2" 
+     hx-get="/messages/{{ .ContactID }}" 
+     hx-trigger="every 3s" 
+     hx-swap="outerHTML"
+     hx-on::before-request="if(window.getSelection().toString()) event.preventDefault()">
     {{ if .Messages }}
         {{ range .Messages }}
         <div class="flex flex-col {{ if .IsIncoming }}items-start{{ else }}items-end{{ end }}">
