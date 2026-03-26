@@ -55,7 +55,10 @@ CREATE TABLE IF NOT EXISTS sequences (
     account_id INTEGER,
     company_name TEXT NOT NULL,
     vacancy_name TEXT NOT NULL,
+    vacancy_link TEXT,
     status TEXT DEFAULT 'initial',
+    rejection_reason TEXT,
+    summary_comment TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
 );

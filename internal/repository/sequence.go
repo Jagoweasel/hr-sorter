@@ -48,9 +48,48 @@ func (r *SequenceRepository) UpdateStatus(ctx context.Context, id interface{}, s
 	return err
 }
 
-func (r *SequenceRepository) UpdateDetails(ctx context.Context, id interface{}, company, vacancy string) error {
-	_, err := r.db.ExecContext(ctx, "UPDATE sequences SET company_name = ?, vacancy_name = ? WHERE id = ?", company, vacancy, id)
+func (r *SequenceRepository) UpdateDetails(ctx context.Context, id interface{}, company, vacancy, link, reason, comment string) error {
+	_, err := r.db.ExecContext(ctx, "UPDATE sequences SET company_name = ?, vacancy_name = ?, vacancy_link = ?, rejection_reason = ?, summary_comment = ? WHERE id = ?", company, vacancy, link, reason, comment, id)
 	return err
+}
+
+func (r *SequenceRepository) GetAllFullDetails(ctx context.Context, accountID string) ([]SequenceWithDetails, error) {
+	var sequences []models.Sequence
+	query := "SELECT * FROM sequences"
+	var args []interface{}
+	if accountID != "" {
+		query += " WHERE account_id = ?"
+		args = append(args, accountID)
+	}
+	query += " ORDER BY created_at DESC"
+	err := r.db.SelectContext(ctx, &sequences, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	var detailed []SequenceWithDetails
+	for _, s := range sequences {
+		recruiters, _ := r.GetRecruiters(ctx, s.ID)
+		stages, _ := r.GetStages(ctx, s.ID)
+
+		var history []models.InterviewStage
+		for _, st := range stages {
+			if st.IsCompleted {
+				history = append(history, st)
+			}
+		}
+
+		detailed = append(detailed, SequenceWithDetails{
+			Sequence:   s,
+			Recruiters: recruiters,
+			Stages:     stages,
+			History:    history,
+			IsRejected: s.Status == "rejected",
+			IsAccepted: s.Status == "accepted",
+		})
+	}
+
+	return detailed, nil
 }
 
 func (r *SequenceRepository) Delete(ctx context.Context, id interface{}) error {

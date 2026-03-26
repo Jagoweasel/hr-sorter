@@ -137,6 +137,17 @@ func InitDB(path string) {
 	// Ensure NO nulls in access_hash if it was already there without default
 	DB.MustExec("UPDATE contacts SET access_hash = 0 WHERE access_hash IS NULL")
 
+	// Migration: Add report columns to sequences if they don't exist
+	var hasReportColumns bool
+	err = DB.Get(&hasReportColumns, "SELECT COUNT(*) FROM pragma_table_info('sequences') WHERE name='vacancy_link'")
+	if err == nil && !hasReportColumns {
+		log.Println("[DB] Migrating sequences: adding report columns...")
+		DB.MustExec("ALTER TABLE sequences ADD COLUMN vacancy_link TEXT")
+		DB.MustExec("ALTER TABLE sequences ADD COLUMN rejection_reason TEXT")
+		DB.MustExec("ALTER TABLE sequences ADD COLUMN summary_comment TEXT")
+		log.Println("[DB] Migration finished.")
+	}
+
 	SeedFilters()
 }
 

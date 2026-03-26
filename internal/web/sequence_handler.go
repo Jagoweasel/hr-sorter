@@ -122,8 +122,11 @@ func (h *Handler) handleUpdateSequence(w http.ResponseWriter, r *http.Request) {
 	id := r.FormValue("id")
 	company := r.FormValue("company_name")
 	vacancy := r.FormValue("vacancy_name")
+	link := r.FormValue("vacancy_link")
+	reason := r.FormValue("rejection_reason")
+	comment := r.FormValue("summary_comment")
 
-	if err := h.seqRepo.UpdateDetails(r.Context(), id, company, vacancy); err != nil {
+	if err := h.seqRepo.UpdateDetails(r.Context(), id, company, vacancy, link, reason, comment); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}

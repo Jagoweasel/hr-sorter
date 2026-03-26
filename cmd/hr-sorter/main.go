@@ -80,7 +80,7 @@ func main() {
 	conService := service.NewContactService(conRepo, fltRepo)
 	seqService := service.NewSequenceService(seqRepo, conRepo, accRepo, conService)
 	fltService := service.NewFilterService(fltRepo)
-	repService := service.NewReportService(seqRepo)
+	repService := service.NewReportService(seqRepo, accRepo)
 
 	// Fetch active TG/HH integrations from active accounts
 	integrations, err := intRepo.GetActiveAndPending(context.Background())
