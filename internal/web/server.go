@@ -78,6 +78,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/", h.handleIndex)
 	mux.HandleFunc("/reports", h.handleReports)
 	mux.HandleFunc("/reports/export/xlsx", h.handleExportXLSX)
+	mux.HandleFunc("/reports/export/pdf-options", h.handleExportPDFOptions)
+	mux.HandleFunc("/reports/export/pdf", h.handleExportPDF)
 	mux.HandleFunc("/contacts", h.handleContacts)
 	mux.HandleFunc("/messages/", h.handleMessages)
 	mux.HandleFunc("/accounts", h.handleAccounts)
