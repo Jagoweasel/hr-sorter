@@ -74,8 +74,8 @@ func (r *AccountRepository) GetStatus(ctx context.Context, id interface{}) (stri
 	return status, err
 }
 
-func (r *AccountRepository) Create(ctx context.Context, name string) error {
-	_, err := r.db.ExecContext(ctx, "INSERT INTO accounts (name, status) VALUES (?, 'active')", name)
+func (r *AccountRepository) Create(ctx context.Context, name, slug string) error {
+	_, err := r.db.ExecContext(ctx, "INSERT INTO accounts (name, slug, status) VALUES (?, ?, 'active')", name, slug)
 	return err
 }
 
@@ -84,8 +84,8 @@ func (r *AccountRepository) UpdateStatus(ctx context.Context, id interface{}, st
 	return err
 }
 
-func (r *AccountRepository) UpdateName(ctx context.Context, id interface{}, name string) error {
-	_, err := r.db.ExecContext(ctx, "UPDATE accounts SET name = ? WHERE id = ?", name, id)
+func (r *AccountRepository) Update(ctx context.Context, id interface{}, name, slug string) error {
+	_, err := r.db.ExecContext(ctx, "UPDATE accounts SET name = ?, slug = ? WHERE id = ?", name, slug, id)
 	return err
 }
 

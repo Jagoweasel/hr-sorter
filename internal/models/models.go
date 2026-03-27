@@ -5,6 +5,7 @@ import "time"
 type Account struct {
 	ID        int64     `db:"id" json:"id"`
 	Name      string    `db:"name" json:"name"`
+	Slug      *string   `db:"slug" json:"slug"`
 	Status    string    `db:"status" json:"status"` // "active", "inactive"
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
 }

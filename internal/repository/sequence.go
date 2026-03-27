@@ -10,6 +10,7 @@ import (
 type SequenceWithDetails struct {
 	models.Sequence
 	AccountName string
+	AccountSlug string
 	Recruiters  []models.Contact
 	Stages      []models.InterviewStage
 	History     []models.InterviewStage
@@ -58,9 +59,12 @@ func (r *SequenceRepository) GetAllFullDetails(ctx context.Context, accountID st
 	var sequences []struct {
 		models.Sequence
 		AccountName string `db:"account_name"`
+		AccountSlug string `db:"account_slug"`
 	}
 	query := `
-		SELECT s.*, COALESCE(a.name, 'Unknown') as account_name 
+		SELECT s.*, 
+		       COALESCE(a.name, 'Unknown') as account_name,
+		       COALESCE(a.slug, '') as account_slug
 		FROM sequences s 
 		LEFT JOIN accounts a ON s.account_id = a.id`
 	var args []interface{}
@@ -89,6 +93,7 @@ func (r *SequenceRepository) GetAllFullDetails(ctx context.Context, accountID st
 		detailed = append(detailed, SequenceWithDetails{
 			Sequence:    s.Sequence,
 			AccountName: s.AccountName,
+			AccountSlug: s.AccountSlug,
 			Recruiters:  recruiters,
 			Stages:      stages,
 			History:     history,

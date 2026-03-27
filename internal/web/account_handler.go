@@ -20,7 +20,7 @@ func (h *Handler) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Name required", 400)
 		return
 	}
-	err := h.accRepo.Create(r.Context(), name)
+	err := h.accService.CreateAccount(r.Context(), name)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -46,11 +46,12 @@ func (h *Handler) handleEditAccountModal(w http.ResponseWriter, r *http.Request)
 func (h *Handler) handleUpdateAccount(w http.ResponseWriter, r *http.Request) {
 	id := r.FormValue("id")
 	name := r.FormValue("name")
+	slug := r.FormValue("slug")
 	if name == "" {
 		http.Error(w, "Name required", 400)
 		return
 	}
-	err := h.accRepo.UpdateName(r.Context(), id, name)
+	err := h.accService.UpdateAccount(r.Context(), id, name, slug)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return

@@ -14,6 +14,7 @@ const (
 	History     Category = "history"
 	Telegram    Category = "tg"
 	HH          Category = "hh"
+	Reports     Category = "reports"
 )
 
 var enabledCategories = make(map[Category]bool)

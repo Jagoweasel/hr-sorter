@@ -27,6 +27,7 @@ func main() {
 	debugHistory := flag.Bool("debug-history", false, "Enable debug logs for sequence history and movement")
 	debugTG := flag.Bool("debug-tg", false, "Enable debug logs for Telegram API and client creation")
 	debugHH := flag.Bool("debug-hh", false, "Enable debug logs for HeadHunter API and sync")
+	debugReports := flag.Bool("debug-reports", false, "Enable debug logs for report generation")
 	debugAll := flag.Bool("debug-all", false, "Enable all debug logs")
 	flag.Parse()
 
@@ -44,6 +45,9 @@ func main() {
 	}
 	if *debugAll || *debugHH {
 		logger.Enable(logger.HH)
+	}
+	if *debugAll || *debugReports {
+		logger.Enable(logger.Reports)
 	}
 
 	log.Println("[Main] Starting application...")

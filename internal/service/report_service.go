@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"hr-sorter/internal/logger"
 	"hr-sorter/internal/repository"
+	"strings"
 
 	"github.com/xuri/excelize/v2"
 )
@@ -91,7 +93,71 @@ func (s *ReportService) GetReportDataFromSequences(detailed []repository.Sequenc
 		VacancyStats:   vacancyMap,
 		CompanyStats:   companyMap,
 		ConversionRate: calculatePercent(offerPlus, screeningPlus),
-		AcceptanceRate: calculatePercent(accepted, offerPlus),
+		AcceptanceRate: calculatePercent(accepted, total),
+	}
+}
+
+type reportStyles struct {
+	Header         int
+	TableHead      int
+	Bold           int
+	Done           int
+	StatusAccept   int
+	StatusDecline  int
+	StatusWaiting  int
+	StageInitial   int
+	StageScreening int
+	StageTech      int
+	StageFinal     int
+	StageOffer     int
+}
+
+func (s *ReportService) createStyles(f *excelize.File) reportStyles {
+	h, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 14},
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#F3F4F6"}, Pattern: 1},
+	})
+	th, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true},
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#E5E7EB"}, Pattern: 1},
+		Border: []excelize.Border{
+			{Type: "left", Color: "000000", Style: 1}, {Type: "top", Color: "000000", Style: 1},
+			{Type: "bottom", Color: "000000", Style: 1}, {Type: "right", Color: "000000", Style: 1},
+		},
+	})
+	bold, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}})
+
+	done, _ := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#D1FAE5"}, Pattern: 1},
+		Border: []excelize.Border{
+			{Type: "left", Color: "000000", Style: 1}, {Type: "top", Color: "000000", Style: 1},
+			{Type: "bottom", Color: "000000", Style: 1}, {Type: "right", Color: "000000", Style: 1},
+		},
+	})
+
+	sAccept, _ := f.NewStyle(&excelize.Style{Fill: excelize.Fill{Type: "pattern", Color: []string{"#BBF7D0"}, Pattern: 1}, Font: &excelize.Font{Bold: true}, Border: []excelize.Border{{Type: "left", Color: "000000", Style: 1}, {Type: "top", Color: "000000", Style: 1}, {Type: "bottom", Color: "000000", Style: 1}, {Type: "right", Color: "000000", Style: 1}}})
+	sDecline, _ := f.NewStyle(&excelize.Style{Fill: excelize.Fill{Type: "pattern", Color: []string{"#FECACA"}, Pattern: 1}, Font: &excelize.Font{Bold: true}, Border: []excelize.Border{{Type: "left", Color: "000000", Style: 1}, {Type: "top", Color: "000000", Style: 1}, {Type: "bottom", Color: "000000", Style: 1}, {Type: "right", Color: "000000", Style: 1}}})
+	sWaiting, _ := f.NewStyle(&excelize.Style{Fill: excelize.Fill{Type: "pattern", Color: []string{"#FEF08A"}, Pattern: 1}, Font: &excelize.Font{Bold: true}, Border: []excelize.Border{{Type: "left", Color: "000000", Style: 1}, {Type: "top", Color: "000000", Style: 1}, {Type: "bottom", Color: "000000", Style: 1}, {Type: "right", Color: "000000", Style: 1}}})
+
+	stInitial, _ := f.NewStyle(&excelize.Style{Fill: excelize.Fill{Type: "pattern", Color: []string{"#DBEAFE"}, Pattern: 1}, Border: []excelize.Border{{Type: "left", Color: "000000", Style: 1}, {Type: "top", Color: "000000", Style: 1}, {Type: "bottom", Color: "000000", Style: 1}, {Type: "right", Color: "000000", Style: 1}}})
+	stScreening, _ := f.NewStyle(&excelize.Style{Fill: excelize.Fill{Type: "pattern", Color: []string{"#E0E7FF"}, Pattern: 1}, Border: []excelize.Border{{Type: "left", Color: "000000", Style: 1}, {Type: "top", Color: "000000", Style: 1}, {Type: "bottom", Color: "000000", Style: 1}, {Type: "right", Color: "000000", Style: 1}}})
+	stTech, _ := f.NewStyle(&excelize.Style{Fill: excelize.Fill{Type: "pattern", Color: []string{"#F3E8FF"}, Pattern: 1}, Border: []excelize.Border{{Type: "left", Color: "000000", Style: 1}, {Type: "top", Color: "000000", Style: 1}, {Type: "bottom", Color: "000000", Style: 1}, {Type: "right", Color: "000000", Style: 1}}})
+	stFinal, _ := f.NewStyle(&excelize.Style{Fill: excelize.Fill{Type: "pattern", Color: []string{"#FCE7F3"}, Pattern: 1}, Border: []excelize.Border{{Type: "left", Color: "000000", Style: 1}, {Type: "top", Color: "000000", Style: 1}, {Type: "bottom", Color: "000000", Style: 1}, {Type: "right", Color: "000000", Style: 1}}})
+	stOffer, _ := f.NewStyle(&excelize.Style{Fill: excelize.Fill{Type: "pattern", Color: []string{"#FEF9C3"}, Pattern: 1}, Border: []excelize.Border{{Type: "left", Color: "000000", Style: 1}, {Type: "top", Color: "000000", Style: 1}, {Type: "bottom", Color: "000000", Style: 1}, {Type: "right", Color: "000000", Style: 1}}})
+
+	return reportStyles{
+		Header:         h,
+		TableHead:      th,
+		Bold:           bold,
+		Done:           done,
+		StatusAccept:   sAccept,
+		StatusDecline:  sDecline,
+		StatusWaiting:  sWaiting,
+		StageInitial:   stInitial,
+		StageScreening: stScreening,
+		StageTech:      stTech,
+		StageFinal:     stFinal,
+		StageOffer:     stOffer,
 	}
 }
 
@@ -100,27 +166,12 @@ func (s *ReportService) ExportSummarizedXLSX(ctx context.Context, accountID stri
 	if err != nil {
 		return nil, err
 	}
+	logger.Debug(logger.Reports, "Export requested for AccountID: %s. Fetched %d sequences.", accountID, len(detailed))
 
 	f := excelize.NewFile()
 	defer f.Close()
+	styles := s.createStyles(f)
 
-	// Styles
-	styleHeader, _ := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 14},
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"#F3F4F6"}, Pattern: 1},
-	})
-	styleTableHead, _ := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true},
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"#E5E7EB"}, Pattern: 1},
-		Border: []excelize.Border{
-			{Type: "left", Color: "000000", Style: 1}, {Type: "top", Color: "000000", Style: 1},
-			{Type: "bottom", Color: "000000", Style: 1}, {Type: "right", Color: "000000", Style: 1},
-		},
-	})
-	styleBold, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}})
-	styleDone, _ := f.NewStyle(&excelize.Style{Fill: excelize.Fill{Type: "pattern", Color: []string{"#D1FAE5"}, Pattern: 1}, Border: []excelize.Border{{Type: "left", Color: "000000", Style: 1}, {Type: "top", Color: "000000", Style: 1}, {Type: "bottom", Color: "000000", Style: 1}, {Type: "right", Color: "000000", Style: 1}}})
-
-	// 1. Overview Sheet
 	sheetOverview := "Overview"
 	f.SetSheetName("Sheet1", sheetOverview)
 
@@ -133,117 +184,175 @@ func (s *ReportService) ExportSummarizedXLSX(ctx context.Context, accountID stri
 		}
 	}
 
-	// Write Overall Summary to Overview
-	currentRow = s.writeOverviewSection(f, sheetOverview, "Recruitment Report: "+accountName, detailed, currentRow, styleHeader, styleTableHead)
+	// 1. Write Overall Summary to Overview
+	currentRow = s.writeOverviewSection(f, sheetOverview, "Recruitment Report: "+accountName, detailed, currentRow, styles)
 
-	// If multiple accounts, add vertical breakdowns
-	byAccount := make(map[string][]repository.SequenceWithDetails)
-	for _, sd := range detailed {
-		byAccount[sd.AccountName] = append(byAccount[sd.AccountName], sd)
+	// Group by Account ID
+	type accGroup struct {
+		ID   int64
+		Name string
+		Slug string
+		Seqs []repository.SequenceWithDetails
 	}
+	byAccountID := make(map[int64]*accGroup)
+	var accountIDs []int64
 
-	if accountID == "" && len(byAccount) > 1 {
-		currentRow += 2 // Gap
-		for name, accSeqs := range byAccount {
-			currentRow = s.writeOverviewSection(f, sheetOverview, "Applicant Summary: "+name, accSeqs, currentRow, styleHeader, styleTableHead)
-			currentRow += 2 // Gap between applicants
+	for _, sd := range detailed {
+		id := int64(0)
+		if sd.AccountID != nil {
+			id = *sd.AccountID
+		}
+
+		if _, ok := byAccountID[id]; !ok {
+			byAccountID[id] = &accGroup{ID: id, Name: sd.AccountName, Slug: sd.AccountSlug, Seqs: nil}
+			accountIDs = append(accountIDs, id)
+		}
+		byAccountID[id].Seqs = append(byAccountID[id].Seqs, sd)
+	}
+	logger.Debug(logger.Reports, "Found %d unique applicants in dataset.", len(accountIDs))
+
+	// 2. Add individual summaries to Overview vertically
+	if accountID == "" && len(accountIDs) > 0 {
+		currentRow += 2
+		for _, id := range accountIDs {
+			group := byAccountID[id]
+			logger.Debug(logger.Reports, "Adding summary block for applicant: %s (ID: %d) to Overview", group.Name, id)
+			currentRow = s.writeOverviewSection(f, sheetOverview, "Applicant Summary: "+group.Name, group.Seqs, currentRow, styles)
+			currentRow += 2
 		}
 	}
 
-	// 2. Global Detailed and Timeline
+	// 3. Global Detailed and Timeline
 	sheetDetailed := "Detailed Applicants"
 	f.NewSheet(sheetDetailed)
-	s.writeDetailedTable(f, sheetDetailed, detailed, styleTableHead)
+	logger.Debug(logger.Reports, "Writing global Detailed sheet")
+	s.writeDetailedTable(f, sheetDetailed, detailed, styles)
 
 	sheetTimeline := "Timeline"
 	f.NewSheet(sheetTimeline)
-	s.writeTimelineRows(f, sheetTimeline, detailed, styleBold, styleDone)
+	logger.Debug(logger.Reports, "Writing global Timeline sheet")
+	s.writeTimelineRows(f, sheetTimeline, detailed, styles)
 
-	// 3. Per-Applicant Sheets if "All" is selected
-	if accountID == "" && len(byAccount) > 1 {
-		for name, accSeqs := range byAccount {
-			detSheet := truncateSheetName(name + " - Detailed")
-			timeSheet := truncateSheetName(name + " - Timeline")
+	// 4. Per-Applicant Sheets
+	if accountID == "" {
+		for _, id := range accountIDs {
+			group := byAccountID[id]
+			slug := group.Slug
+			if slug == "" {
+				slug = fmt.Sprintf("acc_%d", id)
+			}
 
-			f.NewSheet(detSheet)
-			s.writeDetailedTable(f, detSheet, accSeqs, styleTableHead)
+			detName := truncateSheetName(slug + "_detailed")
+			timeName := truncateSheetName(slug + "_timeline")
 
-			f.NewSheet(timeSheet)
-			s.writeTimelineRows(f, timeSheet, accSeqs, styleBold, styleDone)
+			logger.Debug(logger.Reports, "Creating individual sheet: '%s'", detName)
+			f.NewSheet(detName)
+			s.writeDetailedTable(f, detName, group.Seqs, styles)
+
+			logger.Debug(logger.Reports, "Creating individual sheet: '%s'", timeName)
+			f.NewSheet(timeName)
+			s.writeTimelineRows(f, timeName, group.Seqs, styles)
 		}
 	}
 
 	f.SetActiveSheet(0)
 	var buf bytes.Buffer
 	if err := f.Write(&buf); err != nil {
+		logger.Debug(logger.Reports, "Error writing XLSX to buffer: %v", err)
 		return nil, err
 	}
 	return buf.Bytes(), nil
 }
 
-func (s *ReportService) writeOverviewSection(f *excelize.File, sheet, title string, data []repository.SequenceWithDetails, startRow int, styleHeader, styleTableHead int) int {
-	reportData := s.GetReportDataFromSequences(data)
-
+func (s *ReportService) writeOverviewSection(f *excelize.File, sheet, title string, data []repository.SequenceWithDetails, startRow int, styles reportStyles) int {
+	rd := s.GetReportDataFromSequences(data)
 	row := startRow
 	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), title)
-	f.MergeCell(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row))
-	f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row), styleHeader)
+	f.MergeCell(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("C%d", row))
+	f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("C%d", row), styles.Header)
 
 	row += 2
 	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), "Metric")
 	f.SetCellValue(sheet, fmt.Sprintf("B%d", row), "Value")
-	f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row), styleTableHead)
+	f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row), styles.TableHead)
 
 	row++
 	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), "Total Responses")
-	f.SetCellValue(sheet, fmt.Sprintf("B%d", row), reportData.TotalResponses)
+	f.SetCellValue(sheet, fmt.Sprintf("B%d", row), rd.TotalResponses)
 	row++
 	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), "Interview-to-Offer Conversion")
-	f.SetCellValue(sheet, fmt.Sprintf("B%d", row), fmt.Sprintf("%.1f%%", reportData.ConversionRate))
+	f.SetCellValue(sheet, fmt.Sprintf("B%d", row), fmt.Sprintf("%.1f%%", rd.ConversionRate))
 	row++
 	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), "Hire Rate (Total)")
-	f.SetCellValue(sheet, fmt.Sprintf("B%d", row), fmt.Sprintf("%.1f%%", reportData.AcceptanceRate))
+	f.SetCellValue(sheet, fmt.Sprintf("B%d", row), fmt.Sprintf("%.1f%%", rd.AcceptanceRate))
 
 	row += 2
 	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), "Recruitment Funnel")
-	f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), styleTableHead)
+	f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), styles.TableHead)
 	row++
 	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), "Stage")
 	f.SetCellValue(sheet, fmt.Sprintf("B%d", row), "Count")
-	f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row), styleTableHead)
+	f.SetCellValue(sheet, fmt.Sprintf("C%d", row), "Percentage")
+	f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("C%d", row), styles.TableHead)
 
-	for _, step := range reportData.Funnel {
+	for _, step := range rd.Funnel {
 		row++
 		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), step.Label)
 		f.SetCellValue(sheet, fmt.Sprintf("B%d", row), step.Count)
+		f.SetCellValue(sheet, fmt.Sprintf("C%d", row), fmt.Sprintf("%.0f%%", step.Percentage))
 	}
-
 	return row
 }
 
-func (s *ReportService) writeDetailedTable(f *excelize.File, sheet string, data []repository.SequenceWithDetails, styleTableHead int) {
+func (s *ReportService) writeDetailedTable(f *excelize.File, sheet string, data []repository.SequenceWithDetails, styles reportStyles) {
 	headers := []string{"Recruiter TG", "Company", "Date", "Applicant (Account)", "Vacancy Link", "Last Stage", "Status", "Reason", "Comment"}
 	for i, h := range headers {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
 		f.SetCellValue(sheet, cell, h)
 	}
-	f.SetCellStyle(sheet, "A1", "I1", styleTableHead)
+	f.SetCellStyle(sheet, "A1", "I1", styles.TableHead)
 
 	for i, sd := range data {
 		row := i + 2
-		tgName := ""
+		tgName := "HH"
 		if len(sd.Recruiters) > 0 {
-			tgName = deref(sd.Recruiters[0].Username)
+			r := sd.Recruiters[0]
+			if r.Platform == "tg" {
+				if r.Username != nil && *r.Username != "" {
+					tgName = "@" + *r.Username
+				} else {
+					tgName = deref(r.FirstName) + " " + deref(r.LastName)
+				}
+			}
 		}
+
 		lastStage := "Initial"
+		lastStageStyle := styles.StageInitial
 		if len(sd.History) > 0 {
 			lastStage = sd.History[len(sd.History)-1].Name
 		}
+
+		lsLower := strings.ToLower(lastStage)
+		switch {
+		case strings.Contains(lsLower, "screening"):
+			lastStageStyle = styles.StageScreening
+		case strings.Contains(lsLower, "tech"):
+			lastStageStyle = styles.StageTech
+		case strings.Contains(lsLower, "final"):
+			lastStageStyle = styles.StageFinal
+		case strings.Contains(lsLower, "offer"):
+			lastStageStyle = styles.StageOffer
+		}
+
 		status := "waiting"
+		statusStyle := styles.StatusWaiting
 		if sd.Sequence.Status == "accepted" {
 			status = "accept"
-		} else if sd.Sequence.Status == "rejected" {
+			statusStyle = styles.StatusAccept
+		}
+		if sd.Sequence.Status == "rejected" {
 			status = "decline"
+			statusStyle = styles.StatusDecline
 		}
 
 		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), tgName)
@@ -251,33 +360,38 @@ func (s *ReportService) writeDetailedTable(f *excelize.File, sheet string, data 
 		f.SetCellValue(sheet, fmt.Sprintf("C%d", row), sd.CreatedAt.Format("2006-01-02"))
 		f.SetCellValue(sheet, fmt.Sprintf("D%d", row), sd.AccountName)
 		f.SetCellValue(sheet, fmt.Sprintf("E%d", row), deref(sd.VacancyLink))
+
 		f.SetCellValue(sheet, fmt.Sprintf("F%d", row), lastStage)
+		f.SetCellStyle(sheet, fmt.Sprintf("F%d", row), fmt.Sprintf("F%d", row), lastStageStyle)
+
 		f.SetCellValue(sheet, fmt.Sprintf("G%d", row), status)
+		f.SetCellStyle(sheet, fmt.Sprintf("G%d", row), fmt.Sprintf("G%d", row), statusStyle)
+
 		f.SetCellValue(sheet, fmt.Sprintf("H%d", row), deref(sd.RejectionReason))
 		f.SetCellValue(sheet, fmt.Sprintf("I%d", row), deref(sd.SummaryComment))
 	}
-	f.SetColWidth(sheet, "A", "I", 20)
+	f.SetColWidth(sheet, "A", "I", 25)
 }
 
-func (s *ReportService) writeTimelineRows(f *excelize.File, sheet string, data []repository.SequenceWithDetails, styleBold, styleDone int) {
+func (s *ReportService) writeTimelineRows(f *excelize.File, sheet string, data []repository.SequenceWithDetails, styles reportStyles) {
 	for i, sd := range data {
 		row := i + 1
 		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), sd.AccountName)
 		f.SetCellValue(sheet, fmt.Sprintf("B%d", row), sd.CompanyName)
-		f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row), styleBold)
+		f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row), styles.Bold)
 
-		// Skip cell C (col 3)
+		// Skip Col C (spacer)
 		colIdx := 4
 		for _, st := range sd.History {
 			cell, _ := excelize.CoordinatesToCellName(colIdx, row)
 			f.SetCellValue(sheet, cell, st.Name)
-			f.SetCellStyle(sheet, cell, cell, styleDone)
+			f.SetCellStyle(sheet, cell, cell, styles.Done)
 			colIdx++
 		}
 	}
 	f.SetColWidth(sheet, "A", "B", 25)
 	f.SetColWidth(sheet, "C", "C", 5)
-	f.SetColWidth(sheet, "D", "Z", 15)
+	f.SetColWidth(sheet, "D", "Z", 20)
 }
 
 func truncateSheetName(name string) string {

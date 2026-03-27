@@ -148,6 +148,15 @@ func InitDB(path string) {
 		log.Println("[DB] Migration finished.")
 	}
 
+	// Migration: Add slug to accounts if it doesn't exist
+	var hasSlug bool
+	err = DB.Get(&hasSlug, "SELECT COUNT(*) FROM pragma_table_info('accounts') WHERE name='slug'")
+	if err == nil && !hasSlug {
+		log.Println("[DB] Migrating accounts: adding slug column...")
+		DB.MustExec("ALTER TABLE accounts ADD COLUMN slug TEXT")
+		log.Println("[DB] Migration finished.")
+	}
+
 	SeedFilters()
 }
 
