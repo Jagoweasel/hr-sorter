@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hr-sorter/internal/logger"
 	"hr-sorter/internal/repository"
+	"os"
 	"strings"
 
 	"github.com/johnfercher/maroto/pkg/color"
@@ -432,6 +433,11 @@ func calculatePercent(subset, total int) float64 {
 	return (float64(subset) / float64(total)) * 100
 }
 
+const (
+	fontPath = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+	fontName = "DejaVuSans"
+)
+
 func (s *ReportService) ExportPDF(ctx context.Context, accountID string, opts PDFExportOptions) ([]byte, error) {
 	detailed, err := s.seqRepo.GetAllFullDetails(ctx, accountID)
 	if err != nil {
@@ -449,9 +455,18 @@ func (s *ReportService) ExportPDF(ctx context.Context, accountID string, opts PD
 	m := pdf.NewMaroto(consts.Landscape, consts.A4)
 	m.SetPageMargins(10, 10, 10)
 
+	// Load font for Cyrillic support
+	if _, err := os.Stat(fontPath); err == nil {
+		m.AddUTF8Font(fontName, consts.Normal, fontPath)
+		m.AddUTF8Font(fontName, consts.Bold, fontPath)
+		m.SetDefaultFontFamily(fontName)
+	} else {
+		logger.Debug(logger.Reports, "WARNING: Font not found at %s. Cyrillic might not render correctly.", fontPath)
+	}
+
 	// Header
 	m.RegisterHeader(func() {
-		m.Row(10, func() {
+		m.Row(15, func() {
 			m.Col(12, func() {
 				m.Text("Recruitment Report: "+accountName, props.Text{
 					Top:   2,
@@ -470,9 +485,13 @@ func (s *ReportService) ExportPDF(ctx context.Context, accountID string, opts PD
 	}
 
 	// Group by Account
-	byAccount := make(map[int64][]repository.SequenceWithDetails)
+	type accGroup struct {
+		ID   int64
+		Name string
+		Seqs []repository.SequenceWithDetails
+	}
+	byAccount := make(map[int64]*accGroup)
 	var accountOrder []int64
-	accNames := make(map[int64]string)
 	for _, sd := range detailed {
 		id := int64(0)
 		if sd.AccountID != nil {
@@ -480,18 +499,18 @@ func (s *ReportService) ExportPDF(ctx context.Context, accountID string, opts PD
 		}
 		if _, ok := byAccount[id]; !ok {
 			accountOrder = append(accountOrder, id)
-			accNames[id] = sd.AccountName
+			byAccount[id] = &accGroup{ID: id, Name: sd.AccountName, Seqs: nil}
 		}
-		byAccount[id] = append(byAccount[id], sd)
+		byAccount[id].Seqs = append(byAccount[id].Seqs, sd)
 	}
 
 	// 2. Per-Applicant Summaries
-	if accountID == "" && len(accountOrder) > 1 {
+	if accountID == "" && len(accountOrder) > 0 {
 		for _, id := range accountOrder {
-			accSeqs := byAccount[id]
-			rd := s.GetReportDataFromSequences(accSeqs)
+			group := byAccount[id]
+			rd := s.GetReportDataFromSequences(group.Seqs)
 			m.AddPage()
-			s.writePDFOverviewSection(m, "Applicant Summary: "+accNames[id], rd, opts)
+			s.writePDFOverviewSection(m, "Applicant Summary: "+group.Name, rd, opts)
 		}
 	}
 
@@ -500,7 +519,9 @@ func (s *ReportService) ExportPDF(ctx context.Context, accountID string, opts PD
 		m.AddPage()
 		rd := s.GetReportDataFromSequences(detailed)
 		m.Row(10, func() {
-			m.Col(12, func() { m.Text("Performance by Vacancy", props.Text{Size: 14, Style: consts.Bold}) })
+			m.Col(12, func() {
+				m.Text("Performance by Vacancy", props.Text{Size: 14, Style: consts.Bold})
+			})
 		})
 		headers := []string{"Vacancy", "Total", "Screening+", "Offer+", "Accepted"}
 		var contents [][]string
@@ -517,6 +538,7 @@ func (s *ReportService) ExportPDF(ctx context.Context, accountID string, opts PD
 		m.TableList(headers, contents, props.TableList{
 			HeaderProp:  props.TableListContent{Size: 9, Style: consts.Bold},
 			ContentProp: props.TableListContent{Size: 8},
+			Align:       consts.Center,
 		})
 	}
 
@@ -525,7 +547,9 @@ func (s *ReportService) ExportPDF(ctx context.Context, accountID string, opts PD
 		m.AddPage()
 		rd := s.GetReportDataFromSequences(detailed)
 		m.Row(10, func() {
-			m.Col(12, func() { m.Text("Performance by Company", props.Text{Size: 14, Style: consts.Bold}) })
+			m.Col(12, func() {
+				m.Text("Performance by Company", props.Text{Size: 14, Style: consts.Bold})
+			})
 		})
 		headers := []string{"Company", "Total", "Offers", "Accepted"}
 		var contents [][]string
@@ -541,6 +565,7 @@ func (s *ReportService) ExportPDF(ctx context.Context, accountID string, opts PD
 		m.TableList(headers, contents, props.TableList{
 			HeaderProp:  props.TableListContent{Size: 9, Style: consts.Bold},
 			ContentProp: props.TableListContent{Size: 8},
+			Align:       consts.Center,
 		})
 	}
 
@@ -548,9 +573,11 @@ func (s *ReportService) ExportPDF(ctx context.Context, accountID string, opts PD
 	if opts.IncludeDetailed {
 		m.AddPage()
 		m.Row(10, func() {
-			m.Col(12, func() { m.Text("Detailed Applicants", props.Text{Size: 14, Style: consts.Bold}) })
+			m.Col(12, func() {
+				m.Text("Detailed Applicants", props.Text{Size: 14, Style: consts.Bold})
+			})
 		})
-		headers := []string{"Recruiter", "Company", "Date", "Applicant", "Last Stage", "Status"}
+		headers := []string{"Recruiter", "Company", "Date", "Last Stage", "Status", "Comment"}
 		var contents [][]string
 		for _, sd := range detailed {
 			tg := "HH"
@@ -570,20 +597,23 @@ func (s *ReportService) ExportPDF(ctx context.Context, accountID string, opts PD
 			}
 
 			contents = append(contents, []string{
-				tg, sd.CompanyName, sd.CreatedAt.Format("2006-01-02"), sd.AccountName, lastStage, sd.Status,
+				tg, sd.CompanyName, sd.CreatedAt.Format("2006-01-02"), lastStage, sd.Status, deref(sd.SummaryComment),
 			})
 		}
 		m.TableList(headers, contents, props.TableList{
 			HeaderProp:  props.TableListContent{Size: 9, Style: consts.Bold},
 			ContentProp: props.TableListContent{Size: 8},
 		})
+
 	}
 
 	// 6. Timelines
 	if opts.IncludeTimeline {
 		m.AddPage()
 		m.Row(10, func() {
-			m.Col(12, func() { m.Text("Applicant Timelines", props.Text{Size: 14, Style: consts.Bold}) })
+			m.Col(12, func() {
+				m.Text("Applicant Timelines (Visualized)", props.Text{Size: 14, Style: consts.Bold})
+			})
 		})
 		for _, sd := range detailed {
 			m.Row(10, func() {
@@ -591,16 +621,41 @@ func (s *ReportService) ExportPDF(ctx context.Context, accountID string, opts PD
 					m.Text(sd.AccountName+" | "+sd.CompanyName, props.Text{Size: 10, Style: consts.Bold})
 				})
 			})
-			m.Row(8, func() {
-				for _, st := range sd.History {
-					m.Col(2, func() {
-						m.Text(st.Name, props.Text{
-							Size: 7, Align: consts.Center, Top: 1,
-							Color: color.Color{Red: 16, Green: 185, Blue: 129}, // Green
+
+			// Visual boxes for stages
+			if len(sd.History) > 0 {
+				m.Row(12, func() {
+					for _, st := range sd.History {
+						// Map status to colors
+						bgColor := color.Color{Red: 209, Green: 250, Blue: 229} // Default Green
+						stLower := strings.ToLower(st.Name)
+						switch {
+						case strings.Contains(stLower, "screening"):
+							bgColor = color.Color{Red: 224, Green: 231, Blue: 255}
+						case strings.Contains(stLower, "tech"):
+							bgColor = color.Color{Red: 243, Green: 232, Blue: 255}
+						case strings.Contains(stLower, "final"):
+							bgColor = color.Color{Red: 252, Green: 231, Blue: 243}
+						case strings.Contains(stLower, "offer"):
+							bgColor = color.Color{Red: 254, Green: 249, Blue: 195}
+						}
+
+						m.Col(2, func() {
+							m.SetBackgroundColor(bgColor)
+							m.Text(st.Name, props.Text{
+								Size: 8, Align: consts.Center, Style: consts.Bold, Top: 3.5,
+							})
+							m.SetBackgroundColor(color.NewWhite())
 						})
+					}
+				})
+			} else {
+				m.Row(8, func() {
+					m.Col(12, func() {
+						m.Text("Initial Contact", props.Text{Size: 8, Color: color.Color{Red: 150, Green: 150, Blue: 150}})
 					})
-				}
-			})
+				})
+			}
 			m.Line(5)
 		}
 	}
@@ -613,40 +668,58 @@ func (s *ReportService) ExportPDF(ctx context.Context, accountID string, opts PD
 }
 
 func (s *ReportService) writePDFOverviewSection(m pdf.Maroto, title string, rd *ReportData, opts PDFExportOptions) {
-	m.Row(10, func() {
-		m.Col(12, func() { m.Text(title, props.Text{Size: 14, Style: consts.Bold}) })
+	m.Row(12, func() {
+		m.Col(12, func() {
+			m.Text(title, props.Text{Size: 14, Style: consts.Bold, Align: consts.Center})
+		})
 	})
 
 	if opts.IncludeKPIs {
-		m.Row(8, func() {
-			m.Col(12, func() { m.Text("Key Performance Indicators", props.Text{Size: 10, Style: consts.Bold}) })
+		m.Row(10, func() {
+			m.Col(12, func() { m.Text("Key Performance Indicators", props.Text{Size: 11, Style: consts.Bold, Top: 4}) })
 		})
-		m.Row(6, func() {
-			m.Col(4, func() { m.Text("Total Responses:", props.Text{Size: 9}) })
-			m.Col(2, func() { m.Text(fmt.Sprintf("%d", rd.TotalResponses), props.Text{Size: 9, Style: consts.Bold}) })
-		})
-		m.Row(6, func() {
-			m.Col(4, func() { m.Text("Conv. Rate (Intv/Offer):", props.Text{Size: 9}) })
-			m.Col(2, func() { m.Text(fmt.Sprintf("%.1f%%", rd.ConversionRate), props.Text{Size: 9, Style: consts.Bold}) })
-		})
-		m.Row(6, func() {
-			m.Col(4, func() { m.Text("Hire Rate (Total):", props.Text{Size: 9}) })
-			m.Col(2, func() { m.Text(fmt.Sprintf("%.1f%%", rd.AcceptanceRate), props.Text{Size: 9, Style: consts.Bold}) })
+
+		// Centered KPI blocks
+		m.Row(25, func() {
+			m.ColSpace(2)
+			m.Col(3, func() {
+				m.Text("Responses", props.Text{Size: 9, Align: consts.Center, Top: 2})
+				m.Text(fmt.Sprintf("%d", rd.TotalResponses), props.Text{Size: 18, Style: consts.Bold, Align: consts.Center, Top: 8})
+			})
+			m.Col(3, func() {
+				m.Text("Conversion Rate", props.Text{Size: 9, Align: consts.Center, Top: 2})
+				m.Text(fmt.Sprintf("%.1f%%", rd.ConversionRate), props.Text{Size: 18, Style: consts.Bold, Align: consts.Center, Top: 8})
+			})
+			m.Col(3, func() {
+				m.Text("Hire Rate", props.Text{Size: 9, Align: consts.Center, Top: 2})
+				m.Text(fmt.Sprintf("%.1f%%", rd.AcceptanceRate), props.Text{Size: 18, Style: consts.Bold, Align: consts.Center, Top: 8})
+			})
+			m.ColSpace(1)
 		})
 	}
 
 	if opts.IncludeFunnel {
 		m.Row(10, func() {
-			m.Col(12, func() { m.Text("Recruitment Funnel", props.Text{Size: 10, Style: consts.Bold, Top: 4}) })
+			m.Col(12, func() { m.Text("Recruitment Funnel", props.Text{Size: 11, Style: consts.Bold, Top: 6}) })
 		})
+
 		headers := []string{"Stage", "Count", "Percentage"}
 		var contents [][]string
 		for _, step := range rd.Funnel {
 			contents = append(contents, []string{step.Label, fmt.Sprintf("%d", step.Count), fmt.Sprintf("%.0f%%", step.Percentage)})
 		}
-		m.TableList(headers, contents, props.TableList{
-			HeaderProp:  props.TableListContent{Size: 9, Style: consts.Bold},
-			ContentProp: props.TableListContent{Size: 8},
+
+		// Centered small table
+		m.Row(60, func() {
+			m.ColSpace(2)
+			m.Col(8, func() {
+				m.TableList(headers, contents, props.TableList{
+					HeaderProp:  props.TableListContent{Size: 9, Style: consts.Bold},
+					ContentProp: props.TableListContent{Size: 9},
+					Align:       consts.Center,
+				})
+			})
+			m.ColSpace(2)
 		})
 	}
 }
