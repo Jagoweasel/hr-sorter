@@ -28,7 +28,46 @@ func (s *FilterService) ExportFilters(ctx context.Context) error {
 		return err
 	}
 
-	return os.WriteFile("filters.json", data, 0644)
+	f, err := os.Create("filters.json")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if _, err := f.Write(data); err != nil {
+		return err
+	}
+
+	return f.Sync()
+}
+
+func (s *FilterService) ImportFilters(ctx context.Context) error {
+	path := "filters.json"
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	var patterns []string
+	if err := json.Unmarshal(data, &patterns); err != nil {
+		return err
+	}
+
+	for _, p := range patterns {
+		if p == "" {
+			continue
+		}
+		if err := s.fltRepo.Create(ctx, p); err != nil {
+			// Continue on error (likely duplicate)
+			continue
+		}
+	}
+
+	return nil
 }
 
 func (s *FilterService) AddFilter(ctx context.Context, pattern string) error {

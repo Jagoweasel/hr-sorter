@@ -182,7 +182,15 @@
             <!-- Loaded via HTMX -->
         </div>
 
-        <div class="flex justify-center">
+        <div class="flex items-center justify-center space-x-6">
+            <button hx-post="/filters/import" 
+                    hx-swap="none"
+                    class="text-[10px] font-black text-gray-400 uppercase hover:text-blue-600 transition-colors flex items-center space-x-2"
+                    onclick="this.innerText = 'Imported!'; setTimeout(() => this.innerText = 'Import from filters.json', 2000)">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                <span>Import from filters.json</span>
+            </button>
+
             <button hx-post="/filters/export" 
                     hx-swap="none"
                     class="text-[10px] font-black text-gray-400 uppercase hover:text-blue-600 transition-colors flex items-center space-x-2"

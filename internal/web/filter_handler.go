@@ -52,3 +52,12 @@ func (h *Handler) handleExportFilters(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("HX-Trigger", "refreshFilters")
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (h *Handler) handleImportFilters(w http.ResponseWriter, r *http.Request) {
+	if err := h.fltService.ImportFilters(r.Context()); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	w.Header().Set("HX-Trigger", "refreshFilters")
+	w.WriteHeader(http.StatusNoContent)
+}
