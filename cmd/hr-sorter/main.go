@@ -29,6 +29,7 @@ func main() {
 	debugHH := flag.Bool("debug-hh", false, "Enable debug logs for HeadHunter API and sync")
 	debugReports := flag.Bool("debug-reports", false, "Enable debug logs for report generation")
 	debugMsg := flag.Bool("debug-msg", false, "Enable debug logs for messaging")
+	debugFilters := flag.Bool("debug-filters", false, "Enable debug logs for message filtering")
 	debugAll := flag.Bool("debug-all", false, "Enable all debug logs")
 	flag.Parse()
 
@@ -52,6 +53,9 @@ func main() {
 	}
 	if *debugAll || *debugMsg {
 		logger.Enable(logger.Messaging)
+	}
+	if *debugAll || *debugFilters {
+		logger.Enable(logger.Filters)
 	}
 
 	log.Println("[Main] Starting application...")

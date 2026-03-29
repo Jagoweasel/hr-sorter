@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"hr-sorter/internal/logger"
 	"hr-sorter/internal/models"
 
 	"github.com/jmoiron/sqlx"
@@ -28,8 +29,15 @@ func (r *FilterRepository) GetActivePatterns(ctx context.Context) ([]string, err
 }
 
 func (r *FilterRepository) Create(ctx context.Context, pattern string) error {
-	_, err := r.db.ExecContext(ctx, "INSERT OR IGNORE INTO message_filters (pattern) VALUES (?)", pattern)
-	return err
+	logger.Debug(logger.Filters, "Repo: Inserting pattern '%s'", pattern)
+	res, err := r.db.ExecContext(ctx, "INSERT OR IGNORE INTO message_filters (pattern) VALUES (?)", pattern)
+	if err != nil {
+		logger.Debug(logger.Filters, "Repo: Error inserting pattern '%s': %v", pattern, err)
+		return err
+	}
+	rows, _ := res.RowsAffected()
+	logger.Debug(logger.Filters, "Repo: Pattern '%s' inserted, rows affected: %d", pattern, rows)
+	return nil
 }
 
 func (r *FilterRepository) Delete(ctx context.Context, id interface{}) error {

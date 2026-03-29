@@ -157,6 +157,9 @@ func InitDB(path string) {
 		log.Println("[DB] Migration finished.")
 	}
 
+	// Migration: Add unique index to message_filters pattern
+	_, _ = DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_message_filters_pattern ON message_filters(pattern)")
+
 	SeedFilters()
 }
 

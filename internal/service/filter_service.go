@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"hr-sorter/internal/logger"
 	"hr-sorter/internal/repository"
 	"os"
 )
@@ -56,16 +57,28 @@ func (s *FilterService) ImportFilters(ctx context.Context) error {
 }
 
 func (s *FilterService) ImportFromJSON(ctx context.Context, data []byte) error {
+	if len(data) == 0 {
+		logger.Debug(logger.Filters, "ImportFromJSON: empty data")
+		return nil
+	}
+
 	var patterns []string
 	if err := json.Unmarshal(data, &patterns); err != nil {
+		logger.Debug(logger.Filters, "ImportFromJSON: failed to unmarshal: %v", err)
 		return err
 	}
+
+	logger.Debug(logger.Filters, "ImportFromJSON: unmarshaled %d patterns", len(patterns))
 
 	for _, p := range patterns {
 		if p == "" {
 			continue
 		}
-		_ = s.fltRepo.Create(ctx, p)
+		if err := s.fltRepo.Create(ctx, p); err != nil {
+			logger.Debug(logger.Filters, "ImportFromJSON: failed to create pattern '%s': %v", p, err)
+		} else {
+			logger.Debug(logger.Filters, "ImportFromJSON: created pattern '%s'", p)
+		}
 	}
 
 	return nil

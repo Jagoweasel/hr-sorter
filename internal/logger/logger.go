@@ -16,6 +16,7 @@ const (
 	HH          Category = "hh"
 	Reports     Category = "reports"
 	Messaging   Category = "msg"
+	Filters     Category = "filters"
 )
 
 var enabledCategories = make(map[Category]bool)
