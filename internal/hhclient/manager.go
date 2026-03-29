@@ -1,15 +1,17 @@
 package hhclient
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"hr-sorter/internal/database"
 	"hr-sorter/internal/logger"
 	"hr-sorter/internal/models"
@@ -68,38 +70,41 @@ func (m *Manager) StopIntegration(id int64) {
 }
 
 func (m *Manager) SendMessage(ctx context.Context, integrationID int64, negID string, text string) error {
+	logger.Debug(logger.Messaging, "[HH] [Int ID %d] Attempting to send message to neg %s", integrationID, negID)
+
 	var integration models.Integration
 	err := database.DB.Get(&integration, "SELECT * FROM integrations WHERE id = ?", integrationID)
 	if err != nil {
 		return err
 	}
 
-	url := fmt.Sprintf("%snegotiations/%s/messages", HHApiURL, negID)
-	// Body for HH API is usually text=... or JSON.
-	// The User's log showed JSON, but it was for chatik.
-	// Official API: POST /negotiations/{negotiation_id}/messages
+	urlVal := fmt.Sprintf("%snegotiations/%s/messages", HHApiURL, negID)
+	logger.Debug(logger.Messaging, "[HH] [Int ID %d] URL: %s", integrationID, urlVal)
 
-	body := map[string]string{
-		"text": text,
-	}
-	jsonBody, _ := json.Marshal(body)
+	data := url.Values{}
+	data.Set("message", text)
 
-	req, _ := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
+	req, _ := http.NewRequestWithContext(ctx, "POST", urlVal, strings.NewReader(data.Encode()))
 	req.Header.Set("Authorization", "Bearer "+*integration.AccessToken)
 	req.Header.Set("User-Agent", *integration.UserAgent)
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("X-HH-App-Active", "true")
+	req.Header.Set("X-Idempotency-Key", uuid.New().String())
+
+	logger.Debug(logger.Messaging, "[HH] [Int ID %d] Request Body: %s", integrationID, data.Encode())
 
 	client := GetHHHttpClient()
 	resp, err := client.Do(req)
 	if err != nil {
+		logger.Debug(logger.Messaging, "[HH] [Int ID %d] Send error: %v", integrationID, err)
 		return err
 	}
 	defer resp.Body.Close()
 
+	respBody, _ := io.ReadAll(resp.Body)
+	logger.Debug(logger.Messaging, "[HH] [Int ID %d] Response Status: %d, Body: %s", integrationID, resp.StatusCode, string(respBody))
+
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		// Log error body
-		respBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("hh api error: status %d, body: %s", resp.StatusCode, string(respBody))
 	}
 

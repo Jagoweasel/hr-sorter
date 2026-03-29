@@ -1,6 +1,6 @@
-<div class="flex flex-col h-full bg-slate-50">
+<div id="chat-container" class="col-span-12 lg:col-span-8 bg-white rounded-xl shadow-lg flex flex-col overflow-hidden border border-gray-200">
     <div id="message-list-container" 
-         class="flex-1 overflow-y-auto"
+         class="flex-1 overflow-y-auto bg-slate-50"
          hx-get="/messages/list/{{ .ContactID }}" 
          hx-trigger="every 3s, refreshMessages from:body"
          hx-swap="innerHTML"

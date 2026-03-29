@@ -141,9 +141,8 @@
         </div>
 
         <!-- Right: Message History -->
-        <div class="col-span-12 lg:col-span-8 bg-white rounded-xl shadow-lg flex flex-col overflow-hidden border border-gray-200">
-            <div id="chat-history" 
-                 class="flex-1 overflow-y-auto bg-slate-50 relative">
+        <div id="chat-container" class="col-span-12 lg:col-span-8 bg-white rounded-xl shadow-lg flex flex-col overflow-hidden border border-gray-200">
+            <div class="flex-1 overflow-y-auto bg-slate-50 relative">
                 <div class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 space-y-4">
                     <div class="p-6 bg-white rounded-full shadow-sm border border-gray-100">
                         <svg class="w-16 h-16 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -155,8 +154,6 @@
                     </div>
                 </div>
             </div>
-            <!-- Chat Box Container (initially hidden or empty) -->
-            <div id="chat-box-container" class="border-t border-gray-100 bg-white"></div>
         </div>
     </div>
     </div>

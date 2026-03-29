@@ -279,6 +279,8 @@ func (a *codeAuthenticator) Code(ctx context.Context, sentCode *tg.AuthSentCode)
 }
 
 func (m *Manager) SendMessage(ctx context.Context, integrationID int64, contactID string, accessHash int64, username string, text string) (int, error) {
+	logger.Debug(logger.Messaging, "[TG] [Int ID %d] Attempting to send message to %s (hash: %d, user: %s)", integrationID, contactID, accessHash, username)
+
 	m.mu.RLock()
 	api, ok := m.apis[integrationID]
 	m.mu.RUnlock()
@@ -304,26 +306,33 @@ func (m *Manager) SendMessage(ctx context.Context, integrationID int64, contactI
 		peer = &tg.InputPeerUser{UserID: targetID, AccessHash: accessHash}
 	}
 
+	logger.Debug(logger.Messaging, "[TG] [Int ID %d] Using peer: %T", integrationID, peer)
+
 	res, err := api.MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{
 		Peer:     peer,
 		Message:  text,
 		RandomID: time.Now().UnixNano(),
 	})
 	if err != nil {
+		logger.Debug(logger.Messaging, "[TG] [Int ID %d] Send error: %v", integrationID, err)
 		return 0, err
 	}
 
 	switch u := res.(type) {
 	case *tg.UpdateShortSentMessage:
+		logger.Debug(logger.Messaging, "[TG] [Int ID %d] Sent successfully (ShortSent, ID: %d)", integrationID, u.ID)
 		return u.ID, nil
 	case *tg.Updates:
 		for _, upd := range u.Updates {
 			if m, ok := upd.(*tg.UpdateNewMessage); ok {
 				if msg, ok := m.Message.(*tg.Message); ok {
+					logger.Debug(logger.Messaging, "[TG] [Int ID %d] Sent successfully (NewMessage, ID: %d)", integrationID, msg.ID)
 					return msg.ID, nil
 				}
 			}
 		}
+	default:
+		logger.Debug(logger.Messaging, "[TG] [Int ID %d] Sent but received unknown update type: %T", integrationID, u)
 	}
 
 	return 0, nil
