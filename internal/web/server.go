@@ -123,6 +123,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/filters/add", h.handleAddFilter)
 	mux.HandleFunc("/filters/export", h.handleExportFilters)
 	mux.HandleFunc("/filters/import", h.handleImportFilters)
+	mux.HandleFunc("/filters/upload", h.handleUploadFilters)
+	mux.HandleFunc("/filters/clear", h.handleClearFilters)
 	mux.HandleFunc("/filters/delete", h.handleDeleteFilter)
 	mux.HandleFunc("/filters/toggle", h.handleToggleFilter)
 }

@@ -52,6 +52,10 @@ func (s *FilterService) ImportFilters(ctx context.Context) error {
 		return err
 	}
 
+	return s.ImportFromJSON(ctx, data)
+}
+
+func (s *FilterService) ImportFromJSON(ctx context.Context, data []byte) error {
 	var patterns []string
 	if err := json.Unmarshal(data, &patterns); err != nil {
 		return err
@@ -61,13 +65,14 @@ func (s *FilterService) ImportFilters(ctx context.Context) error {
 		if p == "" {
 			continue
 		}
-		if err := s.fltRepo.Create(ctx, p); err != nil {
-			// Continue on error (likely duplicate)
-			continue
-		}
+		_ = s.fltRepo.Create(ctx, p)
 	}
 
 	return nil
+}
+
+func (s *FilterService) ClearFilters(ctx context.Context) error {
+	return s.fltRepo.DeleteAll(ctx)
 }
 
 func (s *FilterService) AddFilter(ctx context.Context, pattern string) error {

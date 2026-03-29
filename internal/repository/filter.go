@@ -28,7 +28,7 @@ func (r *FilterRepository) GetActivePatterns(ctx context.Context) ([]string, err
 }
 
 func (r *FilterRepository) Create(ctx context.Context, pattern string) error {
-	_, err := r.db.ExecContext(ctx, "INSERT INTO message_filters (pattern) VALUES (?)", pattern)
+	_, err := r.db.ExecContext(ctx, "INSERT OR IGNORE INTO message_filters (pattern) VALUES (?)", pattern)
 	return err
 }
 
@@ -39,5 +39,10 @@ func (r *FilterRepository) Delete(ctx context.Context, id interface{}) error {
 
 func (r *FilterRepository) Toggle(ctx context.Context, id interface{}) error {
 	_, err := r.db.ExecContext(ctx, "UPDATE message_filters SET is_active = NOT is_active WHERE id = ?", id)
+	return err
+}
+
+func (r *FilterRepository) DeleteAll(ctx context.Context) error {
+	_, err := r.db.ExecContext(ctx, "DELETE FROM message_filters")
 	return err
 }
