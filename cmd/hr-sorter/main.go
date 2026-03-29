@@ -81,7 +81,7 @@ func main() {
 	// Initialize services
 	accService := service.NewAccountService(accRepo, intRepo, manager, hhManager)
 	intService := service.NewIntegrationService(intRepo, manager, hhManager)
-	conService := service.NewContactService(conRepo, fltRepo)
+	conService := service.NewContactService(conRepo, fltRepo, msgRepo, manager, hhManager)
 	seqService := service.NewSequenceService(seqRepo, conRepo, accRepo, conService)
 	fltService := service.NewFilterService(fltRepo)
 	repService := service.NewReportService(seqRepo, accRepo)

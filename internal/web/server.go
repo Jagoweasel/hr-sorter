@@ -7,6 +7,7 @@ import (
 	"hr-sorter/internal/service"
 	"hr-sorter/internal/tgclient"
 	"net/http"
+	"strings"
 )
 
 type Handler struct {
@@ -81,7 +82,17 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/reports/export/pdf-options", h.handleExportPDFOptions)
 	mux.HandleFunc("/reports/export/pdf", h.handleExportPDF)
 	mux.HandleFunc("/contacts", h.handleContacts)
-	mux.HandleFunc("/messages/", h.handleMessages)
+	mux.HandleFunc("/messages/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/send") {
+			h.handleSendMessage(w, r)
+			return
+		}
+		if strings.Contains(r.URL.Path, "/list/") {
+			h.handleMessageList(w, r)
+			return
+		}
+		h.handleMessages(w, r)
+	})
 	mux.HandleFunc("/accounts", h.handleAccounts)
 	mux.HandleFunc("/accounts/create", h.handleCreateAccount)
 	mux.HandleFunc("/accounts/toggle", h.handleToggleAccount)

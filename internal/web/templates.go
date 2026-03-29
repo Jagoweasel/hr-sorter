@@ -81,7 +81,18 @@ func NewTemplateManager() (*TemplateManager, error) {
 
 	layoutPath := filepath.Join("templates", "layout.html")
 
-	err := filepath.Walk("templates", func(path string, info os.FileInfo, err error) error {
+	// First, parse all fragments into a common pool
+	fragments, err := filepath.Glob("templates/fragments/*.html")
+	if err != nil {
+		return nil, err
+	}
+	modalFragments, err := filepath.Glob("templates/fragments/modals/*.html")
+	if err != nil {
+		return nil, err
+	}
+	allFragments := append(fragments, modalFragments...)
+
+	err = filepath.Walk("templates", func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -104,11 +115,13 @@ func NewTemplateManager() (*TemplateManager, error) {
 
 		var t *template.Template
 		if !strings.Contains(key, "/") && strings.HasSuffix(key, ".html") {
-			// Main page: Parse with layout
-			t, err = template.New(fileName).Funcs(funcMap).ParseFiles(layoutPath, path)
+			// Main page: Parse with layout and ALL fragments
+			files := append([]string{layoutPath, path}, allFragments...)
+			t, err = template.New("layout.html").Funcs(funcMap).ParseFiles(files...)
 		} else {
-			// Fragment or JSON: Parse as standalone
-			t, err = template.New(fileName).Funcs(funcMap).ParseFiles(path)
+			// Fragment or JSON: Parse with ALL other fragments so they can include each other
+			files := append([]string{path}, allFragments...)
+			t, err = template.New(fileName).Funcs(funcMap).ParseFiles(files...)
 		}
 
 		if err != nil {

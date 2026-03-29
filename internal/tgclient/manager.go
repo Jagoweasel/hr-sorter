@@ -22,6 +22,7 @@ import (
 
 type Manager struct {
 	clients   map[int64]*telegram.Client
+	apis      map[int64]*tg.Client
 	cancels   map[int64]context.CancelFunc
 	codeChans map[int64]chan string
 	passChans map[int64]chan string
@@ -31,6 +32,7 @@ type Manager struct {
 func NewManager() *Manager {
 	return &Manager{
 		clients:   make(map[int64]*telegram.Client),
+		apis:      make(map[int64]*tg.Client),
 		cancels:   make(map[int64]context.CancelFunc),
 		codeChans: make(map[int64]chan string),
 		passChans: make(map[int64]chan string),
@@ -55,6 +57,7 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 		delete(m.cancels, integration.ID)
 		delete(m.codeChans, integration.ID)
 		delete(m.passChans, integration.ID)
+		delete(m.apis, integration.ID)
 		m.mu.Unlock()
 	}()
 
@@ -69,7 +72,7 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 
 	// Setup Update Dispatcher and Manager
 	dispatcher := tg.NewUpdateDispatcher()
-	api := tg.NewClient(nil) // Will be set after client creation
+	var api *tg.Client
 
 	// Create updates manager for reliable delivery
 	updateManager := updates.New(updates.Config{
@@ -107,6 +110,9 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 	})
 
 	api = tg.NewClient(client)
+	m.mu.Lock()
+	m.apis[integration.ID] = api
+	m.mu.Unlock()
 
 	// Setup Auth Flow
 	codeChan := make(chan string, 1)
@@ -270,6 +276,57 @@ func (a *codeAuthenticator) Code(ctx context.Context, sentCode *tg.AuthSentCode)
 		logger.Debug(logger.Telegram, "[Int ID %d] Code entry timeout (5 min)", a.integrationID)
 		return "", fmt.Errorf("auth timeout")
 	}
+}
+
+func (m *Manager) SendMessage(ctx context.Context, integrationID int64, contactID string, accessHash int64, username string, text string) (int, error) {
+	m.mu.RLock()
+	api, ok := m.apis[integrationID]
+	m.mu.RUnlock()
+	if !ok {
+		return 0, fmt.Errorf("no active API client for integration %d (is it logged in?)", integrationID)
+	}
+
+	// Double check api isn't nil (safety against racing/partial init)
+	if api == nil {
+		return 0, fmt.Errorf("API client for integration %d exists but is not yet initialized", integrationID)
+	}
+
+	// Parse contactID to int64
+	var targetID int64
+	fmt.Sscanf(contactID, "%d", &targetID)
+
+	var peer tg.InputPeerClass
+	if strings.HasPrefix(username, "channel_") {
+		peer = &tg.InputPeerChannel{ChannelID: targetID, AccessHash: accessHash}
+	} else if strings.HasPrefix(username, "chat_") {
+		peer = &tg.InputPeerChat{ChatID: targetID}
+	} else {
+		peer = &tg.InputPeerUser{UserID: targetID, AccessHash: accessHash}
+	}
+
+	res, err := api.MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{
+		Peer:     peer,
+		Message:  text,
+		RandomID: time.Now().UnixNano(),
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	switch u := res.(type) {
+	case *tg.UpdateShortSentMessage:
+		return u.ID, nil
+	case *tg.Updates:
+		for _, upd := range u.Updates {
+			if m, ok := upd.(*tg.UpdateNewMessage); ok {
+				if msg, ok := m.Message.(*tg.Message); ok {
+					return msg.ID, nil
+				}
+			}
+		}
+	}
+
+	return 0, nil
 }
 
 func (m *Manager) StopIntegration(id int64) {
