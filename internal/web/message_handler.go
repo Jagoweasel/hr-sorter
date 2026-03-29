@@ -15,11 +15,15 @@ func (h *Handler) handleMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	contact, _ := h.conRepo.GetByID(r.Context(), id)
+
 	h.templates.RenderWithStatus(w, "fragments/chat_container.html", http.StatusOK, struct {
 		ContactID string
+		Contact   interface{}
 		Messages  interface{}
 	}{
 		ContactID: id,
+		Contact:   contact,
 		Messages:  messages,
 	})
 }

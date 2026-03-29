@@ -1,4 +1,47 @@
 <div id="chat-container" class="col-span-12 lg:col-span-8 bg-white rounded-xl shadow-lg flex flex-col overflow-hidden border border-gray-200">
+    <!-- Chat Header -->
+    <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-white z-10">
+        <div class="flex items-center space-x-3">
+            <div class="relative">
+                <div class="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 font-black text-sm border border-blue-100 uppercase">
+                    {{ if .Contact }}{{ if (deref .Contact.FirstName) }}{{ slice (deref .Contact.FirstName) 0 1 }}{{ else }}?{{ end }}{{ else }}?{{ end }}
+                </div>
+                {{ if .Contact }}
+                <div class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center text-[8px] font-black
+                    {{ if eq .Contact.Platform "tg" }}bg-blue-400 text-white{{ else }}bg-red-500 text-white{{ end }}">
+                    {{ if eq .Contact.Platform "tg" }}T{{ else }}H{{ end }}
+                </div>
+                {{ end }}
+            </div>
+            <div>
+                <h3 class="text-sm font-black text-gray-900 leading-tight">
+                    {{ if .Contact }}
+                        {{ if eq .Contact.Platform "hh" }}{{ deref .Contact.FirstName }}{{ else }}{{ deref .Contact.FirstName }} {{ deref .Contact.LastName }}{{ end }}
+                    {{ else }}
+                        Unknown Contact
+                    {{ end }}
+                </h3>
+                <p class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                    {{ if .Contact }}
+                        {{ if eq .Contact.Platform "hh" }}{{ deref .Contact.LastName }}{{ else }}@{{ deref .Contact.Username }}{{ end }}
+                    {{ else }}
+                        Offline
+                    {{ end }}
+                </p>
+            </div>
+        </div>
+        
+        <button hx-get="/messages/list/{{ .ContactID }}" 
+                hx-target="#message-list-container" 
+                hx-disabled-elt="this"
+                class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all group active:scale-95"
+                title="Force Refresh">
+            <svg class="w-5 h-5 group-disabled:animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+        </button>
+    </div>
+
     <div id="message-list-container" 
          class="flex-1 overflow-y-auto bg-slate-50"
          hx-get="/messages/list/{{ .ContactID }}" 
