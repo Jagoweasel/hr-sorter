@@ -1,0 +1,467 @@
+package hh
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"hr-sorter/internal/domain/dto"
+	"hr-sorter/internal/logger"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/playwright-community/playwright-go"
+)
+
+// Authenticator defines the high-level logic for HeadHunter authorization.
+// It manages multiple authentication flows and handles token acquisition.
+type Authenticator interface {
+	// StartFlow starts a new authentication process for a specific account.
+	// It uses Playwright to navigate the HH login page and perform identification.
+	StartFlow(ctx context.Context, accountID int64, identifier string) (AuthFlow, error)
+
+	// GetFlow retrieves an existing authentication flow by account identifier.
+	GetFlow(accountID int64) (AuthFlow, bool)
+
+	// Close stops playwright and closes the browser.
+	Close() error
+}
+
+// AuthFlow represents an active authentication process.
+// It encapsulates Playwright browser context and session-specific logic.
+type AuthFlow interface {
+	// GetStatus returns the current progress of the authentication.
+	GetStatus() *dto.HHAuthStatus
+
+	// SubmitOTP sends the one-time password (OTP) to the login process.
+	SubmitOTP(code string) error
+
+	// SubmitCaptcha sends the solved captcha text to the login process.
+	SubmitCaptcha(solution string) error
+
+	// Cancel terminates the flow prematurely.
+	Cancel() error
+
+	// Done returns a channel that is closed when the flow is finished (success or failure).
+	Done() <-chan struct{}
+
+	// Result returns the session if the flow completed successfully.
+	Result() (*Session, error)
+}
+
+// Session represents a fully authenticated HH session for an integration.
+type Session struct {
+	AccountID    int64
+	Identifier   string // email or phone
+	AccessToken  string
+	RefreshToken string
+	ExpiresAt    time.Time
+	UserAgent    string
+}
+
+type PlaywrightAuthenticator struct {
+	pw       *playwright.Playwright
+	browser  playwright.Browser
+	flows    map[int64]*PlaywrightAuthFlow
+	mu       sync.RWMutex
+	storage  SessionStorage
+	config   ClientConfig
+	uaGen    UserAgentGenerator
+	headless bool
+}
+
+func NewPlaywrightAuthenticator(storage SessionStorage, config ClientConfig, uaGen UserAgentGenerator, headless bool) (*PlaywrightAuthenticator, error) {
+	pw, err := playwright.Run()
+	if err != nil {
+		return nil, fmt.Errorf("failed to start playwright: %w", err)
+	}
+
+	browser, err := pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
+		Headless: playwright.Bool(headless),
+	})
+	if err != nil {
+		_ = pw.Stop()
+		return nil, fmt.Errorf("failed to launch browser: %w", err)
+	}
+
+	return &PlaywrightAuthenticator{
+		pw:       pw,
+		browser:  browser,
+		flows:    make(map[int64]*PlaywrightAuthFlow),
+		storage:  storage,
+		config:   config,
+		uaGen:    uaGen,
+		headless: headless,
+	}, nil
+}
+
+func (a *PlaywrightAuthenticator) StartFlow(ctx context.Context, accountID int64, identifier string) (AuthFlow, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if flow, ok := a.flows[accountID]; ok {
+		return flow, nil
+	}
+
+	flow := &PlaywrightAuthFlow{
+		accountID:  accountID,
+		identifier: identifier,
+		status:     &dto.HHAuthStatus{State: dto.AuthStateWaitIdentify},
+		done:       make(chan struct{}),
+		otpChan:    make(chan string, 1),
+		capChan:    make(chan string, 1),
+		codeChan:   make(chan string, 1),
+		stopChan:   make(chan struct{}),
+		storage:    a.storage,
+		config:     a.config,
+		userAgent:  a.uaGen.Generate(),
+		browser:    a.browser,
+		pw:         a.pw,
+	}
+
+	a.flows[accountID] = flow
+	go flow.run()
+
+	return flow, nil
+}
+
+func (a *PlaywrightAuthenticator) GetFlow(accountID int64) (AuthFlow, bool) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	flow, ok := a.flows[accountID]
+	return flow, ok
+}
+
+func (a *PlaywrightAuthenticator) Close() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	for _, flow := range a.flows {
+		_ = flow.Cancel()
+	}
+
+	var errs []string
+	if a.browser != nil {
+		if err := a.browser.Close(); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+	if a.pw != nil {
+		if err := a.pw.Stop(); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("errors closing authenticator: %s", strings.Join(errs, "; "))
+	}
+	return nil
+}
+
+type PlaywrightAuthFlow struct {
+	accountID  int64
+	identifier string
+	status     *dto.HHAuthStatus
+	mu         sync.RWMutex
+	done       chan struct{}
+	otpChan    chan string
+	capChan    chan string
+	codeChan   chan string
+	stopChan   chan struct{}
+	storage    SessionStorage
+	config     ClientConfig
+	userAgent  string
+	browser    playwright.Browser
+	pw         *playwright.Playwright
+	session    *Session
+	err        error
+
+	// Playwright objects
+	context playwright.BrowserContext
+	page    playwright.Page
+}
+
+func (f *PlaywrightAuthFlow) GetStatus() *dto.HHAuthStatus {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.status
+}
+
+func (f *PlaywrightAuthFlow) SubmitOTP(code string) error {
+	select {
+	case f.otpChan <- code:
+		return nil
+	case <-f.done:
+		return fmt.Errorf("flow already finished")
+	}
+}
+
+func (f *PlaywrightAuthFlow) SubmitCaptcha(solution string) error {
+	select {
+	case f.capChan <- solution:
+		return nil
+	case <-f.done:
+		return fmt.Errorf("flow already finished")
+	}
+}
+
+func (f *PlaywrightAuthFlow) Cancel() error {
+	select {
+	case <-f.stopChan:
+		return nil
+	default:
+		close(f.stopChan)
+		return nil
+	}
+}
+
+func (f *PlaywrightAuthFlow) Done() <-chan struct{} {
+	return f.done
+}
+
+func (f *PlaywrightAuthFlow) Result() (*Session, error) {
+	<-f.done
+	return f.session, f.err
+}
+
+func (f *PlaywrightAuthFlow) run() {
+	defer close(f.done)
+	defer func() {
+		if f.page != nil {
+			f.page.Close()
+		}
+		if f.context != nil {
+			f.context.Close()
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer cancel()
+
+	var err error
+	// Set up browser context with mobile emulation
+	device := f.pw.Devices["Pixel 7"]
+	f.context, err = f.browser.NewContext(playwright.BrowserNewContextOptions{
+		UserAgent:         playwright.String(device.UserAgent),
+		Viewport:          device.Viewport,
+		DeviceScaleFactor: playwright.Float(device.DeviceScaleFactor),
+		IsMobile:          playwright.Bool(device.IsMobile),
+		HasTouch:          playwright.Bool(device.HasTouch),
+	})
+	if err != nil {
+		f.fail(fmt.Errorf("failed to create context: %w", err))
+		return
+	}
+
+	f.page, err = f.context.NewPage()
+	if err != nil {
+		f.fail(fmt.Errorf("failed to create page: %w", err))
+		return
+	}
+
+	// Request Interception for hhandroid://
+	f.context.OnRequest(func(request playwright.Request) {
+		if strings.HasPrefix(request.URL(), "hhandroid://") {
+			logger.Info(logger.HH, "[HHAuth] Detected redirect: %s", request.URL())
+			u, _ := url.Parse(request.URL())
+			code := u.Query().Get("code")
+			if code != "" {
+				select {
+				case f.codeChan <- code:
+				default:
+				}
+			}
+		}
+	})
+
+	// Get authorize URL (adapted from ExchangeToken logic)
+	authURL := fmt.Sprintf("https://hh.ru/oauth/authorize?response_type=code&client_id=%s&state=skip", f.config.ClientID)
+
+	go func() {
+		_, _ = f.page.Goto(authURL, playwright.PageGotoOptions{
+			WaitUntil: playwright.WaitUntilStateLoad,
+		})
+	}()
+
+	// Identification
+	if err := f.handleIdentify(); err != nil {
+		f.fail(err)
+		return
+	}
+
+	for {
+		select {
+		case <-f.stopChan:
+			f.fail(fmt.Errorf("cancelled by user"))
+			return
+		case <-ctx.Done():
+			f.fail(fmt.Errorf("timeout"))
+			return
+		case code := <-f.codeChan:
+			f.complete(code)
+			return
+		default:
+			state, err := f.detectState()
+			if err != nil {
+				f.fail(err)
+				return
+			}
+
+			switch state {
+			case dto.AuthStateWaitOTP:
+				f.setStatus(dto.AuthStateWaitOTP, "")
+				select {
+				case code := <-f.otpChan:
+					if err := f.page.Fill("input[data-qa='magritte-pincode-input-field']", code); err != nil {
+						_ = f.page.Fill("input[name='code']", code)
+					}
+					_ = f.page.Keyboard().Press("Enter")
+				case <-f.stopChan:
+					return
+				case <-ctx.Done():
+					return
+				}
+			case dto.AuthStateWaitCaptcha:
+				imgElement := f.page.Locator("img[data-qa='account-captcha-picture']")
+				if visible, _ := imgElement.IsVisible(); !visible {
+					imgElement = f.page.Locator("img[src*='captcha']")
+				}
+				screenshot, _ := imgElement.Screenshot()
+				f.mu.Lock()
+				f.status.State = dto.AuthStateWaitCaptcha
+				f.status.CaptchaImg = screenshot
+				f.mu.Unlock()
+
+				select {
+				case solution := <-f.capChan:
+					if err := f.page.Fill("input[data-qa='account-captcha-input']", solution); err != nil {
+						_ = f.page.Fill("input[name='captcha']", solution)
+					}
+					_ = f.page.Keyboard().Press("Enter")
+				case <-f.stopChan:
+					return
+				case <-ctx.Done():
+					return
+				}
+			case dto.AuthStateFailed:
+				// Already handled in detectState
+				return
+			default:
+				time.Sleep(2 * time.Second)
+			}
+		}
+	}
+}
+
+func (f *PlaywrightAuthFlow) handleIdentify() error {
+	f.setStatus(dto.AuthStateWaitIdentify, "")
+
+	// Wait for input
+	_, err := f.page.WaitForSelector("input[data-qa='login-input-username'], input[name='login']", playwright.PageWaitForSelectorOptions{
+		Timeout: playwright.Float(10000),
+	})
+	if err != nil {
+		return fmt.Errorf("login input not found: %w", err)
+	}
+
+	err = f.page.Fill("input[data-qa='login-input-username']", f.identifier)
+	if err != nil {
+		_ = f.page.Fill("input[name='login']", f.identifier)
+	}
+	return f.page.Keyboard().Press("Enter")
+}
+
+func (f *PlaywrightAuthFlow) detectState() (dto.HHAuthState, error) {
+	// Check for errors first
+	if visible, _ := f.page.Locator("div.bloko-notification--error, div[data-qa='login-error']").IsVisible(); visible {
+		msg, _ := f.page.Locator("div.bloko-notification--error, div[data-qa='login-error']").InnerText()
+		return dto.AuthStateFailed, fmt.Errorf("HH error: %s", msg)
+	}
+
+	if visible, _ := f.page.Locator("input[data-qa='magritte-pincode-input-field'], input[name='code']").IsVisible(); visible {
+		return dto.AuthStateWaitOTP, nil
+	}
+	if visible, _ := f.page.Locator("img[data-qa='account-captcha-picture'], img[src*='captcha']").IsVisible(); visible {
+		return dto.AuthStateWaitCaptcha, nil
+	}
+
+	return dto.AuthStateNone, nil
+}
+
+func (f *PlaywrightAuthFlow) fail(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.err = err
+	f.status.State = dto.AuthStateFailed
+	f.status.ErrorMessage = err.Error()
+	logger.Error(logger.HH, "Auth flow failed for %d: %v", f.accountID, err)
+}
+
+func (f *PlaywrightAuthFlow) setStatus(state dto.HHAuthState, msg string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.status.State = state
+	f.status.ErrorMessage = msg
+}
+
+func (f *PlaywrightAuthFlow) complete(code string) {
+	f.setStatus(dto.AuthStateWaitRedirect, "Exchanging token...")
+
+	// Exchange token using the common logic (I'll implement it in client.go or similar)
+	tr, err := f.exchangeToken(code)
+	if err != nil {
+		f.fail(err)
+		return
+	}
+
+	f.session = &Session{
+		AccountID:    f.accountID,
+		Identifier:   f.identifier,
+		AccessToken:  tr.AccessToken,
+		RefreshToken: tr.RefreshToken,
+		ExpiresAt:    time.Now().Add(time.Duration(tr.ExpiresIn) * time.Second),
+		UserAgent:    f.userAgent,
+	}
+
+	if err := f.storage.Save(context.Background(), f.session); err != nil {
+		f.fail(fmt.Errorf("failed to save session: %w", err))
+		return
+	}
+
+	f.setStatus(dto.AuthStateCompleted, "")
+}
+
+func (f *PlaywrightAuthFlow) exchangeToken(code string) (*TokenResponse, error) {
+	data := url.Values{}
+	data.Set("grant_type", "authorization_code")
+	data.Set("code", code)
+	data.Set("client_id", f.config.ClientID)
+	data.Set("client_secret", f.config.ClientSecret)
+
+	req, err := http.NewRequest("POST", "https://hh.ru/oauth/token", strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", f.userAgent)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("token exchange failed (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var tr TokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&tr); err != nil {
+		return nil, err
+	}
+	return &tr, nil
+}
