@@ -240,7 +240,12 @@ func (s *HHAuthService) detectState(ctx context.Context) (dto.HHAuthState, error
 		Timeout: playwright.Float(5000),
 	})
 	if err != nil {
-		return dto.AuthStateNone, nil
+		// If it's a timeout, it just means none of the selectors appeared yet
+		if strings.Contains(err.Error(), "timeout") {
+			return dto.AuthStateNone, nil
+		}
+		// For other errors, we should fail the flow
+		return dto.AuthStateNone, fmt.Errorf("wait for selector failed: %w", err)
 	}
 
 	if visible, _ := s.sessionPage.Locator("input[name='code']").IsVisible(); visible {
@@ -319,7 +324,9 @@ func (s *HHAuthService) complete(code string, userAgent string) {
 		CreatedAt:    now,
 	}
 
-	err = s.repo.SaveIntegration(context.Background(), integration)
+	dbCtx, dbCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer dbCancel()
+	err = s.repo.SaveIntegration(dbCtx, integration)
 	if err != nil {
 		s.fail(err)
 		return
