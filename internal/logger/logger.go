@@ -31,8 +31,16 @@ func IsEnabled(cat Category) bool {
 
 func Debug(cat Category, format string, v ...interface{}) {
 	if enabledCategories[cat] {
-		log.Printf("[%s] %s", strings.ToUpper(string(cat)), fmt.Sprintf(format, v...))
+		log.Printf("[DEBUG][%s] %s", strings.ToUpper(string(cat)), fmt.Sprintf(format, v...))
 	}
+}
+
+func Info(cat Category, format string, v ...interface{}) {
+	log.Printf("[INFO][%s] %s", strings.ToUpper(string(cat)), fmt.Sprintf(format, v...))
+}
+
+func Error(cat Category, format string, v ...interface{}) {
+	log.Printf("[ERROR][%s] %s", strings.ToUpper(string(cat)), fmt.Sprintf(format, v...))
 }
 
 // LogChain outputs a visual representation of the sequence history

@@ -32,18 +32,22 @@ func main() {
 	}
 
 	// 3. Initialize HeadHunter Service (Playwright)
-	hhService := hhclient.NewHHAuthService()
+	hhService := hhclient.NewHHAuthService(repo)
+	_ = hhService // To be used by API handlers
 
 	// 4. Initialize Reporting Engine (maroto/v2)
 	reporter := report.NewPDFReportService()
+	_ = reporter
 
 	// 5. Initialize Vacancy Mapping
 	rules, _ := repo.GetMappingRules(ctx)
 	mapper := mapping.NewRegexMapper()
 	mapper.UpdateRules(ctx, rules)
+	_ = mapper
 
 	// 6. Initialize Log Streaming (zap broadcaster)
 	logBroadcaster := streaming.NewLogBroadcaster()
+	_ = logBroadcaster
 	// Use logBroadcaster as a zap.WriteSyncer or as an io.Writer
 
 	// 7. Start API/Web Server (Echo/Gin)
