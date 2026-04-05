@@ -78,10 +78,34 @@ func (r *SequenceRepository) GetAllFullDetails(ctx context.Context, accountID st
 		return nil, err
 	}
 
+	if len(sequences) == 0 {
+		return nil, nil
+	}
+
+	sequenceIDs := make([]int64, len(sequences))
+	for i, s := range sequences {
+		sequenceIDs[i] = s.ID
+	}
+
+	recruitersMap, err := r.GetRecruitersBatch(ctx, sequenceIDs)
+	if err != nil {
+		return nil, err
+	}
+	stagesMap, err := r.GetStagesBatch(ctx, sequenceIDs)
+	if err != nil {
+		return nil, err
+	}
+
 	var detailed []SequenceWithDetails
 	for _, s := range sequences {
-		recruiters, _ := r.GetRecruiters(ctx, s.ID)
-		stages, _ := r.GetStages(ctx, s.ID)
+		recruiters := recruitersMap[s.ID]
+		if recruiters == nil {
+			recruiters = []models.Contact{}
+		}
+		stages := stagesMap[s.ID]
+		if stages == nil {
+			stages = []models.InterviewStage{}
+		}
 
 		var history []models.InterviewStage
 		for _, st := range stages {

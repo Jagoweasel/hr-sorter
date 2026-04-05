@@ -1,8 +1,8 @@
 <div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[110] overflow-y-auto p-4" id="modal" onclick="if(event.target === this) htmx.remove('#modal')">
-    <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-lg my-auto relative" onclick="event.stopPropagation()">
-        <div class="flex justify-between items-center mb-6 border-b pb-4">
-            <h2 class="text-2xl font-black text-gray-900 tracking-tight">New Sequence</h2>
-            <button onclick="htmx.remove('#modal')" class="text-gray-400 hover:text-gray-600">
+    <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 w-full max-w-lg my-auto relative" onclick="event.stopPropagation()">
+        <div class="flex justify-between items-center mb-6 border-b dark:border-gray-700 pb-4">
+            <h2 class="text-2xl font-black text-gray-900 dark:text-white tracking-tight">{{ Tr "new_sequence" }}</h2>
+            <button onclick="htmx.remove('#modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
@@ -11,22 +11,22 @@
             <div class="space-y-6">
                 <div class="grid grid-cols-2 gap-6">
                     <div>
-                        <label class="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Company</label>
-                        <input type="text" name="company_name" value="{{ .CompanyName }}" required class="block w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 focus:ring-0 transition-colors text-sm font-bold bg-gray-50" placeholder="Google">
+                        <label class="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-2">{{ Tr "company" }}</label>
+                        <input type="text" name="company_name" value="{{ .CompanyName }}" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 focus:border-blue-500 focus:ring-0 transition-colors text-sm font-bold bg-gray-50 dark:bg-gray-700 dark:text-white" placeholder="Google">
                     </div>
                     <div>
-                        <label class="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Vacancy</label>
-                        <input type="text" name="vacancy_name" value="{{ .VacancyName }}" required class="block w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 focus:ring-0 transition-colors text-sm font-bold bg-gray-50" placeholder="Senior Go Dev">
+                        <label class="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-2">{{ Tr "vacancy" }}</label>
+                        <input type="text" name="vacancy_name" value="{{ .VacancyName }}" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 focus:border-blue-500 focus:ring-0 transition-colors text-sm font-bold bg-gray-50 dark:bg-gray-700 dark:text-white" placeholder="Senior Go Dev">
                     </div>
                 </div>
                 <div>
-                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Initial Contact Date</label>
-                    <input type="datetime-local" name="initial_date" value="{{ .FirstMsgDate }}" class="block w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 focus:ring-0 text-sm font-bold bg-gray-50">
+                    <label class="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-2">{{ Tr "initial_contact_date" }}</label>
+                    <input type="datetime-local" name="initial_date" value="{{ .FirstMsgDate }}" class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 focus:border-blue-500 focus:ring-0 text-sm font-bold bg-gray-50 dark:bg-gray-700 dark:text-white">
                 </div>
             </div>
             <div class="mt-10 flex justify-end space-x-4">
-                <button type="button" onclick="htmx.remove('#modal')" class="px-6 py-3 text-gray-400 hover:text-gray-600 text-xs font-black uppercase tracking-widest">Cancel</button>
-                <button type="submit" class="px-8 py-3 bg-gray-900 text-white rounded-xl hover:bg-black font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:-translate-y-0.5 transition-all">Create</button>
+                <button type="button" onclick="htmx.remove('#modal')" class="px-6 py-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs font-black uppercase tracking-widest">{{ Tr "cancel" }}</button>
+                <button type="submit" class="px-8 py-3 bg-gray-900 dark:bg-gray-700 text-white rounded-xl hover:bg-black dark:hover:bg-gray-600 font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:-translate-y-0.5 transition-all">{{ Tr "create" }}</button>
             </div>
         </form>
     </div>

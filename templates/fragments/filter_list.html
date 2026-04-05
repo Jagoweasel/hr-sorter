@@ -1,21 +1,21 @@
 <div class="space-y-3">
     {{ if . }}
         {{ range . }}
-        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100 group">
+        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-700 group">
             <div class="flex items-center space-x-3">
                 <button hx-post="/filters/toggle?id={{ .ID }}" 
-                        class="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest {{ if .IsActive }}bg-green-100 text-green-700{{ else }}bg-gray-100 text-gray-500{{ end }}">
-                    {{ if .IsActive }}Active{{ else }}Off{{ end }}
+                        class="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest {{ if .IsActive }}bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400{{ else }}bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400{{ end }}">
+                    {{ if .IsActive }}{{ Tr "active" }}{{ else }}{{ Tr "off" }}{{ end }}
                 </button>
-                <span class="text-sm font-bold text-gray-700">{{ .Pattern }}</span>
+                <span class="text-sm font-bold text-gray-700 dark:text-gray-300">{{ .Pattern }}</span>
             </div>
-            <button hx-post="/filters/delete?id={{ .ID }}" hx-confirm="Delete pattern?" 
-                    class="opacity-0 group-hover:opacity-100 p-1 text-red-400 hover:bg-red-50 rounded-lg transition-all">
+            <button hx-post="/filters/delete?id={{ .ID }}" hx-confirm="{{ Tr "delete_pattern_confirm" }}" 
+                    class="opacity-0 group-hover:opacity-100 p-1 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-all">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
             </button>
         </div>
         {{ end }}
     {{ else }}
-        <p class="text-center text-gray-400 italic text-sm py-4">No filters defined yet</p>
+        <p class="text-center text-gray-400 dark:text-gray-500 italic text-sm py-4">{{ Tr "no_filters_defined" }}</p>
     {{ end }}
 </div>

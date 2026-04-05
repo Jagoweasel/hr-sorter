@@ -4,23 +4,27 @@
         <h2 class="text-2xl font-bold text-gray-800 dark:text-white">{{ Tr "system_logs" }}</h2>
         <div class="flex space-x-2">
             <button onclick="clearLogs()" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded text-sm transition-colors">
-                Clear
+                {{ Tr "clear" }}
             </button>
             <div id="connection-status" class="flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
                 <span class="w-2 h-2 rounded-full bg-yellow-500 mr-2"></span>
-                Connecting...
+                {{ Tr "connecting" }}
             </div>
         </div>
     </div>
 
     <div class="bg-black text-green-400 p-4 rounded-lg shadow-inner font-mono text-sm h-[600px] overflow-y-auto" id="log-container">
-        <div class="opacity-50 italic">Waiting for logs...</div>
+        <div class="opacity-50 italic">{{ Tr "waiting_for_logs" }}</div>
     </div>
 </div>
 
 <script>
     const logContainer = document.getElementById('log-container');
     const statusEl = document.getElementById('connection-status');
+    const translations = {
+        live: '{{ Tr "live" }}',
+        disconnected: '{{ Tr "disconnected" }}'
+    };
     let eventSource;
 
     function connect() {
@@ -29,13 +33,13 @@
         eventSource = new EventSource('/logs/stream');
         
         eventSource.onopen = () => {
-            statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>Live';
+            statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>${translations.live}`;
             statusEl.className = 'flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
         };
 
         eventSource.onerror = (e) => {
             console.error('SSE error:', e);
-            statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500 mr-2"></span>Disconnected';
+            statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 mr-2"></span>${translations.disconnected}`;
             statusEl.className = 'flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
             setTimeout(connect, 3000);
         };

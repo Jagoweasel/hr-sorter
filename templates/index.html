@@ -61,7 +61,7 @@
                         <option value="true">{{ Tr "hide_filtered" }}</option>
                         <option value="false">{{ Tr "show_all" }}</option>
                     </select>
-                    <button onclick="openFilterModal()" class="p-2 bg-gray-50 hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 border-2 border-gray-100 dark:border-gray-600 rounded-lg transition-colors text-gray-500" title="Manage Filters">
+                    <button onclick="openFilterModal()" class="p-2 bg-gray-50 hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 border-2 border-gray-100 dark:border-gray-600 rounded-lg transition-colors text-gray-500" title="{{ Tr "manage_filters" }}">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
                     </button>
                 </div>
@@ -109,7 +109,7 @@
             <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-colors shadow-lg shadow-blue-100 flex items-center space-x-2"
                     hx-post="/sequences/bulk-add"
                     hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened'], [name='hide_unanswered'], [name='sequence_filter']"
-                    hx-confirm="Add all visible unfiltered contacts to pipeline?"
+                    hx-confirm="{{ Tr "bulk_add_confirm" }}"
                     hx-swap="none">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
                 <span>{{ Tr "bulk_add" }}</span>
@@ -135,7 +135,7 @@
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <p class="italic text-sm">Scanning recruiters...</p>
+                    <p class="italic text-sm">{{ Tr "scanning_recruiters" }}</p>
                 </div>
             </div>
         </div>
@@ -150,7 +150,7 @@
                         </svg>
                     </div>
                     <div class="text-center">
-                        <p class="font-medium text-gray-500">Select contact</p>
+                        <p class="font-medium text-gray-500">{{ Tr "select_contact" }}</p>
                     </div>
                 </div>
             </div>
@@ -163,19 +163,19 @@
 <div id="filter-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-[300]" onclick="if(event.target === this) closeFilterModal()">
     <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-lg relative" onclick="event.stopPropagation()">
         <div class="flex justify-between items-center mb-6">
-            <h2 class="text-xl font-black text-gray-900 tracking-tight">Message Filters (HH)</h2>
+            <h2 class="text-xl font-black text-gray-900 tracking-tight">{{ Tr "message_filters_hh" }}</h2>
             <button onclick="closeFilterModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
 
         <p class="text-xs text-gray-500 mb-6 bg-blue-50 p-3 rounded-xl border border-blue-100">
-            Contacts whose <span class="font-bold">last message</span> contains any of these phrases will be hidden when "Hide Filtered" is active.
+            {{ Tr "filters_description" }}
         </p>
 
         <form hx-post="/filters/add" class="mb-6 flex space-x-2">
-            <input type="text" name="pattern" placeholder="e.g. we will call you" required class="flex-1 border-2 border-gray-100 rounded-xl px-4 py-2 text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none transition-colors">
-            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200">Add</button>
+            <input type="text" name="pattern" placeholder="{{ Tr "message_filters_placeholder" }}" required class="flex-1 border-2 border-gray-100 rounded-xl px-4 py-2 text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none transition-colors">
+            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200">{{ Tr "add" }}</button>
         </form>
 
         <div id="filter-list-content" hx-get="/filters" hx-trigger="load, refreshFilters from:body" class="max-h-96 overflow-y-auto pr-2 mb-6">
@@ -187,17 +187,17 @@
                 <button hx-post="/filters/import" 
                         hx-swap="none"
                         class="text-[10px] font-black text-gray-400 uppercase hover:text-blue-600 transition-colors flex items-center space-x-2"
-                        onclick="this.innerText = 'Imported!'; setTimeout(() => this.innerText = 'Import from filters.json', 2000)">
+                        onclick="this.innerText = '{{ Tr "imported_hint" }}'; setTimeout(() => this.innerText = '{{ Tr "import_from_json" }}', 2000)">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                    <span>Import from filters.json</span>
+                    <span>{{ Tr "import_from_json" }}</span>
                 </button>
 
                 <button hx-post="/filters/export" 
                         hx-swap="none"
                         class="text-[10px] font-black text-gray-400 uppercase hover:text-blue-600 transition-colors flex items-center space-x-2"
-                        onclick="this.innerText = 'Exported!'; setTimeout(() => this.innerText = 'Export to filters.json', 2000)">
+                        onclick="this.innerText = '{{ Tr "exported_hint" }}'; setTimeout(() => this.innerText = '{{ Tr "export_to_json" }}', 2000)">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                    <span>Export to filters.json</span>
+                    <span>{{ Tr "export_to_json" }}</span>
                 </button>
             </div>
 
@@ -207,17 +207,17 @@
                     <button type="button" onclick="document.getElementById('filter-upload-input').click()"
                             class="text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 transition-colors flex items-center space-x-2">
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                        <span class="htmx-indicator-hide">Upload JSON</span>
-                        <span class="htmx-indicator">Processing...</span>
+                        <span class="htmx-indicator-hide">{{ Tr "upload_json" }}</span>
+                        <span class="htmx-indicator">{{ Tr "processing" }}</span>
                     </button>
                 </form>
 
                 <button hx-post="/filters/clear" 
-                        hx-confirm="Are you sure you want to delete ALL filter patterns?"
+                        hx-confirm="{{ Tr "clear_all_confirm" }}"
                         hx-swap="none"
                         class="text-[10px] font-black text-red-400 uppercase hover:text-red-600 transition-colors flex items-center space-x-2">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                    <span>Clear All</span>
+                    <span>{{ Tr "clear_all" }}</span>
                 </button>
             </div>
             
