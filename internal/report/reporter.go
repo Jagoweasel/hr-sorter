@@ -40,19 +40,16 @@ func (r *reporter) GeneratePDF(ctx context.Context, data *models.ReportData) ([]
 		WithTitle("HR-SORTER Report", true).
 		WithAuthor("HR-SORTER", true)
 
-	// Attempt to load custom fonts from embed or system
 	if len(regular) > 0 && len(bold) > 0 {
 		builder.WithCustomFonts([]*entity.CustomFont{
 			{Family: "Inter", Style: fontstyle.Normal, Bytes: regular},
 			{Family: "Inter", Style: fontstyle.Bold, Bytes: bold},
 		}).WithDefaultFont(&props.Font{Family: "Inter"})
 	} else {
-		// Fallback to system fonts for Cyrillic support if embed fonts are missing/empty
 		systemFont := ""
 		if runtime.GOOS == "windows" {
 			systemFont = os.Getenv("WINDIR") + "\\Fonts\\arial.ttf"
 		} else {
-			// Common Linux path
 			systemFont = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 		}
 
@@ -66,22 +63,17 @@ func (r *reporter) GeneratePDF(ctx context.Context, data *models.ReportData) ([]
 	}
 
 	cfg := builder.Build()
-
 	m := maroto.New(cfg)
 
-	// Header
-	r.buildHeader(m, data)
+	// Global Section
+	r.buildSection(m, data.AccountName, data.KPI, data.Funnel, data.Sequences, true)
 
-	// KPI Summary
-	r.buildKPI(m, data)
+	// Additional Sections per Account
+	for _, section := range data.Sections {
+		r.buildSection(m, section.AccountName, section.KPI, section.Funnel, section.Sequences, false)
+	}
 
-	// Funnel
-	r.buildFunnel(m, data)
-
-	// Sequences Table
-	r.buildTable(m, data)
-
-	// Footer (automatic via Page Numbering)
+	// Footer
 	m.RegisterFooter(
 		row.New(10).Add(
 			col.New(12).Add(
@@ -93,7 +85,6 @@ func (r *reporter) GeneratePDF(ctx context.Context, data *models.ReportData) ([]
 		),
 	)
 
-	// Generate
 	doc, err := m.Generate()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate PDF: %w", err)
@@ -102,85 +93,72 @@ func (r *reporter) GeneratePDF(ctx context.Context, data *models.ReportData) ([]
 	return doc.GetBytes(), nil
 }
 
-func (r *reporter) buildHeader(m core.Maroto, data *models.ReportData) {
+func (r *reporter) buildSection(m core.Maroto, title string, kpi models.ReportKPI, funnel models.Funnel, sequences []models.Sequence, isGlobal bool) {
+	// Header
+	headerSize := 14.0
+	if isGlobal {
+		headerSize = 18.0
+	}
+
 	m.AddRow(20,
-		col.New(4).Add(
-			text.New("HR-SORTER", props.Text{
-				Size:  16,
+		col.New(8).Add(
+			text.New(title, props.Text{
+				Size:  headerSize,
 				Style: fontstyle.Bold,
 				Align: align.Left,
 			}),
 		),
 		col.New(4).Add(
-			text.New(fmt.Sprintf("Account: %s", data.AccountName), props.Text{
+			text.New("HR-SORTER", props.Text{
 				Size:  10,
-				Align: align.Center,
-			}),
-		),
-		col.New(4).Add(
-			text.New(fmt.Sprintf("Date: %s", data.ReportDate.Format("02.01.2006")), props.Text{
-				Size:  10,
+				Style: fontstyle.Bold,
 				Align: align.Right,
 			}),
 		),
 	)
 	m.AddRow(5, col.New(12).Add(line.New(props.Line{Thickness: 0.5})))
-}
 
-func (r *reporter) buildKPI(m core.Maroto, data *models.ReportData) {
+	// KPI Summary
 	m.AddRow(10)
-	m.AddRow(10, col.New(12).Add(text.New("KPI Summary", props.Text{Size: 14, Style: fontstyle.Bold})))
+	m.AddRow(10, col.New(12).Add(text.New("KPI Summary", props.Text{Size: 12, Style: fontstyle.Bold})))
 	m.AddRow(15,
-		col.New(4).Add(
-			text.New(fmt.Sprintf("Total Sequences: %d", data.KPI.TotalSequences), props.Text{Size: 10}),
-		),
-		col.New(4).Add(
-			text.New(fmt.Sprintf("Response Rate: %.1f%%", data.KPI.ResponseRate), props.Text{Size: 10}),
-		),
-		col.New(4).Add(
-			text.New(fmt.Sprintf("Hire Rate: %.1f%%", data.KPI.HireRate), props.Text{Size: 10}),
-		),
+		col.New(3).Add(text.New(fmt.Sprintf("Applied: %d", kpi.TotalApplied), props.Text{Size: 9})),
+		col.New(3).Add(text.New(fmt.Sprintf("Sequences: %d", kpi.TotalSequences), props.Text{Size: 9})),
+		col.New(3).Add(text.New(fmt.Sprintf("Response Rate: %.1f%%", kpi.ResponseRate), props.Text{Size: 9})),
+		col.New(3).Add(text.New(fmt.Sprintf("Hire Rate: %.1f%%", kpi.HireRate), props.Text{Size: 9})),
 	)
-}
 
-func (r *reporter) buildFunnel(m core.Maroto, data *models.ReportData) {
-	m.AddRow(10)
-	m.AddRow(10, col.New(12).Add(text.New("Recruitment Funnel", props.Text{Size: 14, Style: fontstyle.Bold})))
-
+	// Funnel
+	m.AddRow(10, col.New(12).Add(text.New("Recruitment Funnel", props.Text{Size: 12, Style: fontstyle.Bold})))
 	m.AddRow(15,
-		col.New(2).Add(text.New(fmt.Sprintf("Initial: %d", data.Funnel.Initial), props.Text{Size: 9, Align: align.Center})),
-		col.New(1).Add(text.New("->", props.Text{Size: 9, Align: align.Center})),
-		col.New(2).Add(text.New(fmt.Sprintf("Screening: %d", data.Funnel.Screening), props.Text{Size: 9, Align: align.Center})),
-		col.New(1).Add(text.New("->", props.Text{Size: 9, Align: align.Center})),
-		col.New(2).Add(text.New(fmt.Sprintf("Tech: %d", data.Funnel.Tech), props.Text{Size: 9, Align: align.Center})),
-		col.New(1).Add(text.New("->", props.Text{Size: 9, Align: align.Center})),
-		col.New(3).Add(text.New(fmt.Sprintf("Offer: %d (Acc: %d)", data.Funnel.Offer, data.Funnel.Accepted), props.Text{Size: 9, Align: align.Center})),
+		col.New(2).Add(text.New(fmt.Sprintf("App: %d", funnel.Applied), props.Text{Size: 8, Align: align.Center})),
+		col.New(2).Add(text.New(fmt.Sprintf("Init: %d", funnel.Initial), props.Text{Size: 8, Align: align.Center})),
+		col.New(2).Add(text.New(fmt.Sprintf("Scr: %d", funnel.Screening), props.Text{Size: 8, Align: align.Center})),
+		col.New(2).Add(text.New(fmt.Sprintf("Tech: %d", funnel.Tech), props.Text{Size: 8, Align: align.Center})),
+		col.New(2).Add(text.New(fmt.Sprintf("Off: %d", funnel.Offer), props.Text{Size: 8, Align: align.Center})),
+		col.New(2).Add(text.New(fmt.Sprintf("Acc: %d", funnel.Accepted), props.Text{Size: 8, Align: align.Center})),
 	)
-}
 
-func (r *reporter) buildTable(m core.Maroto, data *models.ReportData) {
-	m.AddRow(10)
-	m.AddRow(10, col.New(12).Add(text.New("Detailed Sequences", props.Text{Size: 14, Style: fontstyle.Bold})))
-
-	// Table Header
+	// Sequences Table
+	m.AddRow(10, col.New(12).Add(text.New("Details", props.Text{Size: 12, Style: fontstyle.Bold})))
 	m.AddRow(10,
-		col.New(3).Add(text.New("Company", props.Text{Style: fontstyle.Bold, Size: 10})),
-		col.New(4).Add(text.New("Vacancy", props.Text{Style: fontstyle.Bold, Size: 10})),
-		col.New(2).Add(text.New("Category", props.Text{Style: fontstyle.Bold, Size: 10})),
-		col.New(3).Add(text.New("Status", props.Text{Style: fontstyle.Bold, Size: 10})),
+		col.New(3).Add(text.New("Company", props.Text{Style: fontstyle.Bold, Size: 9})),
+		col.New(4).Add(text.New("Vacancy", props.Text{Style: fontstyle.Bold, Size: 9})),
+		col.New(2).Add(text.New("Category", props.Text{Style: fontstyle.Bold, Size: 9})),
+		col.New(3).Add(text.New("Status", props.Text{Style: fontstyle.Bold, Size: 9})),
 	)
 	m.AddRow(2, col.New(12).Add(line.New(props.Line{Thickness: 0.2})))
 
-	for _, seq := range data.Sequences {
+	for _, seq := range sequences {
 		category := "N/A"
 		if seq.Category != nil {
 			category = *seq.Category
 		}
 		m.AddRow(8,
-			col.New(3).Add(text.New(seq.CompanyName, props.Text{Size: 9})),
-			col.New(4).Add(text.New(seq.VacancyName, props.Text{Size: 9})),
-			col.New(2).Add(text.New(category, props.Text{Size: 9})),
-			col.New(3).Add(text.New(seq.Status, props.Text{Size: 9})),
+			col.New(3).Add(text.New(seq.CompanyName, props.Text{Size: 8})),
+			col.New(4).Add(text.New(seq.VacancyName, props.Text{Size: 8})),
+			col.New(2).Add(text.New(category, props.Text{Size: 8})),
+			col.New(3).Add(text.New(seq.Status, props.Text{Size: 8})),
 		)
 	}
 }

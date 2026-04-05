@@ -66,20 +66,30 @@ type Sequence struct {
 }
 
 type ReportData struct {
+	AccountName string          `json:"account_name"`
+	ReportDate  time.Time       `json:"report_date"`
+	KPI         ReportKPI       `json:"kpi"`
+	Funnel      Funnel          `json:"funnel"`
+	Sequences   []Sequence      `json:"sequences"`
+	Sections    []ReportSection `json:"sections,omitempty"`
+}
+
+type ReportSection struct {
 	AccountName string     `json:"account_name"`
-	ReportDate  time.Time  `json:"report_date"`
 	KPI         ReportKPI  `json:"kpi"`
 	Funnel      Funnel     `json:"funnel"`
 	Sequences   []Sequence `json:"sequences"`
 }
 
 type ReportKPI struct {
+	TotalApplied   int     `json:"total_applied"`
 	TotalSequences int     `json:"total_sequences"`
 	ResponseRate   float64 `json:"response_rate"`
 	HireRate       float64 `json:"hire_rate"`
 }
 
 type Funnel struct {
+	Applied   int `json:"applied"`
 	Initial   int `json:"initial"`
 	Screening int `json:"screening"`
 	Tech      int `json:"tech"`

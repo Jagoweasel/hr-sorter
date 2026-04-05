@@ -38,7 +38,7 @@ func TestGETEndpoints(t *testing.T) {
 	conService := service.NewContactService(conRepo, fltRepo, msgRepo, nil, nil)
 	seqService := service.NewSequenceService(seqRepo, conRepo, accRepo, conService)
 	fltService := service.NewFilterService(fltRepo)
-	repService := service.NewReportService(seqRepo, accRepo)
+	repService := service.NewReportService(seqRepo, accRepo, mapRepo)
 
 	// 4. Setup I18n & Templates
 	ls, err := i18n.NewLocalizationService()

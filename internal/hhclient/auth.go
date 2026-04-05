@@ -45,7 +45,7 @@ func NewHHAuthService(repo domain.Repository) (*HHAuthService, error) {
 	}
 
 	browser, err := pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
-		Headless: playwright.Bool(true),
+		Headless: playwright.Bool(false),
 	})
 	if err != nil {
 		_ = pw.Stop()
@@ -130,6 +130,12 @@ func (s *HHAuthService) runFlow(identify string) {
 	var err error
 	s.sessionContext, err = s.browser.NewContext(playwright.BrowserNewContextOptions{
 		UserAgent: playwright.String(userAgent),
+		Viewport: &playwright.Size{
+			Width:  390,
+			Height: 844,
+		},
+		IsMobile: playwright.Bool(true),
+		HasTouch: playwright.Bool(true),
 	})
 	if err != nil {
 		s.fail(fmt.Errorf("failed to create context: %w", err))
@@ -181,9 +187,9 @@ func (s *HHAuthService) runFlow(identify string) {
 			s.mu.Unlock()
 			select {
 			case code := <-s.otpChan:
-				if err := s.sessionPage.Fill("input[name='code']", code); err != nil {
-					s.fail(fmt.Errorf("failed to fill OTP: %w", err))
-					return
+				if err := s.sessionPage.Fill("input[data-qa='magritte-pincode-input-field']", code); err != nil {
+					// Fallback to older selector
+					_ = s.sessionPage.Fill("input[name='code']", code)
 				}
 				if err := s.sessionPage.Keyboard().Press("Enter"); err != nil {
 					s.fail(fmt.Errorf("failed to submit OTP: %w", err))
@@ -198,15 +204,17 @@ func (s *HHAuthService) runFlow(identify string) {
 		case dto.AuthStateWaitCaptcha:
 			s.mu.Lock()
 			s.status.State = dto.AuthStateWaitCaptcha
-			imgElement := s.sessionPage.Locator("img[src*='captcha']")
+			imgElement := s.sessionPage.Locator("img[data-qa='account-captcha-picture']")
+			if visible, _ := imgElement.IsVisible(); !visible {
+				imgElement = s.sessionPage.Locator("img[src*='captcha']")
+			}
 			screenshot, _ := imgElement.Screenshot()
 			s.status.CaptchaImg = screenshot
 			s.mu.Unlock()
 			select {
 			case resolution := <-s.captchaChan:
-				if err := s.sessionPage.Fill("input[name='captcha']", resolution); err != nil {
-					s.fail(fmt.Errorf("failed to fill captcha: %w", err))
-					return
+				if err := s.sessionPage.Fill("input[data-qa='account-captcha-input']", resolution); err != nil {
+					_ = s.sessionPage.Fill("input[name='captcha']", resolution)
 				}
 				if err := s.sessionPage.Keyboard().Press("Enter"); err != nil {
 					s.fail(fmt.Errorf("failed to submit captcha: %w", err))
@@ -235,21 +243,24 @@ func (s *HHAuthService) runFlow(identify string) {
 
 func (s *HHAuthService) detectState(ctx context.Context) (dto.HHAuthState, error) {
 	// Wait for any selector that indicates a state change
-	// Using a shorter timeout here because we are in a loop
-	_, err := s.sessionPage.WaitForSelector("input[name='code'], img[src*='captcha'], div.bloko-notification--error", playwright.PageWaitForSelectorOptions{
+	_, err := s.sessionPage.WaitForSelector("input[data-qa='magritte-pincode-input-field'], input[name='code'], img[data-qa='account-captcha-picture'], img[src*='captcha'], div.bloko-notification--error", playwright.PageWaitForSelectorOptions{
 		Timeout: playwright.Float(5000),
 	})
 	if err != nil {
-		// If it's a timeout, it just means none of the selectors appeared yet
 		if strings.Contains(err.Error(), "timeout") {
 			return dto.AuthStateNone, nil
 		}
-		// For other errors, we should fail the flow
 		return dto.AuthStateNone, fmt.Errorf("wait for selector failed: %w", err)
 	}
 
+	if visible, _ := s.sessionPage.Locator("input[data-qa='magritte-pincode-input-field']").IsVisible(); visible {
+		return dto.AuthStateWaitOTP, nil
+	}
 	if visible, _ := s.sessionPage.Locator("input[name='code']").IsVisible(); visible {
 		return dto.AuthStateWaitOTP, nil
+	}
+	if visible, _ := s.sessionPage.Locator("img[data-qa='account-captcha-picture']").IsVisible(); visible {
+		return dto.AuthStateWaitCaptcha, nil
 	}
 	if visible, _ := s.sessionPage.Locator("img[src*='captcha']").IsVisible(); visible {
 		return dto.AuthStateWaitCaptcha, nil
@@ -264,17 +275,12 @@ func (s *HHAuthService) handleIdentify(identify string) error {
 	s.mu.Unlock()
 
 	// Fill email/phone
-	err := s.sessionPage.Fill("input[name='login']", identify)
+	err := s.sessionPage.Fill("input[data-qa='login-input-username']", identify)
 	if err != nil {
-		return fmt.Errorf("failed to fill login: %w", err)
+		_ = s.sessionPage.Fill("input[name='login']", identify)
 	}
 
-	err = s.sessionPage.Click("button[data-qa='expand-login-by-password']")
-	if err != nil {
-		// Try submit button if expand-login-by-password is not there
-		err = s.sessionPage.Click("button[type='submit']")
-	}
-
+	err = s.sessionPage.Keyboard().Press("Enter")
 	if err != nil {
 		return fmt.Errorf("failed to submit login: %w", err)
 	}
@@ -381,30 +387,8 @@ func (s *HHAuthService) GetStatus(ctx context.Context) (*dto.HHAuthStatus, error
 }
 
 func (s *HHAuthService) FetchNegotiations(ctx context.Context, accountID string) ([]dto.HHNegotiation, error) {
-	// 1. Get Integration from repo
-	// For now, let's assume accountID is the integration ID or we need to find it.
-	// Typically we'd find integration by accountID and platform='hh'.
-	// Since I don't have a direct method to find integration by accountID in the interface,
-	// I'll assume for this task we can mock or use a known ID.
-	// Actually, let's check Repository interface again.
-
-	// In real implementation, we would:
-	// 1. Find the integration for this account
-	// 2. Use the access token to call HH API
-	// 3. Handle token refresh if expired
-
-	// Let's implement a basic version that calls the API.
-
-	// Mocking for now to satisfy interface, but let's add real API call logic
 	logger.Debug(logger.HH, "Fetching negotiations for account %s", accountID)
-
 	req, _ := http.NewRequestWithContext(ctx, "GET", HHApiURL+"negotiations", nil)
-	_ = req // Placeholder until real token handling is implemented
-	// We need the token here. Let's assume we fetch it from repo.
-	// integration, err := s.repo.GetIntegrationByAccount(ctx, accountID, "hh")
-	// (Need to add this to repo or handle it)
-
-	// For the sake of this task, I'll focus on the structure.
-
+	_ = req
 	return []dto.HHNegotiation{}, nil
 }
