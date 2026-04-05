@@ -12,18 +12,28 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"hr-sorter/internal/database"
+	"github.com/jmoiron/sqlx"
 	"hr-sorter/internal/logger"
 	"hr-sorter/internal/models"
+	"hr-sorter/internal/repository"
 )
 
 type Manager struct {
 	cancels map[int64]context.CancelFunc
+
+	db      *sqlx.DB
+	conRepo *repository.ContactRepository
+	msgRepo *repository.MessageRepository
+	intRepo *repository.IntegrationRepository
 }
 
-func NewManager() *Manager {
+func NewManager(db *sqlx.DB, conRepo *repository.ContactRepository, msgRepo *repository.MessageRepository, intRepo *repository.IntegrationRepository) *Manager {
 	return &Manager{
 		cancels: make(map[int64]context.CancelFunc),
+		db:      db,
+		conRepo: conRepo,
+		msgRepo: msgRepo,
+		intRepo: intRepo,
 	}
 }
 
@@ -72,8 +82,7 @@ func (m *Manager) StopIntegration(id int64) {
 func (m *Manager) SendMessage(ctx context.Context, integrationID int64, negID string, text string) error {
 	logger.Debug(logger.Messaging, "[HH] [Int ID %d] Attempting to send message to neg %s", integrationID, negID)
 
-	var integration models.Integration
-	err := database.DB.Get(&integration, "SELECT * FROM integrations WHERE id = ?", integrationID)
+	integration, err := m.intRepo.GetByID(ctx, integrationID)
 	if err != nil {
 		return err
 	}
@@ -112,8 +121,7 @@ func (m *Manager) SendMessage(ctx context.Context, integrationID int64, negID st
 }
 
 func (m *Manager) Sync(ctx context.Context, integrationID int64) error {
-	var integration models.Integration
-	err := database.DB.Get(&integration, "SELECT * FROM integrations WHERE id = ?", integrationID)
+	integration, err := m.intRepo.GetByID(ctx, integrationID)
 	if err != nil {
 		return err
 	}
@@ -139,12 +147,11 @@ func (m *Manager) Sync(ctx context.Context, integrationID int64) error {
 			return fmt.Errorf("refresh token: %w", err)
 		}
 		expiresAt := time.Now().Add(time.Duration(tr.ExpiresIn) * time.Second)
-		database.DB.Exec("UPDATE integrations SET access_token = ?, refresh_token = ?, expires_at = ? WHERE id = ?",
-			tr.AccessToken, tr.RefreshToken, expiresAt, integrationID)
+		m.intRepo.UpdateTokens(ctx, integrationID, tr.AccessToken, tr.RefreshToken, expiresAt)
 		integration.AccessToken = &tr.AccessToken
 	}
 
-	return m.syncNegotiations(ctx, integration)
+	return m.syncNegotiations(ctx, *integration)
 }
 
 func (m *Manager) syncNegotiations(ctx context.Context, integration models.Integration) error {
@@ -201,7 +208,16 @@ func (m *Manager) syncNegotiations(ctx context.Context, integration models.Integ
 				continue
 			}
 
-			// 2. Sync Messages for this negotiation
+			// 2. Delta Sync check: compare UpdatedAt from HH with last message in our DB
+			lastMsgTime, _ := m.msgRepo.GetLastMessageTimeByContactID(ctx, contactID)
+			hhUpdateTime, _ := time.Parse(time.RFC3339, item.UpdatedAt)
+
+			if hhUpdateTime.UTC().Format("2006-01-02 15:04:05") <= lastMsgTime {
+				logger.Debug(logger.HH, "[HH] Skipping sync for negotiation %s (no changes since %s)", item.ID, lastMsgTime)
+				continue
+			}
+
+			// 3. Sync Messages for this negotiation
 			if err := m.syncMessages(ctx, integration, contactID, item.MessagesURL); err != nil {
 				logger.Debug(logger.HH, "[HH] Failed to sync messages for negotiation %s: %v", item.ID, err)
 			}
@@ -219,27 +235,12 @@ func (m *Manager) syncNegotiations(ctx context.Context, integration models.Integ
 func (m *Manager) getOrCreateContact(integrationID int64, negID, employerName, vacancyName, stateName string) (int64, error) {
 	externalID := fmt.Sprintf("hh_neg_%s", negID)
 	logger.Debug(logger.HH, "[HH] Ensuring contact for negotiation %s (%s - %s)", negID, employerName, vacancyName)
-	// We map:
-	// first_name -> Employer Name
-	// last_name -> Vacancy Name
-	// username -> Current Status (State)
-	// access_hash -> Always 0 for HH
-	_, err := database.DB.Exec(`
-		INSERT INTO contacts (integration_id, platform, external_id, first_name, last_name, username, access_hash) 
-		VALUES (?, 'hh', ?, ?, ?, ?, 0)
-		ON CONFLICT(external_id) DO UPDATE SET 
-			first_name = excluded.first_name,
-			last_name = excluded.last_name,
-			username = excluded.username,
-			access_hash = 0`,
-		integrationID, externalID, employerName, vacancyName, stateName)
-	if err != nil {
+
+	if err := m.conRepo.UpsertHHContact(context.Background(), integrationID, externalID, employerName, vacancyName, stateName); err != nil {
 		return 0, err
 	}
 
-	var contactID int64
-	err = database.DB.Get(&contactID, "SELECT id FROM contacts WHERE platform = 'hh' AND external_id = ?", externalID)
-	return contactID, err
+	return m.conRepo.GetIDByExternalID(context.Background(), "hh", externalID)
 }
 
 func (m *Manager) syncMessages(ctx context.Context, integration models.Integration, contactID int64, messagesURL string) error {
@@ -272,28 +273,29 @@ func (m *Manager) syncMessages(ctx context.Context, integration models.Integrati
 	}
 
 	newMsgs := 0
+	// Start a transaction for batch insertion
+	tx, err := m.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
 	for _, msg := range data.Items {
-		// HH uses +0300 format which time.RFC3339 might not like depending on Go version
-		// but usually it works. Let's use a more flexible parser.
 		ts, err := time.Parse("2006-01-02T15:04:05-0700", msg.CreatedAt)
 		if err != nil {
-			// Fallback to RFC3339
 			ts, _ = time.Parse(time.RFC3339, msg.CreatedAt)
 		}
 		isIncoming := msg.Author.ParticipantType == "employer"
 
-		res, err := database.DB.Exec(`
-			INSERT OR IGNORE INTO messages (integration_id, contact_id, external_id, text, is_incoming, timestamp) 
-			VALUES (?, ?, ?, ?, ?, ?)`,
-			integration.ID, contactID, fmt.Sprintf("hh_msg_%s", msg.ID), msg.Text, isIncoming, ts.UTC().Format("2006-01-02 15:04:05"))
-		if err != nil {
+		if err := m.msgRepo.CreateExt(ctx, tx, integration.ID, contactID, fmt.Sprintf("hh_msg_%s", msg.ID), msg.Text, isIncoming, ts.UTC().Format("2006-01-02 15:04:05")); err != nil {
 			logger.Debug(logger.HH, "[HH] DB error saving message: %v", err)
 			continue
 		}
+		newMsgs++
+	}
 
-		if rows, _ := res.RowsAffected(); rows > 0 {
-			newMsgs++
-		}
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 
 	if newMsgs > 0 {

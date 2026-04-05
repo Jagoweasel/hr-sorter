@@ -15,9 +15,10 @@ import (
 	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/telegram/updates"
 	"github.com/gotd/td/tg"
-	"hr-sorter/internal/database"
+	"github.com/jmoiron/sqlx"
 	"hr-sorter/internal/logger"
 	"hr-sorter/internal/models"
+	"hr-sorter/internal/repository"
 )
 
 type Manager struct {
@@ -27,15 +28,26 @@ type Manager struct {
 	codeChans map[int64]chan string
 	passChans map[int64]chan string
 	mu        sync.RWMutex
+
+	db      *sqlx.DB
+	conRepo *repository.ContactRepository
+	msgRepo *repository.MessageRepository
+	stRepo  *repository.StateRepository
+	intRepo *repository.IntegrationRepository
 }
 
-func NewManager() *Manager {
+func NewManager(db *sqlx.DB, conRepo *repository.ContactRepository, msgRepo *repository.MessageRepository, stRepo *repository.StateRepository, intRepo *repository.IntegrationRepository) *Manager {
 	return &Manager{
 		clients:   make(map[int64]*telegram.Client),
 		apis:      make(map[int64]*tg.Client),
 		cancels:   make(map[int64]context.CancelFunc),
 		codeChans: make(map[int64]chan string),
 		passChans: make(map[int64]chan string),
+		db:        db,
+		conRepo:   conRepo,
+		msgRepo:   msgRepo,
+		stRepo:    stRepo,
+		intRepo:   intRepo,
 	}
 }
 
@@ -77,8 +89,8 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 	// Create updates manager for reliable delivery
 	updateManager := updates.New(updates.Config{
 		Handler:      dispatcher,
-		Storage:      &dbStateStorage{integrationID: integration.ID},
-		AccessHasher: &dbStateStorage{integrationID: integration.ID},
+		Storage:      &dbStateStorage{integrationID: integration.ID, stRepo: m.stRepo, conRepo: m.conRepo},
+		AccessHasher: &dbStateStorage{integrationID: integration.ID, stRepo: m.stRepo, conRepo: m.conRepo},
 	})
 
 	// Detailed logging for ALL updates
@@ -128,6 +140,7 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 		codeChan:      codeChan,
 		passChan:      passChan,
 		integrationID: integration.ID,
+		intRepo:       m.intRepo,
 	}
 
 	flow := auth.NewFlow(a, auth.SendCodeOptions{})
@@ -140,12 +153,12 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 			logger.Debug(logger.Telegram, "[Int ID %d] Calling client.Auth().IfNecessary (auth flow starts)", integration.ID)
 			if err := client.Auth().IfNecessary(ctx, flow); err != nil {
 				logger.Debug(logger.Telegram, "[Int ID %d] Auth failed: %v", integration.ID, err)
-				database.DB.Exec("UPDATE integrations SET status = 'pending_auth' WHERE id = ?", integration.ID)
+				m.intRepo.UpdateStatus(ctx, integration.ID, "pending_auth")
 				return fmt.Errorf("auth failed: %w", err)
 			}
 
 			logger.Debug(logger.Telegram, "[Int ID %d] Auth succeeded! Updating status to active.", integration.ID)
-			database.DB.Exec("UPDATE integrations SET status = 'active' WHERE id = ?", integration.ID)
+			m.intRepo.UpdateStatus(ctx, integration.ID, "active")
 
 			logger.Debug(logger.Telegram, "Client loop running for %s", integration.Identifier)
 			log.Printf("[Integration %s] [RUNNING] Logged in successfully.", integration.Identifier)
@@ -228,6 +241,7 @@ type codeAuthenticator struct {
 	codeChan      chan string
 	passChan      chan string
 	integrationID int64
+	intRepo       *repository.IntegrationRepository
 }
 
 func (a *codeAuthenticator) Phone(ctx context.Context) (string, error) {
@@ -236,7 +250,7 @@ func (a *codeAuthenticator) Phone(ctx context.Context) (string, error) {
 
 func (a *codeAuthenticator) Password(ctx context.Context) (string, error) {
 	logger.Debug(logger.Telegram, "[Int ID %d] Auth flow triggered - PASSWORD needed. Updating status to awaiting_password.", a.integrationID)
-	database.DB.Exec("UPDATE integrations SET status = 'awaiting_password' WHERE id = ?", a.integrationID)
+	a.intRepo.UpdateStatus(ctx, a.integrationID, "awaiting_password")
 
 	select {
 	case password := <-a.passChan:
@@ -263,7 +277,7 @@ func (a *codeAuthenticator) Code(ctx context.Context, sentCode *tg.AuthSentCode)
 	logger.Debug(logger.Telegram, "[Int ID %d] Auth flow triggered. Has code: %v, PhoneChanged: %v",
 		a.integrationID, sentCode != nil, sentCode != nil && sentCode.PhoneCodeHash != "")
 	logger.Debug(logger.Telegram, "[Int ID %d] Auth requested code. Updating status to awaiting_code.", a.integrationID)
-	database.DB.Exec("UPDATE integrations SET status = 'awaiting_code' WHERE id = ?", a.integrationID)
+	a.intRepo.UpdateStatus(ctx, a.integrationID, "awaiting_code")
 
 	select {
 	case code := <-a.codeChan:
@@ -351,23 +365,12 @@ func (m *Manager) StopIntegration(id int64) {
 func (m *Manager) getOrCreateContact(ctx context.Context, user *tg.User, integrationID int64) (int64, error) {
 	externalID := fmt.Sprintf("%d", user.ID)
 	logger.Debug(logger.Sync, "[Int ID %d] getOrCreateContact: %s %s (@%s), ID: %s, AccessHash: %d", integrationID, user.FirstName, user.LastName, user.Username, externalID, user.AccessHash)
-	// Update access_hash if it has changed
-	_, err := database.DB.Exec(`
-		INSERT INTO contacts (integration_id, platform, external_id, first_name, last_name, username, access_hash) 
-		VALUES (?, 'tg', ?, ?, ?, ?, ?)
-		ON CONFLICT(external_id) DO UPDATE SET 
-			first_name = excluded.first_name,
-			last_name = excluded.last_name,
-			username = excluded.username,
-			access_hash = CASE WHEN excluded.access_hash != 0 THEN excluded.access_hash ELSE access_hash END
-	`, integrationID, externalID, user.FirstName, user.LastName, user.Username, user.AccessHash)
-	if err != nil {
+
+	if err := m.conRepo.UpsertTGContact(ctx, integrationID, externalID, user.FirstName, user.LastName, user.Username, user.AccessHash); err != nil {
 		return 0, err
 	}
 
-	var contactID int64
-	err = database.DB.Get(&contactID, "SELECT id FROM contacts WHERE platform = 'tg' AND external_id = ?", externalID)
-	return contactID, err
+	return m.conRepo.GetIDByExternalID(ctx, "tg", externalID)
 }
 
 func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, integrationID int64) error {
@@ -382,19 +385,11 @@ func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, integrationID
 		if u, ok := me[0].(*tg.User); ok {
 			logger.Debug(logger.Telegram, "[Int ID %d] Session verified as @%s (%s %s). Updating status to active.", integrationID, u.Username, u.FirstName, u.LastName)
 			// Auto-activate if verified
-			database.DB.Exec("UPDATE integrations SET status = 'active' WHERE id = ?", integrationID)
+			m.intRepo.UpdateStatus(ctx, integrationID, "active")
 		}
 	} else {
 		logger.Debug(logger.Telegram, "[Int ID %d] No user info returned from Telegram (unauthorized)", integrationID)
 	}
-
-	// Map to track peers across folders to avoid duplicate syncs
-	type peerInfo struct {
-		user     *tg.User
-		name     string
-		peerType string
-	}
-	uniquePeers := make(map[int64]peerInfo)
 
 	// Sync both main inbox (Folder 0) and archive (Folder 1)
 	folders := []int{0, 1}
@@ -417,6 +412,7 @@ func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, integrationID
 
 		var users = make(map[int64]*tg.User)
 		var chats = make(map[int64]tg.ChatClass)
+		var messages = make(map[int]tg.MessageClass)
 		var dialogs []tg.DialogClass
 
 		switch d := res.(type) {
@@ -430,6 +426,11 @@ func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, integrationID
 			for _, cClass := range d.Chats {
 				chats[cClass.GetID()] = cClass
 			}
+			for _, mClass := range d.Messages {
+				if m, ok := mClass.AsNotEmpty(); ok {
+					messages[m.GetID()] = mClass
+				}
+			}
 		case *tg.MessagesDialogsSlice:
 			dialogs = d.Dialogs
 			for _, uClass := range d.Users {
@@ -440,29 +441,41 @@ func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, integrationID
 			for _, cClass := range d.Chats {
 				chats[cClass.GetID()] = cClass
 			}
+			for _, mClass := range d.Messages {
+				if m, ok := mClass.AsNotEmpty(); ok {
+					messages[m.GetID()] = mClass
+				}
+			}
 		}
 
 		logger.Debug(logger.Sync, "[Int ID %d] Found %d total dialogs in %s", integrationID, len(dialogs), folderName)
 
+		// Start a transaction for this folder's dialogs
+		tx, err := m.db.BeginTxx(ctx, nil)
+		if err != nil {
+			logger.Debug(logger.Sync, "[Int ID %d] Failed to start tx for folder sync: %v", integrationID, err)
+			continue
+		}
+		defer tx.Rollback()
+
 		for _, dClass := range dialogs {
 			d, ok := dClass.(*tg.Dialog)
 			if !ok {
-				logger.Debug(logger.Sync, "[Int ID %d] Skipping non-dialog object in dialog list", integrationID)
 				continue
 			}
+
+			var contactID int64
+			var peerUser *tg.User
+			var peerName string
 
 			switch p := d.Peer.(type) {
 			case *tg.PeerUser:
 				if u, ok := users[p.UserID]; ok {
-					if _, exists := uniquePeers[u.ID]; !exists {
-						uniquePeers[u.ID] = peerInfo{
-							user:     u,
-							name:     fmt.Sprintf("@%s (%s %s)", u.Username, u.FirstName, u.LastName),
-							peerType: "User",
-						}
+					peerUser = u
+					peerName = fmt.Sprintf("@%s (%s %s)", u.Username, u.FirstName, u.LastName)
+					if u.Bot {
+						continue // Skip bots
 					}
-				} else {
-					logger.Debug(logger.Sync, "[Int ID %d] Skipping PeerUser %d (user info not found in dialog response)", integrationID, p.UserID)
 				}
 			case *tg.PeerChat:
 				if c, ok := chats[p.ChatID]; ok {
@@ -470,17 +483,12 @@ func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, integrationID
 					if chat, ok := c.(*tg.Chat); ok {
 						title = chat.Title
 					}
-					if _, exists := uniquePeers[p.ChatID]; !exists {
-						uniquePeers[p.ChatID] = peerInfo{
-							user: &tg.User{
-								ID:        p.ChatID,
-								FirstName: title,
-								Username:  fmt.Sprintf("chat_%d", p.ChatID),
-							},
-							name:     title,
-							peerType: "Chat",
-						}
+					peerUser = &tg.User{
+						ID:        p.ChatID,
+						FirstName: title,
+						Username:  fmt.Sprintf("chat_%d", p.ChatID),
 					}
+					peerName = title
 				}
 			case *tg.PeerChannel:
 				if c, ok := chats[p.ChannelID]; ok {
@@ -490,46 +498,47 @@ func (m *Manager) InitialSync(ctx context.Context, api *tg.Client, integrationID
 						title = channel.Title
 						accessHash = channel.AccessHash
 					}
-					if _, exists := uniquePeers[p.ChannelID]; !exists {
-						uniquePeers[p.ChannelID] = peerInfo{
-							user: &tg.User{
-								ID:         p.ChannelID,
-								FirstName:  title,
-								Username:   fmt.Sprintf("channel_%d", p.ChannelID),
-								AccessHash: accessHash,
-							},
-							name:     title,
-							peerType: "Channel",
+					peerUser = &tg.User{
+						ID:         p.ChannelID,
+						FirstName:  title,
+						Username:   fmt.Sprintf("channel_%d", p.ChannelID),
+						AccessHash: accessHash,
+					}
+					peerName = title
+				}
+			}
+
+			if peerUser != nil {
+				externalID := fmt.Sprintf("%d", peerUser.ID)
+				// Upsert contact in tx
+				if err := m.conRepo.UpsertTGContactExt(ctx, tx, integrationID, externalID, peerUser.FirstName, peerUser.LastName, peerUser.Username, peerUser.AccessHash); err != nil {
+					logger.Debug(logger.Sync, "[Int ID %d] Failed to upsert contact %s: %v", integrationID, peerName, err)
+					continue
+				}
+
+				// Get internal contact ID
+				var cID int64
+				err := tx.GetContext(ctx, &cID, "SELECT id FROM contacts WHERE platform = 'tg' AND external_id = ?", externalID)
+				if err == nil {
+					contactID = cID
+					// Save the top message if we have it
+					if msg, ok := messages[d.TopMessage]; ok {
+						if mObj, ok := msg.(*tg.Message); ok {
+							extMsgID := fmt.Sprintf("%d", mObj.ID)
+							ts := time.Unix(int64(mObj.Date), 0).UTC().Format("2006-01-02 15:04:05")
+							m.msgRepo.CreateExt(ctx, tx, integrationID, contactID, extMsgID, mObj.Message, !mObj.Out, ts)
 						}
 					}
 				}
-			default:
-				logger.Debug(logger.Sync, "[Int ID %d] Skipping unknown peer type: %T", integrationID, d.Peer)
 			}
 		}
-	}
 
-	logger.Debug(logger.Sync, "[Int ID %d] Found %d unique private chats across folders", integrationID, len(uniquePeers))
-
-	for _, info := range uniquePeers {
-		if info.user.Bot {
-			logger.Debug(logger.Sync, "[Trace] Skipping bot: %s", info.name)
-			continue
-		}
-
-		logger.Debug(logger.Sync, "[Trace] Syncing private chat: %s", info.name)
-		contactID, err := m.getOrCreateContact(ctx, info.user, integrationID)
-		if err != nil {
-			logger.Debug(logger.Sync, "[Int ID %d] Failed to ensure contact %s: %v", integrationID, info.name, err)
-			continue
-		}
-
-		if err := m.SyncHistory(ctx, api, info.user, contactID, integrationID); err != nil {
-			logger.Debug(logger.Sync, "[Int ID %d] Failed to sync history for %s: %v", integrationID, info.name, err)
+		if err := tx.Commit(); err != nil {
+			logger.Debug(logger.Sync, "[Int ID %d] Failed to commit folder sync tx: %v", integrationID, err)
 		}
 	}
 
-	logger.Debug(logger.Sync, "[Int ID %d] Initial sync finished", integrationID)
+	logger.Debug(logger.Sync, "[Int ID %d] Initial sync finished (top messages only)", integrationID)
 	return nil
 }
 
@@ -635,8 +644,7 @@ func (m *Manager) HandleNewMessage(ctx context.Context, api *tg.Client, msgClass
 	// Save message
 	externalID := fmt.Sprintf("%d", msg.ID)
 	ts := time.Unix(int64(msg.Date), 0).UTC().Format("2006-01-02 15:04:05")
-	_, err = database.DB.Exec("INSERT OR IGNORE INTO messages (integration_id, contact_id, external_id, text, is_incoming, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-		integrationID, contactID, externalID, text, !msg.Out, ts)
+	err = m.msgRepo.Create(ctx, integrationID, contactID, externalID, text, !msg.Out, ts)
 	if err != nil {
 		logger.Debug(logger.Sync, "[Int ID %d] DB Error saving message: %v", integrationID, err)
 		return err
@@ -664,8 +672,7 @@ func (m *Manager) SyncHistory(ctx context.Context, api *tg.Client, user *tg.User
 
 	// If user is missing access hash, try to fetch it from DB
 	if user.AccessHash == 0 {
-		var stored models.Contact
-		err := database.DB.Get(&stored, "SELECT * FROM contacts WHERE id = ?", contactID)
+		stored, err := m.conRepo.GetByID(ctx, contactID)
 		if err == nil {
 			user.AccessHash = stored.AccessHash
 		}
@@ -699,6 +706,13 @@ func (m *Manager) SyncHistory(ctx context.Context, api *tg.Client, user *tg.User
 	}
 
 	newMsgs := 0
+	// Start a transaction for batch insertion
+	tx, err := m.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
 	for _, mClass := range messages {
 		msg, ok := mClass.(*tg.Message)
 		if !ok {
@@ -708,21 +722,18 @@ func (m *Manager) SyncHistory(ctx context.Context, api *tg.Client, user *tg.User
 		// Use INSERT OR IGNORE to avoid duplicates if message was already captured live
 		externalID := fmt.Sprintf("%d", msg.ID)
 		ts := time.Unix(int64(msg.Date), 0).UTC().Format("2006-01-02 15:04:05")
-		res, err := database.DB.Exec("INSERT OR IGNORE INTO messages (integration_id, contact_id, external_id, text, is_incoming, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-			integrationID, contactID, externalID, msg.Message, !msg.Out, ts)
-		if err != nil {
+
+		// Check if message exists before inserting (to avoid unnecessary disk writes in WAL)
+		// Actually INSERT OR IGNORE is fine since we are in a transaction
+		if err := m.msgRepo.CreateExt(ctx, tx, integrationID, contactID, externalID, msg.Message, !msg.Out, ts); err != nil {
 			logger.Debug(logger.Sync, "[Int ID %d] DB Error during sync for @%s: %v", integrationID, user.Username, err)
 			continue
 		}
+		newMsgs++
+	}
 
-		rows, _ := res.RowsAffected()
-		if rows > 0 {
-			newMsgs++
-			logger.Debug(logger.Sync, "[Int ID %d] Saved NEW message %s from @%s", integrationID, externalID, user.Username)
-		} else {
-			// Optional: log if we saw it but it was already in DB
-			// logger.Debug(logger.Sync, "[Int ID %d] Skipping existing message %s", integrationID, externalID)
-		}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	if newMsgs > 0 {
@@ -733,16 +744,12 @@ func (m *Manager) SyncHistory(ctx context.Context, api *tg.Client, user *tg.User
 
 type dbStateStorage struct {
 	integrationID int64
+	stRepo        *repository.StateRepository
+	conRepo       *repository.ContactRepository
 }
 
 func (s *dbStateStorage) GetState(ctx context.Context, userID int64) (updates.State, bool, error) {
-	var state struct {
-		Pts  int `db:"pts"`
-		Qts  int `db:"qts"`
-		Seq  int `db:"seq"`
-		Date int `db:"date"`
-	}
-	err := database.DB.Get(&state, "SELECT pts, qts, seq, date FROM tg_state WHERE integration_id = ?", s.integrationID)
+	state, err := s.stRepo.GetTGState(ctx, s.integrationID)
 	if err != nil {
 		return updates.State{}, false, nil
 	}
@@ -752,46 +759,63 @@ func (s *dbStateStorage) GetState(ctx context.Context, userID int64) (updates.St
 
 func (s *dbStateStorage) SetState(ctx context.Context, userID int64, state updates.State) error {
 	logger.Debug(logger.Sync, "[Int ID %d] Saving update state: PTS=%d, QTS=%d, Seq=%d", s.integrationID, state.Pts, state.Qts, state.Seq)
-	_, err := database.DB.Exec(`
-		INSERT INTO tg_state (integration_id, pts, qts, seq, date) 
-		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(integration_id) DO UPDATE SET 
-			pts = excluded.pts, 
-			qts = excluded.qts, 
-			seq = excluded.seq, 
-			date = excluded.date`,
-		s.integrationID, state.Pts, state.Qts, state.Seq, state.Date)
-	return err
+	return s.stRepo.UpsertTGState(ctx, repository.TGState{
+		IntegrationID: s.integrationID,
+		Pts:           state.Pts,
+		Qts:           state.Qts,
+		Seq:           state.Seq,
+		Date:          state.Date,
+	})
 }
 
 func (s *dbStateStorage) SetPts(ctx context.Context, userID int64, pts int) error {
-	_, err := database.DB.Exec("UPDATE tg_state SET pts = ? WHERE integration_id = ?", pts, s.integrationID)
-	return err
+	state, err := s.stRepo.GetTGState(ctx, s.integrationID)
+	if err != nil {
+		state = &repository.TGState{IntegrationID: s.integrationID}
+	}
+	state.Pts = pts
+	return s.stRepo.UpsertTGState(ctx, *state)
 }
 
 func (s *dbStateStorage) SetQts(ctx context.Context, userID int64, qts int) error {
-	_, err := database.DB.Exec("UPDATE tg_state SET qts = ? WHERE integration_id = ?", qts, s.integrationID)
-	return err
+	state, err := s.stRepo.GetTGState(ctx, s.integrationID)
+	if err != nil {
+		state = &repository.TGState{IntegrationID: s.integrationID}
+	}
+	state.Qts = qts
+	return s.stRepo.UpsertTGState(ctx, *state)
 }
 
 func (s *dbStateStorage) SetDate(ctx context.Context, userID int64, date int) error {
-	_, err := database.DB.Exec("UPDATE tg_state SET date = ? WHERE integration_id = ?", date, s.integrationID)
-	return err
+	state, err := s.stRepo.GetTGState(ctx, s.integrationID)
+	if err != nil {
+		state = &repository.TGState{IntegrationID: s.integrationID}
+	}
+	state.Date = date
+	return s.stRepo.UpsertTGState(ctx, *state)
 }
 
 func (s *dbStateStorage) SetSeq(ctx context.Context, userID int64, seq int) error {
-	_, err := database.DB.Exec("UPDATE tg_state SET seq = ? WHERE integration_id = ?", seq, s.integrationID)
-	return err
+	state, err := s.stRepo.GetTGState(ctx, s.integrationID)
+	if err != nil {
+		state = &repository.TGState{IntegrationID: s.integrationID}
+	}
+	state.Seq = seq
+	return s.stRepo.UpsertTGState(ctx, *state)
 }
 
 func (s *dbStateStorage) SetDateSeq(ctx context.Context, userID int64, date, seq int) error {
-	_, err := database.DB.Exec("UPDATE tg_state SET date = ?, seq = ? WHERE integration_id = ?", date, seq, s.integrationID)
-	return err
+	state, err := s.stRepo.GetTGState(ctx, s.integrationID)
+	if err != nil {
+		state = &repository.TGState{IntegrationID: s.integrationID}
+	}
+	state.Date = date
+	state.Seq = seq
+	return s.stRepo.UpsertTGState(ctx, *state)
 }
 
 func (s *dbStateStorage) GetChannelPts(ctx context.Context, userID, channelID int64) (int, bool, error) {
-	var pts int
-	err := database.DB.Get(&pts, "SELECT pts FROM tg_channels WHERE integration_id = ? AND channel_id = ?", s.integrationID, channelID)
+	pts, err := s.stRepo.GetChannelPts(ctx, s.integrationID, channelID)
 	if err != nil {
 		return 0, false, nil
 	}
@@ -799,20 +823,11 @@ func (s *dbStateStorage) GetChannelPts(ctx context.Context, userID, channelID in
 }
 
 func (s *dbStateStorage) SetChannelPts(ctx context.Context, userID, channelID int64, pts int) error {
-	_, err := database.DB.Exec(`
-		INSERT INTO tg_channels (integration_id, channel_id, pts) 
-		VALUES (?, ?, ?)
-		ON CONFLICT(integration_id, channel_id) DO UPDATE SET pts = excluded.pts`,
-		s.integrationID, channelID, pts)
-	return err
+	return s.stRepo.UpsertChannelPts(ctx, s.integrationID, channelID, pts)
 }
 
 func (s *dbStateStorage) ForEachChannels(ctx context.Context, userID int64, f func(ctx context.Context, channelID int64, pts int) error) error {
-	var channels []struct {
-		ChannelID int64 `db:"channel_id"`
-		Pts       int   `db:"pts"`
-	}
-	err := database.DB.Select(&channels, "SELECT channel_id, pts FROM tg_channels WHERE integration_id = ?", s.integrationID)
+	channels, err := s.stRepo.GetAllChannels(ctx, s.integrationID)
 	if err != nil {
 		return err
 	}
@@ -825,31 +840,24 @@ func (s *dbStateStorage) ForEachChannels(ctx context.Context, userID int64, f fu
 }
 
 func (s *dbStateStorage) SetChannelAccessHash(ctx context.Context, userID, channelID, accessHash int64) error {
-	// Use contacts table for access hashes if it's a known peer, but we also want to store it specifically for updates manager
-	_, err := database.DB.Exec(`
-		UPDATE contacts SET access_hash = ? 
-		WHERE integration_id = ? AND external_id = ?`,
-		accessHash, s.integrationID, fmt.Sprintf("%d", channelID))
-	return err
+	// We use contacts table for access hashes
+	return s.conRepo.UpsertTGContactExt(ctx, s.stRepo.GetDB(), s.integrationID, fmt.Sprintf("%d", channelID), "", "", fmt.Sprintf("channel_%d", channelID), accessHash)
 }
 
 func (s *dbStateStorage) GetChannelAccessHash(ctx context.Context, userID, channelID int64) (int64, bool, error) {
-	var hash int64
-	err := database.DB.Get(&hash, "SELECT access_hash FROM contacts WHERE integration_id = ? AND external_id = ?", s.integrationID, fmt.Sprintf("%d", channelID))
+	id, err := s.conRepo.GetIDByExternalID(ctx, "tg", fmt.Sprintf("%d", channelID))
 	if err != nil {
 		return 0, false, nil
 	}
-	return hash, hash != 0, nil
+	contact, err := s.conRepo.GetByID(ctx, id)
+	if err != nil {
+		return 0, false, nil
+	}
+	return contact.AccessHash, contact.AccessHash != 0, nil
 }
 
 func (s *dbStateStorage) LoadState(ctx context.Context) (updates.State, error) {
-	var state struct {
-		Pts  int `db:"pts"`
-		Qts  int `db:"qts"`
-		Seq  int `db:"seq"`
-		Date int `db:"date"`
-	}
-	err := database.DB.Get(&state, "SELECT pts, qts, seq, date FROM tg_state WHERE integration_id = ?", s.integrationID)
+	state, err := s.stRepo.GetTGState(ctx, s.integrationID)
 	if err != nil {
 		return updates.State{}, nil
 	}
@@ -857,14 +865,11 @@ func (s *dbStateStorage) LoadState(ctx context.Context) (updates.State, error) {
 }
 
 func (s *dbStateStorage) SaveState(ctx context.Context, state updates.State) error {
-	_, err := database.DB.Exec(`
-		INSERT INTO tg_state (integration_id, pts, qts, seq, date) 
-		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(integration_id) DO UPDATE SET 
-			pts = excluded.pts, 
-			qts = excluded.qts, 
-			seq = excluded.seq, 
-			date = excluded.date`,
-		s.integrationID, state.Pts, state.Qts, state.Seq, state.Date)
-	return err
+	return s.stRepo.UpsertTGState(ctx, repository.TGState{
+		IntegrationID: s.integrationID,
+		Pts:           state.Pts,
+		Qts:           state.Qts,
+		Seq:           state.Seq,
+		Date:          state.Date,
+	})
 }

@@ -29,6 +29,10 @@ func InitDB(path string) {
 	if err != nil {
 		log.Fatalf("[DB] Failed to connect to database: %v", err)
 	}
+	// SQLite only supports one writer at a time, and concurrent readers can conflict with writers.
+	// Setting MaxOpenConns(1) serializes all access, effectively eliminating SQLITE_BUSY.
+	DB.SetMaxOpenConns(1)
+	DB.SetMaxIdleConns(1)
 	log.Println("[DB] Connection established.")
 
 	log.Println("[DB] Verifying schema...")

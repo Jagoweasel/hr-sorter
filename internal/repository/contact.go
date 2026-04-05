@@ -65,7 +65,11 @@ func (r *ContactRepository) GetAll(ctx context.Context, accountID, platform stri
 }
 
 func (r *ContactRepository) UpsertTGContact(ctx context.Context, integrationID int64, externalID, firstName, lastName, username string, accessHash int64) error {
-	_, err := r.db.ExecContext(ctx, `
+	return r.UpsertTGContactExt(ctx, r.db, integrationID, externalID, firstName, lastName, username, accessHash)
+}
+
+func (r *ContactRepository) UpsertTGContactExt(ctx context.Context, ext sqlx.ExtContext, integrationID int64, externalID, firstName, lastName, username string, accessHash int64) error {
+	_, err := ext.ExecContext(ctx, `
 		INSERT INTO contacts (integration_id, platform, external_id, first_name, last_name, username, access_hash) 
 		VALUES (?, 'tg', ?, ?, ?, ?, ?)
 		ON CONFLICT(external_id) DO UPDATE SET 
@@ -74,6 +78,23 @@ func (r *ContactRepository) UpsertTGContact(ctx context.Context, integrationID i
 			username = excluded.username,
 			access_hash = CASE WHEN excluded.access_hash != 0 THEN excluded.access_hash ELSE access_hash END
 	`, integrationID, externalID, firstName, lastName, username, accessHash)
+	return err
+}
+
+func (r *ContactRepository) UpsertHHContact(ctx context.Context, integrationID int64, externalID, firstName, lastName, username string) error {
+	return r.UpsertHHContactExt(ctx, r.db, integrationID, externalID, firstName, lastName, username)
+}
+
+func (r *ContactRepository) UpsertHHContactExt(ctx context.Context, ext sqlx.ExtContext, integrationID int64, externalID, firstName, lastName, username string) error {
+	_, err := ext.ExecContext(ctx, `
+		INSERT INTO contacts (integration_id, platform, external_id, first_name, last_name, username, access_hash) 
+		VALUES (?, 'hh', ?, ?, ?, ?, 0)
+		ON CONFLICT(external_id) DO UPDATE SET 
+			first_name = excluded.first_name,
+			last_name = excluded.last_name,
+			username = excluded.username,
+			access_hash = 0
+	`, integrationID, externalID, firstName, lastName, username)
 	return err
 }
 

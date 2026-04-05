@@ -69,15 +69,6 @@ func main() {
 	database.InitDB(dbPath)
 	log.Println("[Main] Database initialized successfully.")
 
-	manager := tgclient.NewManager()
-	hhManager := hhclient.NewManager()
-
-	// Initialize Template Manager
-	tm, err := web.NewTemplateManager()
-	if err != nil {
-		log.Fatalf("[Main] Failed to initialize templates: %v", err)
-	}
-
 	// Initialize repositories
 	accRepo := repository.NewAccountRepository(database.DB)
 	intRepo := repository.NewIntegrationRepository(database.DB)
@@ -85,6 +76,16 @@ func main() {
 	msgRepo := repository.NewMessageRepository(database.DB)
 	seqRepo := repository.NewSequenceRepository(database.DB)
 	fltRepo := repository.NewFilterRepository(database.DB)
+	stRepo := repository.NewStateRepository(database.DB)
+
+	manager := tgclient.NewManager(database.DB, conRepo, msgRepo, stRepo, intRepo)
+	hhManager := hhclient.NewManager(database.DB, conRepo, msgRepo, intRepo)
+
+	// Initialize Template Manager
+	tm, err := web.NewTemplateManager()
+	if err != nil {
+		log.Fatalf("[Main] Failed to initialize templates: %v", err)
+	}
 
 	// Initialize services
 	accService := service.NewAccountService(accRepo, intRepo, manager, hhManager)
