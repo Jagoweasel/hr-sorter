@@ -94,7 +94,7 @@ type MappingRule struct {
 }
 
 type NegotiationStats struct {
-	SequenceID        int64     `db:"sequence_id" json:"sequence_id"`
+	IntegrationID     int64     `db:"integration_id" json:"integration_id"`
 	ApplicationsCount int       `db:"applications_count" json:"applications_count"`
 	UpdatedAt         time.Time `db:"updated_at" json:"updated_at"`
 }

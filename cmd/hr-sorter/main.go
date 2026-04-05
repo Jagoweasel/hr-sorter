@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"hr-sorter/internal/models"
 	"hr-sorter/internal/repository"
 	"hr-sorter/internal/service"
+	"hr-sorter/internal/storage"
 	"hr-sorter/internal/streaming"
 	"hr-sorter/internal/tgclient"
 	"hr-sorter/internal/web"
@@ -76,6 +78,15 @@ func main() {
 	database.InitDB(dbPath)
 	log.Println("[Main] Database initialized successfully.")
 
+	// Initialize Unified Repository for Services that need it (like HH Auth)
+	dsn := dbPath
+	if !strings.Contains(dbPath, "?") {
+		dsn = dbPath + "?_pragma=foreign_keys=1&_journal_mode=WAL&_busy_timeout=5000"
+	}
+	// We need to import storage package
+	// ... wait, I'll check imports
+	unifiedRepo, _ := storage.NewSQLiteRepository(dsn)
+
 	// Initialize repositories
 	accRepo := repository.NewAccountRepository(database.DB)
 	intRepo := repository.NewIntegrationRepository(database.DB)
@@ -88,6 +99,12 @@ func main() {
 
 	manager := tgclient.NewManager(database.DB, conRepo, msgRepo, stRepo, intRepo)
 	hhManager := hhclient.NewManager(database.DB, conRepo, msgRepo, intRepo)
+
+	// Initialize HH Auth Service (New Playwright-based)
+	hhAuthService, _ := hhclient.NewHHAuthService(unifiedRepo)
+	if hhAuthService != nil {
+		defer hhAuthService.Close()
+	}
 
 	// Initialize Localization
 	ls, err := i18n.NewLocalizationService()
@@ -136,7 +153,7 @@ func main() {
 		}
 	}
 
-	handler := web.NewHandler(ctx, manager, hhManager, logBroadcaster, tm, ls, accRepo, intRepo, conRepo, msgRepo, seqRepo, fltRepo, mapRepo, accService, intService, seqService, conService, fltService, repService)
+	handler := web.NewHandler(ctx, manager, hhManager, hhAuthService, logBroadcaster, tm, ls, accRepo, intRepo, conRepo, msgRepo, seqRepo, fltRepo, mapRepo, accService, intService, seqService, conService, fltService, repService)
 	wrappedHandler := handler.InitHandler()
 
 	port := os.Getenv("HTTP_PORT")

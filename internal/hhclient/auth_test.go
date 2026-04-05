@@ -20,6 +20,9 @@ func (m *MockRepo) SaveNegotiations(ctx context.Context, negotiations []dto.HHNe
 func (m *MockRepo) SaveNegotiationsStats(ctx context.Context, stats *models.NegotiationStats) error {
 	return nil
 }
+func (m *MockRepo) GetTotalApplications(ctx context.Context, accountID string) (int, error) {
+	return 0, nil
+}
 func (m *MockRepo) GetMappingRules(ctx context.Context) (map[string]string, error) {
 	return nil, nil
 }

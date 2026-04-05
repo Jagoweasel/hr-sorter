@@ -4,7 +4,10 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"hr-sorter/internal/domain"
 	"hr-sorter/internal/models"
+	"os"
+	"runtime"
 
 	"github.com/johnfercher/maroto/v2"
 	"github.com/johnfercher/maroto/v2/pkg/components/col"
@@ -25,7 +28,7 @@ var fonts embed.FS
 type reporter struct {
 }
 
-func NewReporter() *reporter {
+func NewReporter() domain.Reporter {
 	return &reporter{}
 }
 
@@ -37,21 +40,29 @@ func (r *reporter) GeneratePDF(ctx context.Context, data *models.ReportData) ([]
 		WithTitle("HR-SORTER Report", true).
 		WithAuthor("HR-SORTER", true)
 
+	// Attempt to load custom fonts from embed or system
 	if len(regular) > 0 && len(bold) > 0 {
 		builder.WithCustomFonts([]*entity.CustomFont{
-			{
-				Family: "Inter",
-				Style:  fontstyle.Normal,
-				Bytes:  regular,
-			},
-			{
-				Family: "Inter",
-				Style:  fontstyle.Bold,
-				Bytes:  bold,
-			},
-		}).WithDefaultFont(&props.Font{
-			Family: "Inter",
-		})
+			{Family: "Inter", Style: fontstyle.Normal, Bytes: regular},
+			{Family: "Inter", Style: fontstyle.Bold, Bytes: bold},
+		}).WithDefaultFont(&props.Font{Family: "Inter"})
+	} else {
+		// Fallback to system fonts for Cyrillic support if embed fonts are missing/empty
+		systemFont := ""
+		if runtime.GOOS == "windows" {
+			systemFont = os.Getenv("WINDIR") + "\\Fonts\\arial.ttf"
+		} else {
+			// Common Linux path
+			systemFont = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+		}
+
+		if _, err := os.Stat(systemFont); err == nil {
+			fontBytes, _ := os.ReadFile(systemFont)
+			builder.WithCustomFonts([]*entity.CustomFont{
+				{Family: "System", Style: fontstyle.Normal, Bytes: fontBytes},
+				{Family: "System", Style: fontstyle.Bold, Bytes: fontBytes},
+			}).WithDefaultFont(&props.Font{Family: "System"})
+		}
 	}
 
 	cfg := builder.Build()

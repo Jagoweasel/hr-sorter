@@ -192,6 +192,7 @@
   "detailed_applicants": "Детальный список",
   "applicant_timelines": "Таймлайны кандидатов",
   "download_pdf": "Скачать PDF",
+  "total_applied": "Всего откликов (HH)",
   "view_in_pipeline": "Посмотреть в воронке",
   "matches_screening_filter": "Соответствует фильтру скрининга",
   "type_a_message": "Напишите сообщение...",

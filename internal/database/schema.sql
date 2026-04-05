@@ -76,10 +76,10 @@ CREATE TABLE IF NOT EXISTS mapping_rules (
 );
 
 CREATE TABLE IF NOT EXISTS negotiations_stats (
-    sequence_id INTEGER PRIMARY KEY,
+    integration_id INTEGER PRIMARY KEY,
     applications_count INTEGER DEFAULT 0,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (sequence_id) REFERENCES sequences(id) ON DELETE CASCADE
+    FOREIGN KEY (integration_id) REFERENCES integrations(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS sequence_contacts (

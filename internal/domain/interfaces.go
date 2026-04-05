@@ -58,6 +58,7 @@ type Repository interface {
 	GetAccount(ctx context.Context, id int64) (*models.Account, error)
 	SaveNegotiations(ctx context.Context, negotiations []dto.HHNegotiation) error
 	SaveNegotiationsStats(ctx context.Context, stats *models.NegotiationStats) error
+	GetTotalApplications(ctx context.Context, accountID string) (int, error)
 	GetMappingRules(ctx context.Context) (map[string]string, error)
 
 	// Caching support

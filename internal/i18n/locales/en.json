@@ -192,6 +192,7 @@
   "detailed_applicants": "Detailed Applicants",
   "applicant_timelines": "Applicant Timelines",
   "download_pdf": "Download PDF",
+  "total_applied": "Total Applied (HH)",
   "view_in_pipeline": "View in Pipeline",
   "matches_screening_filter": "Matches screening filter",
   "type_a_message": "Type a message...",

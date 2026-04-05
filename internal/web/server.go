@@ -5,6 +5,7 @@ import (
 	"github.com/gorilla/csrf"
 	"hr-sorter/internal/hhclient"
 	"hr-sorter/internal/i18n"
+	"hr-sorter/internal/logger"
 	"hr-sorter/internal/repository"
 	"hr-sorter/internal/service"
 	"hr-sorter/internal/streaming"
@@ -20,6 +21,7 @@ type Handler struct {
 	// Managers
 	tgManager      *tgclient.Manager
 	hhManager      *hhclient.Manager
+	hhAuthService  *hhclient.HHAuthService
 	logBroadcaster *streaming.LogBroadcaster
 
 	// Templates
@@ -48,6 +50,7 @@ func NewHandler(
 	ctx context.Context,
 	tgManager *tgclient.Manager,
 	hhManager *hhclient.Manager,
+	hhAuthService *hhclient.HHAuthService,
 	logBroadcaster *streaming.LogBroadcaster,
 	templates *TemplateManager,
 	ls *i18n.LocalizationService,
@@ -69,6 +72,7 @@ func NewHandler(
 		rootCtx:        ctx,
 		tgManager:      tgManager,
 		hhManager:      hhManager,
+		hhAuthService:  hhAuthService,
 		logBroadcaster: logBroadcaster,
 		templates:      templates,
 		i18n:           ls,
@@ -95,6 +99,13 @@ func (h *Handler) getLocale(r *http.Request) string {
 	return "en"
 }
 
+func (h *Handler) handleCSRFError(w http.ResponseWriter, r *http.Request) {
+	reason := csrf.FailureReason(r)
+	logger.Error(logger.HH, "CSRF Error: %v | Method: %s | URL: %s | Origin: %s | Referer: %s",
+		reason, r.Method, r.URL.String(), r.Header.Get("Origin"), r.Header.Get("Referer"))
+	http.Error(w, "Forbidden - "+reason.Error(), http.StatusForbidden)
+}
+
 func (h *Handler) InitHandler() http.Handler {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -108,6 +119,8 @@ func (h *Handler) InitHandler() http.Handler {
 		[]byte(secret),
 		csrf.Secure(false), // Change to true in production with HTTPS
 		csrf.Path("/"),
+		csrf.TrustedOrigins([]string{"localhost:8080", "127.0.0.1:8080"}),
+		csrf.ErrorHandler(http.HandlerFunc(h.handleCSRFError)),
 	)
 
 	return csrfMiddleware(mux)

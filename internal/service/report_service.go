@@ -4,27 +4,28 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"hr-sorter/internal/domain"
 	"hr-sorter/internal/logger"
+	"hr-sorter/internal/models"
+	"hr-sorter/internal/report"
 	"hr-sorter/internal/repository"
-	"os"
 	"strings"
+	"time"
 
-	"github.com/johnfercher/maroto/pkg/color"
-	"github.com/johnfercher/maroto/pkg/consts"
-	"github.com/johnfercher/maroto/pkg/pdf"
-	"github.com/johnfercher/maroto/pkg/props"
 	"github.com/xuri/excelize/v2"
 )
 
 type ReportService struct {
-	seqRepo *repository.SequenceRepository
-	accRepo *repository.AccountRepository
+	seqRepo  *repository.SequenceRepository
+	accRepo  *repository.AccountRepository
+	reporter domain.Reporter
 }
 
 func NewReportService(seqRepo *repository.SequenceRepository, accRepo *repository.AccountRepository) *ReportService {
 	return &ReportService{
-		seqRepo: seqRepo,
-		accRepo: accRepo,
+		seqRepo:  seqRepo,
+		accRepo:  accRepo,
+		reporter: report.NewReporter(),
 	}
 }
 
@@ -35,13 +36,15 @@ type FunnelStep struct {
 }
 
 type ReportData struct {
-	TotalResponses int
-	Funnel         []FunnelStep
-	VacancyStats   map[string]map[string]int
-	CompanyStats   map[string]map[string]int
-	PlatformStats  []repository.PlatformStats
-	ConversionRate float64 // Interview to Offer
-	AcceptanceRate float64 // Offer to Accepted
+	TotalApplications int
+	TotalResponses    int
+	Funnel            []FunnelStep
+	VacancyStats      map[string]map[string]int
+	CompanyStats      map[string]map[string]int
+	PlatformStats     []repository.PlatformStats
+	ConversionRate    float64 // Interview to Offer
+	AcceptanceRate    float64 // Offer to Accepted
+	AccountName       string
 }
 
 type PDFExportOptions struct {
@@ -61,6 +64,35 @@ func (s *ReportService) GetReportData(ctx context.Context, accountID string) (*R
 	data := s.GetReportDataFromSequences(detailed)
 	pStats, _ := s.seqRepo.GetPlatformStats(ctx, accountID)
 	data.PlatformStats = pStats
+
+	// Fetch total applications from negotiations_stats
+	totalApps, _ := s.seqRepo.GetTotalApplications(ctx, accountID)
+	data.TotalApplications = totalApps
+
+	if accountID != "" {
+		acc, _ := s.accRepo.GetByID(ctx, accountID)
+		if acc != nil {
+			data.AccountName = acc.Name
+		}
+	} else {
+		data.AccountName = "All Accounts"
+	}
+
+	// Adjust funnel: Add "Applications" at the top if we have them
+	if totalApps > 0 {
+		newFunnel := []FunnelStep{
+			{Label: "Total Applications", Count: totalApps, Percentage: 100},
+		}
+		for i, step := range data.Funnel {
+			step.Percentage = calculatePercent(step.Count, totalApps)
+			if i == 0 {
+				step.Label = "Responses"
+			}
+			newFunnel = append(newFunnel, step)
+		}
+		data.Funnel = newFunnel
+	}
+
 	return data, nil
 }
 
@@ -74,7 +106,6 @@ func (s *ReportService) GetReportDataFromSequences(detailed []repository.Sequenc
 
 	screeningPlus := statusMap["screening"] + statusMap["tech"] + statusMap["final"] + statusMap["offer"] + statusMap["accepted"]
 	techPlus := statusMap["tech"] + statusMap["final"] + statusMap["offer"] + statusMap["accepted"]
-	finalPlus := statusMap["final"] + statusMap["offer"] + statusMap["accepted"]
 	offerPlus := statusMap["offer"] + statusMap["accepted"]
 	accepted := statusMap["accepted"]
 
@@ -82,7 +113,6 @@ func (s *ReportService) GetReportDataFromSequences(detailed []repository.Sequenc
 		{Label: "Total Responses", Count: total, Percentage: 100},
 		{Label: "Interviews", Count: screeningPlus, Percentage: calculatePercent(screeningPlus, total)},
 		{Label: "Technical", Count: techPlus, Percentage: calculatePercent(techPlus, total)},
-		{Label: "Finals", Count: finalPlus, Percentage: calculatePercent(finalPlus, total)},
 		{Label: "Offers", Count: offerPlus, Percentage: calculatePercent(offerPlus, total)},
 		{Label: "Hires", Count: accepted, Percentage: calculatePercent(accepted, total)},
 	}
@@ -109,6 +139,43 @@ func (s *ReportService) GetReportDataFromSequences(detailed []repository.Sequenc
 		ConversionRate: calculatePercent(offerPlus, screeningPlus),
 		AcceptanceRate: calculatePercent(accepted, total),
 	}
+}
+
+func (s *ReportService) ExportPDF(ctx context.Context, accountID string, opts PDFExportOptions) ([]byte, error) {
+	rd, err := s.GetReportData(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Map service.ReportData to models.ReportData
+	mrd := &models.ReportData{
+		AccountName: rd.AccountName,
+		ReportDate:  time.Now(),
+		KPI: models.ReportKPI{
+			TotalSequences: rd.TotalResponses,
+			ResponseRate:   rd.ConversionRate,
+			HireRate:       rd.AcceptanceRate,
+		},
+	}
+
+	// Funnel mapping
+	if len(rd.Funnel) >= 5 {
+		mrd.Funnel = models.Funnel{
+			Initial:   rd.Funnel[0].Count,
+			Screening: rd.Funnel[1].Count,
+			Tech:      rd.Funnel[2].Count,
+			Offer:     rd.Funnel[len(rd.Funnel)-2].Count,
+			Accepted:  rd.Funnel[len(rd.Funnel)-1].Count,
+		}
+	}
+
+	// Sequences mapping
+	detailed, _ := s.seqRepo.GetAllFullDetails(ctx, accountID)
+	for _, sd := range detailed {
+		mrd.Sequences = append(mrd.Sequences, sd.Sequence)
+	}
+
+	return s.reporter.GeneratePDF(ctx, mrd)
 }
 
 type reportStyles struct {
@@ -431,295 +498,4 @@ func calculatePercent(subset, total int) float64 {
 		return 0
 	}
 	return (float64(subset) / float64(total)) * 100
-}
-
-const (
-	fontPath = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-	fontName = "DejaVuSans"
-)
-
-func (s *ReportService) ExportPDF(ctx context.Context, accountID string, opts PDFExportOptions) ([]byte, error) {
-	detailed, err := s.seqRepo.GetAllFullDetails(ctx, accountID)
-	if err != nil {
-		return nil, err
-	}
-
-	accountName := "All Accounts"
-	if accountID != "" {
-		acc, _ := s.accRepo.GetByID(ctx, accountID)
-		if acc != nil {
-			accountName = acc.Name
-		}
-	}
-
-	m := pdf.NewMaroto(consts.Landscape, consts.A4)
-	m.SetPageMargins(10, 10, 10)
-
-	// Load font for Cyrillic support
-	if _, err := os.Stat(fontPath); err == nil {
-		m.AddUTF8Font(fontName, consts.Normal, fontPath)
-		m.AddUTF8Font(fontName, consts.Bold, fontPath)
-		m.SetDefaultFontFamily(fontName)
-	} else {
-		logger.Debug(logger.Reports, "WARNING: Font not found at %s. Cyrillic might not render correctly.", fontPath)
-	}
-
-	// Header
-	m.RegisterHeader(func() {
-		m.Row(15, func() {
-			m.Col(12, func() {
-				m.Text("Recruitment Report: "+accountName, props.Text{
-					Top:   2,
-					Size:  16,
-					Style: consts.Bold,
-					Align: consts.Center,
-				})
-			})
-		})
-	})
-
-	// 1. Overall Summary
-	if opts.IncludeKPIs || opts.IncludeFunnel {
-		rd := s.GetReportDataFromSequences(detailed)
-		s.writePDFOverviewSection(m, "Overall Summary", rd, opts)
-	}
-
-	// Group by Account
-	type accGroup struct {
-		ID   int64
-		Name string
-		Seqs []repository.SequenceWithDetails
-	}
-	byAccount := make(map[int64]*accGroup)
-	var accountOrder []int64
-	for _, sd := range detailed {
-		id := int64(0)
-		if sd.AccountID != nil {
-			id = *sd.AccountID
-		}
-		if _, ok := byAccount[id]; !ok {
-			accountOrder = append(accountOrder, id)
-			byAccount[id] = &accGroup{ID: id, Name: sd.AccountName, Seqs: nil}
-		}
-		byAccount[id].Seqs = append(byAccount[id].Seqs, sd)
-	}
-
-	// 2. Per-Applicant Summaries
-	if accountID == "" && len(accountOrder) > 0 {
-		for _, id := range accountOrder {
-			group := byAccount[id]
-			rd := s.GetReportDataFromSequences(group.Seqs)
-			m.AddPage()
-			s.writePDFOverviewSection(m, "Applicant Summary: "+group.Name, rd, opts)
-		}
-	}
-
-	// 3. Vacancy Stats
-	if opts.IncludeVacancies {
-		m.AddPage()
-		rd := s.GetReportDataFromSequences(detailed)
-		m.Row(10, func() {
-			m.Col(12, func() {
-				m.Text("Performance by Vacancy", props.Text{Size: 14, Style: consts.Bold})
-			})
-		})
-		headers := []string{"Vacancy", "Total", "Screening+", "Offer+", "Accepted"}
-		var contents [][]string
-		for name, stats := range rd.VacancyStats {
-			total := 0
-			for _, c := range stats {
-				total += c
-			}
-			screeningPlus := stats["screening"] + stats["tech"] + stats["final"] + stats["offer"] + stats["accepted"]
-			offerPlus := stats["offer"] + stats["accepted"]
-			accepted := stats["accepted"]
-			contents = append(contents, []string{name, fmt.Sprintf("%d", total), fmt.Sprintf("%d", screeningPlus), fmt.Sprintf("%d", offerPlus), fmt.Sprintf("%d", accepted)})
-		}
-		m.TableList(headers, contents, props.TableList{
-			HeaderProp:  props.TableListContent{Size: 9, Style: consts.Bold},
-			ContentProp: props.TableListContent{Size: 8},
-			Align:       consts.Center,
-		})
-	}
-
-	// 4. Company Stats
-	if opts.IncludeCompanies {
-		m.AddPage()
-		rd := s.GetReportDataFromSequences(detailed)
-		m.Row(10, func() {
-			m.Col(12, func() {
-				m.Text("Performance by Company", props.Text{Size: 14, Style: consts.Bold})
-			})
-		})
-		headers := []string{"Company", "Total", "Offers", "Accepted"}
-		var contents [][]string
-		for name, stats := range rd.CompanyStats {
-			total := 0
-			for _, c := range stats {
-				total += c
-			}
-			offerPlus := stats["offer"] + stats["accepted"]
-			accepted := stats["accepted"]
-			contents = append(contents, []string{name, fmt.Sprintf("%d", total), fmt.Sprintf("%d", offerPlus), fmt.Sprintf("%d", accepted)})
-		}
-		m.TableList(headers, contents, props.TableList{
-			HeaderProp:  props.TableListContent{Size: 9, Style: consts.Bold},
-			ContentProp: props.TableListContent{Size: 8},
-			Align:       consts.Center,
-		})
-	}
-
-	// 5. Detailed Applicants
-	if opts.IncludeDetailed {
-		m.AddPage()
-		m.Row(10, func() {
-			m.Col(12, func() {
-				m.Text("Detailed Applicants", props.Text{Size: 14, Style: consts.Bold})
-			})
-		})
-		headers := []string{"Recruiter", "Company", "Date", "Last Stage", "Status", "Comment"}
-		var contents [][]string
-		for _, sd := range detailed {
-			tg := "HH"
-			if len(sd.Recruiters) > 0 {
-				r := sd.Recruiters[0]
-				if r.Platform == "tg" {
-					if r.Username != nil && *r.Username != "" {
-						tg = "@" + *r.Username
-					} else {
-						tg = deref(r.FirstName)
-					}
-				}
-			}
-			lastStage := "Initial"
-			if len(sd.History) > 0 {
-				lastStage = sd.History[len(sd.History)-1].Name
-			}
-
-			contents = append(contents, []string{
-				tg, sd.CompanyName, sd.CreatedAt.Format("2006-01-02"), lastStage, sd.Status, deref(sd.SummaryComment),
-			})
-		}
-		m.TableList(headers, contents, props.TableList{
-			HeaderProp:  props.TableListContent{Size: 9, Style: consts.Bold},
-			ContentProp: props.TableListContent{Size: 8},
-		})
-
-	}
-
-	// 6. Timelines
-	if opts.IncludeTimeline {
-		m.AddPage()
-		m.Row(10, func() {
-			m.Col(12, func() {
-				m.Text("Applicant Timelines (Visualized)", props.Text{Size: 14, Style: consts.Bold})
-			})
-		})
-		for _, sd := range detailed {
-			m.Row(10, func() {
-				m.Col(12, func() {
-					m.Text(sd.AccountName+" | "+sd.CompanyName, props.Text{Size: 10, Style: consts.Bold})
-				})
-			})
-
-			// Visual boxes for stages
-			if len(sd.History) > 0 {
-				m.Row(12, func() {
-					for _, st := range sd.History {
-						// Map status to colors
-						bgColor := color.Color{Red: 209, Green: 250, Blue: 229} // Default Green
-						stLower := strings.ToLower(st.Name)
-						switch {
-						case strings.Contains(stLower, "screening"):
-							bgColor = color.Color{Red: 224, Green: 231, Blue: 255}
-						case strings.Contains(stLower, "tech"):
-							bgColor = color.Color{Red: 243, Green: 232, Blue: 255}
-						case strings.Contains(stLower, "final"):
-							bgColor = color.Color{Red: 252, Green: 231, Blue: 243}
-						case strings.Contains(stLower, "offer"):
-							bgColor = color.Color{Red: 254, Green: 249, Blue: 195}
-						}
-
-						m.Col(2, func() {
-							m.SetBackgroundColor(bgColor)
-							m.Text(st.Name, props.Text{
-								Size: 8, Align: consts.Center, Style: consts.Bold, Top: 3.5,
-							})
-							m.SetBackgroundColor(color.NewWhite())
-						})
-					}
-				})
-			} else {
-				m.Row(8, func() {
-					m.Col(12, func() {
-						m.Text("Initial Contact", props.Text{Size: 8, Color: color.Color{Red: 150, Green: 150, Blue: 150}})
-					})
-				})
-			}
-			m.Line(5)
-		}
-	}
-
-	buf, err := m.Output()
-	if err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-func (s *ReportService) writePDFOverviewSection(m pdf.Maroto, title string, rd *ReportData, opts PDFExportOptions) {
-	m.Row(12, func() {
-		m.Col(12, func() {
-			m.Text(title, props.Text{Size: 14, Style: consts.Bold, Align: consts.Center})
-		})
-	})
-
-	if opts.IncludeKPIs {
-		m.Row(10, func() {
-			m.Col(12, func() { m.Text("Key Performance Indicators", props.Text{Size: 11, Style: consts.Bold, Top: 4}) })
-		})
-
-		// Centered KPI blocks
-		m.Row(25, func() {
-			m.ColSpace(2)
-			m.Col(3, func() {
-				m.Text("Responses", props.Text{Size: 9, Align: consts.Center, Top: 2})
-				m.Text(fmt.Sprintf("%d", rd.TotalResponses), props.Text{Size: 18, Style: consts.Bold, Align: consts.Center, Top: 8})
-			})
-			m.Col(3, func() {
-				m.Text("Conversion Rate", props.Text{Size: 9, Align: consts.Center, Top: 2})
-				m.Text(fmt.Sprintf("%.1f%%", rd.ConversionRate), props.Text{Size: 18, Style: consts.Bold, Align: consts.Center, Top: 8})
-			})
-			m.Col(3, func() {
-				m.Text("Hire Rate", props.Text{Size: 9, Align: consts.Center, Top: 2})
-				m.Text(fmt.Sprintf("%.1f%%", rd.AcceptanceRate), props.Text{Size: 18, Style: consts.Bold, Align: consts.Center, Top: 8})
-			})
-			m.ColSpace(1)
-		})
-	}
-
-	if opts.IncludeFunnel {
-		m.Row(10, func() {
-			m.Col(12, func() { m.Text("Recruitment Funnel", props.Text{Size: 11, Style: consts.Bold, Top: 6}) })
-		})
-
-		headers := []string{"Stage", "Count", "Percentage"}
-		var contents [][]string
-		for _, step := range rd.Funnel {
-			contents = append(contents, []string{step.Label, fmt.Sprintf("%d", step.Count), fmt.Sprintf("%.0f%%", step.Percentage)})
-		}
-
-		// Centered small table
-		m.Row(60, func() {
-			m.ColSpace(2)
-			m.Col(8, func() {
-				m.TableList(headers, contents, props.TableList{
-					HeaderProp:  props.TableListContent{Size: 9, Style: consts.Bold},
-					ContentProp: props.TableListContent{Size: 9},
-					Align:       consts.Center,
-				})
-			})
-			m.ColSpace(2)
-		})
-	}
 }

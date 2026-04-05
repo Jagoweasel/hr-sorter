@@ -52,7 +52,7 @@ func TestGETEndpoints(t *testing.T) {
 
 	// 5. Create Handler
 	ctx := context.Background()
-	h := NewHandler(ctx, nil, nil, nil, tm, ls,
+	h := NewHandler(ctx, nil, nil, nil, nil, tm, ls,
 		accRepo, intRepo, conRepo, msgRepo, seqRepo, fltRepo, mapRepo,
 		accService, intService, seqService, conService, fltService, repService)
 

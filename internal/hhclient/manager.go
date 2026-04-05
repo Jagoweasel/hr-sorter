@@ -201,6 +201,20 @@ func (m *Manager) syncNegotiations(ctx context.Context, integration models.Integ
 
 		logger.Debug(logger.HH, "[HH] Found %d negotiations on page %d for %s", len(data.Items), data.Page, integration.Identifier)
 
+		// Save total applications count (from the first page response)
+		if page == 0 && data.Found > 0 {
+			stats := &models.NegotiationStats{
+				IntegrationID:     integration.ID,
+				ApplicationsCount: data.Found,
+				UpdatedAt:         time.Now(),
+			}
+			// Use internal repository if available or we can use the db directly for this simple update
+			_, _ = m.db.NamedExecContext(ctx, `INSERT INTO negotiations_stats (integration_id, applications_count, updated_at)
+				VALUES (:integration_id, :applications_count, :updated_at)
+				ON CONFLICT(integration_id) DO UPDATE SET
+				applications_count=excluded.applications_count, updated_at=excluded.updated_at`, stats)
+		}
+
 		for _, item := range data.Items {
 			// 1. Ensure Contact (using Negotiation ID to keep separate)
 			contactID, err := m.getOrCreateContact(integration.ID, item.ID, item.Vacancy.Employer.Name, item.Vacancy.Name, item.State.Name)

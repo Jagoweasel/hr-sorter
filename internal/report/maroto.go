@@ -1,30 +1,30 @@
 package report
 
 import (
+	"bytes"
 	"context"
-	"embed"
-	"hr-sorter/internal/domain/dto"
+	"fmt"
+	"hr-sorter/internal/domain"
+	"hr-sorter/internal/models"
 	"io"
 )
 
-//go:embed assets/*.ttf
-var fontAssets embed.FS
-
 // PDFReportService implementation using maroto/v2
 type PDFReportService struct {
-	// fonts will be loaded from fontAssets
+	reporter domain.Reporter
 }
 
 func NewPDFReportService() *PDFReportService {
-	return &PDFReportService{}
+	return &PDFReportService{
+		reporter: NewReporter(),
+	}
 }
 
-func (s *PDFReportService) CreateReport(ctx context.Context, data dto.HHKPI) (io.ReadCloser, error) {
-	// 1. Load embedded fonts
-	// 2. Initialize maroto/v2 instance
-	// 3. Construct header (HR-SORTER Logo, Report Date, Account Name)
-	// 4. Construct KPI blocks (Response Rate, Hire Rate)
-	// 5. Construct visual recruitment funnel (Total -> Screening -> Tech -> Offer -> Accepted)
-	// 6. Generate footer (Page X of Y)
-	panic("implement me with maroto/v2")
+func (s *PDFReportService) CreateReport(ctx context.Context, data *models.ReportData) (io.ReadCloser, error) {
+	pdfBytes, err := s.reporter.GeneratePDF(ctx, data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate report: %w", err)
+	}
+
+	return io.NopCloser(bytes.NewReader(pdfBytes)), nil
 }

@@ -2,11 +2,20 @@
 <div class="max-w-6xl mx-auto">
     <div class="flex justify-between items-center mb-6">
         <h2 class="text-2xl font-bold text-gray-800 dark:text-white">{{ Tr "system_logs" }}</h2>
-        <div class="flex space-x-2">
-            <button onclick="clearLogs()" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded text-sm transition-colors">
+        <div class="flex flex-wrap items-center gap-3">
+            <!-- Filter Controls -->
+            <div class="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-lg border dark:border-gray-600">
+                <button onclick="setLogLevel('ALL')" id="btn-all" class="px-3 py-1 rounded-md text-xs font-bold transition-colors bg-white dark:bg-gray-600 shadow-sm">{{ Tr "all" }}</button>
+                <button onclick="setLogLevel('DEBUG')" id="btn-debug" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-gray-500">DEBUG</button>
+                <button onclick="setLogLevel('INFO')" id="btn-info" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-blue-500">INFO</button>
+                <button onclick="setLogLevel('WARN')" id="btn-warn" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-yellow-600">WARN</button>
+                <button onclick="setLogLevel('ERROR')" id="btn-error" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-red-500">ERROR</button>
+            </div>
+
+            <button onclick="clearLogs()" class="px-4 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg text-xs font-bold transition-colors border dark:border-gray-600">
                 {{ Tr "clear" }}
             </button>
-            <div id="connection-status" class="flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+            <div id="connection-status" class="flex items-center px-3 py-1.5 rounded-lg text-xs font-bold bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200 border border-yellow-200 dark:border-yellow-800">
                 <span class="w-2 h-2 rounded-full bg-yellow-500 mr-2"></span>
                 {{ Tr "connecting" }}
             </div>
@@ -26,6 +35,39 @@
         disconnected: '{{ Tr "disconnected" }}'
     };
     let eventSource;
+    let currentLogLevel = 'ALL';
+
+    function setLogLevel(level) {
+        currentLogLevel = level;
+        
+        // Update button styles
+        ['all', 'debug', 'info', 'warn', 'error'].forEach(l => {
+            const btn = document.getElementById(`btn-${l}`);
+            if (l === level.toLowerCase()) {
+                btn.classList.add('bg-white', 'dark:bg-gray-600', 'shadow-sm');
+                btn.classList.remove('hover:bg-white/50', 'dark:hover:bg-gray-600/50');
+            } else {
+                btn.classList.remove('bg-white', 'dark:bg-gray-600', 'shadow-sm');
+                btn.classList.add('hover:bg-white/50', 'dark:hover:bg-gray-600/50');
+            }
+        });
+
+        // Filter existing logs
+        const entries = logContainer.querySelectorAll('div.log-entry');
+        entries.forEach(entry => {
+            if (shouldShow(entry.textContent, level)) {
+                entry.classList.remove('hidden');
+            } else {
+                entry.classList.add('hidden');
+            }
+        });
+    }
+
+    function shouldShow(text, level) {
+        if (level === 'ALL') return true;
+        const upperText = text.toUpperCase();
+        return upperText.includes(`[${level}]`) || upperText.includes(`"LEVEL":"${level.toLowerCase()}"`);
+    }
 
     function connect() {
         if (eventSource) eventSource.close();
@@ -34,19 +76,19 @@
         
         eventSource.onopen = () => {
             statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>${translations.live}`;
-            statusEl.className = 'flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+            statusEl.className = 'flex items-center px-3 py-1.5 rounded-lg text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 border border-green-200 dark:border-green-800';
         };
 
         eventSource.onerror = (e) => {
             console.error('SSE error:', e);
             statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 mr-2"></span>${translations.disconnected}`;
-            statusEl.className = 'flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+            statusEl.className = 'flex items-center px-3 py-1.5 rounded-lg text-xs font-bold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200 border border-red-200 dark:border-red-800';
             setTimeout(connect, 3000);
         };
 
         eventSource.onmessage = (e) => {
             const div = document.createElement('div');
-            div.className = 'mb-1 border-l-2 border-transparent hover:border-gray-700 pl-2 transition-colors';
+            div.className = 'log-entry mb-1 border-l-2 border-transparent hover:border-gray-700 dark:hover:border-gray-500 pl-2 transition-colors';
             
             // Basic syntax highlighting for common log levels
             let line = e.data;
@@ -58,12 +100,21 @@
                 div.classList.add('text-gray-500');
             }
 
+            if (!shouldShow(line, currentLogLevel)) {
+                div.classList.add('hidden');
+            }
+
             div.textContent = line;
             logContainer.appendChild(div);
             
             // Auto-scroll to bottom if near bottom
             if (logContainer.scrollHeight - logContainer.scrollTop - logContainer.clientHeight < 100) {
                 logContainer.scrollTop = logContainer.scrollHeight;
+            }
+
+            // Keep log container size manageable
+            if (logContainer.children.length > 1000) {
+                logContainer.removeChild(logContainer.firstChild);
             }
         };
     }

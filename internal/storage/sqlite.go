@@ -125,15 +125,31 @@ func (r *SQLiteRepository) SaveNegotiationsStats(ctx context.Context, stats *mod
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	query := `INSERT INTO negotiations_stats (sequence_id, applications_count, updated_at)
-			  VALUES (:sequence_id, :applications_count, :updated_at)
-			  ON CONFLICT(sequence_id) DO UPDATE SET
+	query := `INSERT INTO negotiations_stats (integration_id, applications_count, updated_at)
+			  VALUES (:integration_id, :applications_count, :updated_at)
+			  ON CONFLICT(integration_id) DO UPDATE SET
 			  applications_count=excluded.applications_count, updated_at=excluded.updated_at`
 	_, err := r.db.NamedExecContext(ctx, query, stats)
 	if err != nil {
 		return fmt.Errorf("failed to save negotiation stats: %w", err)
 	}
 	return nil
+}
+
+func (r *SQLiteRepository) GetTotalApplications(ctx context.Context, accountID string) (int, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	query := "SELECT COALESCE(SUM(applications_count), 0) FROM negotiations_stats ns JOIN integrations i ON ns.integration_id = i.id"
+	var args []interface{}
+	if accountID != "" {
+		query += " WHERE i.account_id = ?"
+		args = append(args, accountID)
+	}
+
+	var count int
+	err := r.db.GetContext(ctx, &count, query, args...)
+	return count, err
 }
 
 func (r *SQLiteRepository) GetMappingRules(ctx context.Context) (map[string]string, error) {
