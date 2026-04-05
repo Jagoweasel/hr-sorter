@@ -33,6 +33,10 @@ func (h *Handler) handleCreateIntegration(w http.ResponseWriter, r *http.Request
 }
 
 func (h *Handler) handleToggleIntegration(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	id := r.URL.Query().Get("id")
 	if err := h.intService.ToggleIntegration(r.Context(), id, h.rootCtx); err != nil {
 		http.Error(w, err.Error(), 500)
@@ -47,6 +51,10 @@ func (h *Handler) handleToggleIntegration(w http.ResponseWriter, r *http.Request
 }
 
 func (h *Handler) handleDeleteIntegration(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete && r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	idStr := r.URL.Query().Get("id")
 	if err := h.intService.DeleteIntegration(r.Context(), idStr); err != nil {
 		http.Error(w, err.Error(), 500)
@@ -75,7 +83,7 @@ func (h *Handler) handleIntegrationStatus(w http.ResponseWriter, r *http.Request
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	h.templates.Render(w, "fragments/status.json", struct {
+	h.templates.Render(w, r, "fragments/status.json", struct {
 		Status     string `json:"status"`
 		Identifier string `json:"identifier"`
 		Platform   string `json:"platform"`

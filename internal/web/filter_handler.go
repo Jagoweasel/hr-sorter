@@ -13,10 +13,14 @@ func (h *Handler) handleGetFilters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.templates.RenderWithStatus(w, "fragments/filter_list.html", http.StatusOK, filters, h.getLocale(r))
+	h.templates.RenderWithStatus(w, r, "fragments/filter_list.html", http.StatusOK, filters, h.getLocale(r))
 }
 
 func (h *Handler) handleAddFilter(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	pattern := r.FormValue("pattern")
 	if err := h.fltService.AddFilter(r.Context(), pattern); err != nil {
 		http.Error(w, err.Error(), 500)
@@ -27,6 +31,10 @@ func (h *Handler) handleAddFilter(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleDeleteFilter(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete && r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	id := r.URL.Query().Get("id")
 	if err := h.fltService.DeleteFilter(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
@@ -37,6 +45,10 @@ func (h *Handler) handleDeleteFilter(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleToggleFilter(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	id := r.URL.Query().Get("id")
 	if err := h.fltService.ToggleFilter(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
@@ -47,6 +59,10 @@ func (h *Handler) handleToggleFilter(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleExportFilters(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	if err := h.fltService.ExportFilters(r.Context()); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -56,6 +72,10 @@ func (h *Handler) handleExportFilters(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleImportFilters(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	if err := h.fltService.ImportFilters(r.Context()); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -65,6 +85,10 @@ func (h *Handler) handleImportFilters(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleUploadFilters(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	log.Printf("Web: Received filter upload request")
 	if err := r.ParseMultipartForm(10 << 20); err != nil { // 10MB limit
 		log.Printf("Web: Upload error: %v", err)

@@ -2,6 +2,7 @@ package web
 
 import (
 	"fmt"
+	"github.com/gorilla/csrf"
 	"hr-sorter/internal/i18n"
 	"html/template"
 	"io"
@@ -145,7 +146,7 @@ func NewTemplateManager(ls *i18n.LocalizationService) (*TemplateManager, error) 
 	return tm, nil
 }
 
-func (tm *TemplateManager) Render(w io.Writer, name string, data interface{}, locale string) error {
+func (tm *TemplateManager) Render(w io.Writer, r *http.Request, name string, data interface{}, locale string) error {
 	t, ok := tm.templates[name]
 	if !ok {
 		return fmt.Errorf("template %s not found", name)
@@ -164,6 +165,12 @@ func (tm *TemplateManager) Render(w io.Writer, name string, data interface{}, lo
 		"Locale": func() string {
 			return locale
 		},
+		"csrfField": func() template.HTML {
+			return csrf.TemplateField(r)
+		},
+		"csrfToken": func() string {
+			return csrf.Token(r)
+		},
 	})
 
 	// If it's a main page (no slash), use ExecuteTemplate with layout.html
@@ -174,10 +181,10 @@ func (tm *TemplateManager) Render(w io.Writer, name string, data interface{}, lo
 	return t.Execute(w, data)
 }
 
-func (tm *TemplateManager) RenderWithStatus(w http.ResponseWriter, name string, status int, data interface{}, locale string) {
+func (tm *TemplateManager) RenderWithStatus(w http.ResponseWriter, r *http.Request, name string, status int, data interface{}, locale string) {
 	// Set status before rendering
 	w.WriteHeader(status)
-	if err := tm.Render(w, name, data, locale); err != nil {
+	if err := tm.Render(w, r, name, data, locale); err != nil {
 		log.Printf("Template error: %v", err)
 		fmt.Fprintf(w, "Error rendering template: %v", err)
 	}

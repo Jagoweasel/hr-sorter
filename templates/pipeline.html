@@ -1,43 +1,43 @@
 {{ define "content" }}
-<div class="flex flex-col h-screen overflow-hidden bg-white">
+<div class="flex flex-col h-screen overflow-hidden bg-white dark:bg-gray-900">
     <!-- Header -->
-    <div class="flex justify-between items-center px-4 py-2 shrink-0 border-b shadow-sm bg-gray-50">
+    <div class="flex justify-between items-center px-4 py-2 shrink-0 border-b dark:border-gray-700 shadow-sm bg-gray-50 dark:bg-gray-800">
         <div>
-            <h1 class="text-lg font-black text-gray-900 tracking-tighter">Pipeline</h1>
+            <h1 class="text-lg font-black text-gray-900 dark:text-white tracking-tighter">{{ Tr "pipeline" }}</h1>
         </div>
 
         <div class="flex items-center space-x-4 ml-4 mr-auto">
             <label class="flex items-center space-x-1 cursor-pointer">
-                <input type="checkbox" onchange="applyFilters()" id="hide-rejected" {{ if .HideRejected }}checked{{ end }} class="w-3 h-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-                <span class="text-[9px] font-black text-gray-400 uppercase tracking-tight">Hide Rejected</span>
+                <input type="checkbox" onchange="applyFilters()" id="hide-rejected" {{ if .HideRejected }}checked{{ end }} class="w-3 h-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+                <span class="text-[9px] font-black text-gray-400 uppercase tracking-tight">{{ Tr "hide_rejected" }}</span>
             </label>
             <label class="flex items-center space-x-1 cursor-pointer">
-                <input type="checkbox" onchange="applyFilters()" id="hide-accepted" {{ if .HideAccepted }}checked{{ end }} class="w-3 h-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-                <span class="text-[9px] font-black text-gray-400 uppercase tracking-tight">Hide Accepted</span>
+                <input type="checkbox" onchange="applyFilters()" id="hide-accepted" {{ if .HideAccepted }}checked{{ end }} class="w-3 h-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+                <span class="text-[9px] font-black text-gray-400 uppercase tracking-tight">{{ Tr "hide_accepted" }}</span>
             </label>
         </div>
         
-        <div class="bg-gray-200 p-1 rounded-lg flex space-x-1 border border-gray-300">
+        <div class="bg-gray-200 dark:bg-gray-700 p-1 rounded-lg flex space-x-1 border border-gray-300 dark:border-gray-600">
             <button onclick="toggleBulkMode()" id="bulk-toggle"
-               class="px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all text-gray-500 hover:text-gray-700">
-                Bulk Mode
+               class="px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+                {{ Tr "bulk_mode" }}
             </button>
-            <div id="bulk-select-all-container" class="hidden flex items-center space-x-1 px-2 border-r border-gray-300 mr-1">
-                <input type="checkbox" id="bulk-select-all" onchange="selectAllVisible(this)" class="w-3 h-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-                <label for="bulk-select-all" class="text-[9px] font-black text-gray-500 uppercase tracking-tight cursor-pointer">All</label>
+            <div id="bulk-select-all-container" class="hidden flex items-center space-x-1 px-2 border-r border-gray-300 dark:border-gray-600 mr-1">
+                <input type="checkbox" id="bulk-select-all" onchange="selectAllVisible(this)" class="w-3 h-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+                <label for="bulk-select-all" class="text-[9px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-tight cursor-pointer">{{ Tr "all" }}</label>
             </div>
-            <button id="bulk-delete-btn" hx-post="/sequences/bulk-delete" hx-include="#bulk-form" hx-confirm="Delete selected sequences?"
+            <button id="bulk-delete-btn" hx-post="/sequences/bulk-delete" hx-include="#bulk-form" hx-confirm="{{ Tr "confirm_bulk_delete" }}"
                     class="hidden px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all bg-red-500 text-white shadow-sm hover:bg-red-600">
-                Delete Selected
+                {{ Tr "delete_selected" }}
             </button>
-            <div class="w-px bg-gray-300 mx-1 my-1"></div>
+            <div class="w-px bg-gray-300 dark:bg-gray-600 mx-1 my-1"></div>
             <a href="/pipeline?view=kanban" 
-               class="px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all {{ if eq .View "kanban" }}bg-white text-blue-600 shadow-sm{{ else }}text-gray-500 hover:text-gray-700{{ end }}">
-                Kanban
+               class="px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all {{ if eq .View "kanban" }}bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm{{ else }}text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200{{ end }}">
+                {{ Tr "kanban" }}
             </a>
             <a href="/pipeline?view=timeline" 
-               class="px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all {{ if eq .View "timeline" }}bg-white text-blue-600 shadow-sm{{ else }}text-gray-500 hover:text-gray-700{{ end }}">
-                Timeline
+               class="px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all {{ if eq .View "timeline" }}bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm{{ else }}text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200{{ end }}">
+                {{ Tr "timeline" }}
             </a>
         </div>
     </div>
@@ -47,17 +47,18 @@
         <!-- Compact Kanban View -->
         <div class="h-full overflow-auto pb-8">
             <form id="bulk-form">
+            {{ csrfField }}
             <div class="inline-flex flex-col min-w-full">
                 
                 <!-- Sticky Header Row -->
-                <div class="flex flex-nowrap sticky top-0 z-30 bg-white/95 backdrop-blur-md py-2 border-b">
-                    <div class="w-48 shrink-0 font-black text-gray-400 text-[9px] uppercase tracking-widest flex items-center px-4 sticky left-0 bg-white z-40 border-r shadow-sm">
-                        Applicants
+                <div class="flex flex-nowrap sticky top-0 z-30 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md py-2 border-b dark:border-gray-700">
+                    <div class="w-48 shrink-0 font-black text-gray-400 dark:text-gray-500 text-[9px] uppercase tracking-widest flex items-center px-4 sticky left-0 bg-white dark:bg-gray-900 z-40 border-r dark:border-gray-700 shadow-sm">
+                        {{ Tr "applicants" }}
                     </div>
                     {{ range .ColumnDefs }}
-                    <div class="w-56 shrink-0 px-4 flex flex-col justify-center border-r last:border-r-0">
+                    <div class="w-56 shrink-0 px-4 flex flex-col justify-center border-r dark:border-gray-700 last:border-r-0">
                         <div class="flex items-center justify-between">
-                            <span class="font-black text-gray-700 text-[9px] uppercase tracking-wider">{{ .Label }}</span>
+                            <span class="font-black text-gray-700 dark:text-gray-300 text-[9px] uppercase tracking-wider">{{ .Label }}</span>
                             <div class="h-1 w-1 rounded-full bg-blue-500 shadow-[0_0_5px_rgba(59,130,246,0.5)]"></div>
                         </div>
                     </div>
@@ -65,18 +66,18 @@
                 </div>
 
                 <!-- Account Groups -->
-                <div class="divide-y border-b">
+                <div class="divide-y dark:divide-gray-700 border-b dark:border-gray-700">
                     {{ range .Groups }}
-                    <div class="flex flex-nowrap group/row hover:bg-gray-50/50">
+                    <div class="flex flex-nowrap group/row hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
                         <!-- Sticky Sidebar -->
-                        <div class="w-48 shrink-0 sticky left-0 z-20 bg-white group-hover/row:bg-gray-50 pr-2 border-r shadow-sm flex items-center px-4 py-3">
+                        <div class="w-48 shrink-0 sticky left-0 z-20 bg-white dark:bg-gray-900 group-hover/row:bg-gray-50 dark:group-hover/row:bg-gray-800 pr-2 border-r dark:border-gray-700 shadow-sm flex items-center px-4 py-3">
                             <div class="flex items-center space-x-2 overflow-hidden">
-                                <div class="w-7 h-7 shrink-0 rounded-lg bg-gray-900 text-white flex items-center justify-center text-[10px] font-black">
+                                <div class="w-7 h-7 shrink-0 rounded-lg bg-gray-900 dark:bg-blue-600 text-white flex items-center justify-center text-[10px] font-black">
                                     {{ if .Account }}{{ slice .Account.Name 0 1 }}{{ else }}?{{ end }}
                                 </div>
                                 <div class="truncate">
-                                    <p class="font-black text-gray-900 text-[10px] truncate leading-none mb-1">{{ if .Account }}{{ .Account.Name }}{{ else }}General{{ end }}</p>
-                                    <p class="text-[7px] text-gray-400 font-bold uppercase tracking-tighter">{{ len .Sequences }} Active</p>
+                                    <p class="font-black text-gray-900 dark:text-white text-[10px] truncate leading-none mb-1">{{ if .Account }}{{ .Account.Name }}{{ else }}{{ Tr "general" }}{{ end }}</p>
+                                    <p class="text-[7px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-tighter">{{ len .Sequences }} Active</p>
                                 </div>
                             </div>
                         </div>
@@ -84,30 +85,30 @@
                         <!-- Columns -->
                         {{ range .Columns }}
                         {{ $colDef := .ColumnDef }}
-                        <div class="w-56 shrink-0 p-2 space-y-2 min-h-[100px] border-r last:border-r-0 {{ .ColorClass }}/20">
+                        <div class="w-56 shrink-0 p-2 space-y-2 min-h-[100px] border-r dark:border-gray-700 last:border-r-0 {{ .ColorClass }}/20 dark:{{ .ColorClass }}/10">
                             {{ range .Sequences }}
-                            <div id="seq-card-{{ .ID }}" class="bg-white p-2.5 rounded-lg shadow-sm border border-gray-200 group/card relative hover:shadow-md transition-all flex flex-col space-y-1.5">
+                            <div id="seq-card-{{ .ID }}" class="bg-white dark:bg-gray-800 p-2.5 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 group/card relative hover:shadow-md transition-all flex flex-col space-y-1.5">
                                 <div class="absolute top-2 right-2 flex items-center space-x-1 opacity-0 group-hover/card:opacity-100 transition-opacity">
                                     <button hx-get="/sequences/edit-modal?id={{ .ID }}" hx-target="#modal-container" 
-                                            class="p-0.5 text-gray-300 hover:text-blue-500 transition-colors">
+                                            class="p-0.5 text-gray-300 dark:text-gray-600 hover:text-blue-500 dark:hover:text-blue-400 transition-colors">
                                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                                     </button>
-                                    <button class="p-0.5 text-gray-300 hover:text-red-500 transition-colors"
-                                            hx-get="/sequences/delete?id={{ .ID }}" hx-confirm="Delete sequence?" hx-target="body">
+                                    <button class="p-0.5 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-colors"
+                                            hx-delete="/sequences/delete?id={{ .ID }}" hx-confirm="{{ Tr "confirm_delete_sequence" }}" hx-target="body">
                                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                     </button>
                                 </div>
                                 <div class="absolute top-2 left-2 hidden bulk-checkbox-container">
-                                    <input type="checkbox" name="sequence_ids" value="{{ .ID }}" class="w-3 h-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                    <input type="checkbox" name="sequence_ids" value="{{ .ID }}" class="w-3 h-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
                                 </div>
                                 <div class="flex justify-between items-start">
                                     <div class="overflow-hidden pr-6 bulk-checkbox-container-padding">
-                                        <h3 class="font-black text-gray-900 text-[11px] truncate leading-tight">{{ .CompanyName }}</h3>
-                                        <p class="text-[8px] text-gray-400 font-bold uppercase mt-0.5 truncate">{{ .VacancyName }}</p>
+                                        <h3 class="font-black text-gray-900 dark:text-white text-[11px] truncate leading-tight">{{ .CompanyName }}</h3>
+                                        <p class="text-[8px] text-gray-400 dark:text-gray-500 font-bold uppercase mt-0.5 truncate">{{ .VacancyName }}</p>
                                     </div>
                                     <div class="flex -space-x-1 shrink-0 ml-1">
                                         {{ range .Recruiters }}
-                                        <a href="/?contact_id={{ .ID }}" class="w-4 h-4 rounded-md bg-blue-50 border border-white flex items-center justify-center text-[7px] font-black text-blue-600 shadow-sm hover:scale-110 transition-transform" title="Go to chat with {{ .FirstName }}">
+                                        <a href="/?contact_id={{ .ID }}" class="w-4 h-4 rounded-md bg-blue-50 dark:bg-blue-900/40 border border-white dark:border-gray-700 flex items-center justify-center text-[7px] font-black text-blue-600 dark:text-blue-400 shadow-sm hover:scale-110 transition-transform" title="Go to chat with {{ .FirstName }}">
                                             {{ slice .FirstName 0 1 }}
                                         </a>
                                         {{ end }}
@@ -116,9 +117,20 @@
 
                                 <!-- Actions -->
                                 <div class="flex items-center justify-between space-x-1 pt-1">
-                                    <select class="flex-1 text-[8px] bg-white border border-gray-200 rounded px-1 py-0.5 font-black text-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/10 outline-none appearance-none hover:bg-gray-50 cursor-pointer"
-                                            onchange="if(this.value) location.href='/sequences/move?id={{ .ID }}&status=' + this.value">
-                                        <option value="">Status...</option>
+                                    <select class="flex-1 text-[8px] bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-1 py-0.5 font-black text-gray-500 dark:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500/10 outline-none appearance-none hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer"
+                                            onchange="if(this.value) { 
+                                                const form = document.createElement('form');
+                                                form.method = 'POST';
+                                                form.action = '/sequences/move?id={{ .ID }}&status=' + this.value;
+                                                const csrf = document.createElement('input');
+                                                csrf.type = 'hidden';
+                                                csrf.name = 'gorilla.csrf.Token';
+                                                csrf.value = '{{ csrfToken }}';
+                                                form.appendChild(csrf);
+                                                document.body.appendChild(form);
+                                                form.submit();
+                                            }">
+                                        <option value="">{{ Tr "status" }}...</option>
                                         {{ range $.ColumnDefs }}
                                         <option value="{{ .ID }}" {{ if eq .ID $colDef.ID }}selected{{ end }}>{{ .Label }}</option>
                                         {{ end }}
@@ -138,53 +150,54 @@
 
         {{ else }}
         <!-- Thinned Timeline History Chain View -->
-        <div class="h-full overflow-auto px-4 py-4 bg-gray-50">
+        <div class="h-full overflow-auto px-4 py-4 bg-gray-50 dark:bg-gray-900">
             <div class="max-w-5xl mx-auto space-y-8">
                 {{ range .Groups }}
                 <div class="space-y-3">
                     <!-- Account Group Header -->
-                    <div class="flex items-center space-x-2 border-b pb-1 px-1">
+                    <div class="flex items-center space-x-2 border-b dark:border-gray-700 pb-1 px-1">
                         <div class="w-6 h-6 rounded bg-blue-600 flex items-center justify-center text-white shadow-sm font-black text-[10px]">
                             {{ if .Account }}{{ slice .Account.Name 0 1 }}{{ else }}?{{ end }}
                         </div>
-                        <h2 class="font-black text-xs text-gray-800 tracking-tight">{{ if .Account }}{{ .Account.Name }}{{ else }}General Sequences{{ end }}</h2>
+                        <h2 class="font-black text-xs text-gray-800 dark:text-white tracking-tight">{{ if .Account }}{{ .Account.Name }}{{ else }}{{ Tr "general" }} Sequences{{ end }}</h2>
                     </div>
 
                     <div class="space-y-4">
                         {{ range .Sequences }}
                         {{ $seq := . }}
                         {{ $historyLen := len .History }}
-                        <div id="seq-card-{{ .ID }}" class="bg-white p-3 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                        <div id="seq-card-{{ .ID }}" class="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
                             <!-- Sequence Info Bar -->
                             <div class="flex items-center justify-between mb-2">
                                 <div class="flex items-center space-x-3 overflow-hidden">
-                                    <span class="px-2 py-0.5 bg-gray-900 text-white rounded text-[9px] font-black uppercase tracking-widest shrink-0">{{ .CompanyName }}</span>
+                                    <span class="px-2 py-0.5 bg-gray-900 dark:bg-blue-600 text-white rounded text-[9px] font-black uppercase tracking-widest shrink-0">{{ .CompanyName }}</span>
                                     <div class="flex -space-x-1 shrink-0">
                                         {{ range .Recruiters }}
-                                        <a href="/?contact_id={{ .ID }}" class="w-5 h-5 rounded-md bg-blue-100 border-2 border-white flex items-center justify-center text-[8px] font-black text-blue-600 shadow-sm hover:scale-110 transition-transform" title="Go to chat with {{ .FirstName }}">
+                                        <a href="/?contact_id={{ .ID }}" class="w-5 h-5 rounded-md bg-blue-100 dark:bg-blue-900/40 border-2 border-white dark:border-gray-800 flex items-center justify-center text-[8px] font-black text-blue-600 dark:text-blue-400 shadow-sm hover:scale-110 transition-transform" title="Go to chat with {{ .FirstName }}">
                                             {{ slice .FirstName 0 1 }}
                                         </a>
                                         {{ end }}
                                     </div>
-                                    <span class="text-gray-400 font-bold text-[9px] uppercase tracking-widest truncate max-w-[200px]">{{ .VacancyName }}</span>
+                                    <span class="text-gray-400 dark:text-gray-500 font-bold text-[9px] uppercase tracking-widest truncate max-w-[200px]">{{ .VacancyName }}</span>
                                 </div>
                                 
                                 <!-- Terminal Actions (Reject/Accept) -->
                                 <div class="flex items-center space-x-1.5 shrink-0">
-                                    <div class="flex bg-gray-100 rounded-md p-0.5 border border-gray-200 space-x-0.5 mr-2">
-                                        <button hx-get="/sequences/move?id={{ .ID }}&status=accepted" hx-target="body" hx-confirm="Accept candidate?"
-                                                class="p-1 bg-green-500 text-white rounded hover:bg-green-600 transition-colors shadow-sm" title="Accept">
+                                    <div class="flex bg-gray-100 dark:bg-gray-700 rounded-md p-0.5 border border-gray-200 dark:border-gray-700 space-x-0.5 mr-2">
+                                        <button hx-post="/sequences/move?id={{ .ID }}&status=accepted" hx-target="body" hx-confirm="{{ Tr "confirm_accept_candidate" }}"
+                                                class="p-1 bg-green-500 text-white rounded hover:bg-green-600 transition-colors shadow-sm" title="{{ Tr "accepted" }}">
                                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
                                         </button>
-                                        <button hx-get="/sequences/move?id={{ .ID }}&status=rejected" hx-target="body" hx-confirm="Reject candidate?"
-                                                class="p-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors shadow-sm" title="Reject">
+                                        <button hx-post="/sequences/move?id={{ .ID }}&status=rejected" hx-target="body" hx-confirm="{{ Tr "confirm_reject_candidate" }}"
+                                                class="p-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors shadow-sm" title="{{ Tr "rejected" }}">
                                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
                                         </button>
                                     </div>
+
                                     
                                     <!-- Simple indicator if no chain yet -->
                                     {{ if eq $historyLen 0 }}
-                                    <span class="text-[8px] font-black text-gray-300 uppercase italic">Idle</span>
+                                    <span class="text-[8px] font-black text-gray-300 dark:text-gray-600 uppercase italic">{{ Tr "idle" }}</span>
                                     {{ end }}
                                 </div>
                             </div>
@@ -194,20 +207,20 @@
                                 <div class="inline-flex items-center space-x-2">
                                     {{ range $idx, $stage := .History }}
                                     <!-- Completed Stage Card -->
-                                    <div class="relative px-3 py-1.5 rounded-lg border-2 bg-white shadow-sm min-w-[130px] group/node
-                                        {{ if and $seq.IsRejected (eq (add $idx 1) $historyLen) }}border-red-500 bg-red-50{{ else }}border-green-500{{ end }}">
+                                    <div class="relative px-3 py-1.5 rounded-lg border-2 bg-white dark:bg-gray-800 shadow-sm min-w-[130px] group/node
+                                        {{ if and $seq.IsRejected (eq (add $idx 1) $historyLen) }}border-red-500 bg-red-50 dark:bg-red-900/20{{ else }}border-green-500{{ end }}">
                                         <div class="flex justify-between items-start">
-                                            <span class="text-[6px] font-black text-gray-400 uppercase leading-none">Step {{ add $idx 1 }}</span>
-                                            <button hx-get="/stages/update?id={{ .ID }}&completed=false" hx-target="body" 
-                                                    class="opacity-0 group-hover/node:opacity-100 transition-opacity text-gray-300 hover:text-red-500 leading-none">
+                                            <span class="text-[6px] font-black text-gray-400 dark:text-gray-500 uppercase leading-none">{{ Tr "step" }} {{ add $idx 1 }}</span>
+                                            <button hx-post="/stages/update?id={{ .ID }}&completed=false" hx-target="body" 
+                                                    class="opacity-0 group-hover/node:opacity-100 transition-opacity text-gray-300 dark:text-gray-600 hover:text-red-500 leading-none">
                                                 <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
                                             </button>
                                         </div>
-                                        <p class="text-[10px] font-black text-gray-900 leading-tight truncate mt-0.5">{{ .Name }}</p>
+                                        <p class="text-[10px] font-black text-gray-900 dark:text-white leading-tight truncate mt-0.5">{{ .Name }}</p>
                                     </div>
                                     
                                     <!-- Arrow Connector -->
-                                    <div class="text-gray-200 flex items-center shrink-0">
+                                    <div class="text-gray-200 dark:text-gray-700 flex items-center shrink-0">
                                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
                                     </div>
                                     {{ end }}
@@ -216,11 +229,11 @@
                                     {{ if not (or .IsAccepted .IsRejected) }}
                                         {{ range .Stages }}
                                             {{ if not .IsCompleted }}
-                                            <button hx-get="/stages/update?id={{ .ID }}&completed=true" hx-target="body"
-                                                    class="px-3 py-1.5 rounded-lg border border-dashed border-gray-300 text-left min-w-[130px] opacity-40 hover:opacity-100 hover:border-blue-400 hover:bg-blue-50 transition-all group/next">
-                                                <p class="text-[10px] font-black text-gray-500 truncate leading-tight">{{ .Name }}</p>
+                                            <button hx-post="/stages/update?id={{ .ID }}&completed=true" hx-target="body"
+                                                    class="px-3 py-1.5 rounded-lg border border-dashed border-gray-300 dark:border-gray-700 text-left min-w-[130px] opacity-40 hover:opacity-100 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group/next">
+                                                <p class="text-[10px] font-black text-gray-500 dark:text-gray-400 truncate leading-tight">{{ .Name }}</p>
                                             </button>
-                                            <div class="text-gray-100 flex items-center shrink-0">
+                                            <div class="text-gray-100 dark:text-gray-800 flex items-center shrink-0">
                                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
                                             </div>
                                             {{ end }}
@@ -230,7 +243,7 @@
                                         <div class="shrink-0">
                                             <button hx-get="/sequences/add-stage-modal?sequence_id={{ .ID }}"
                                                     hx-target="#modal-container"
-                                                    class="w-7 h-7 rounded border border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:border-blue-400 hover:bg-white transition-all shadow-sm">
+                                                    class="w-7 h-7 rounded border border-dashed border-gray-300 dark:border-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-600 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-white dark:hover:bg-gray-800 transition-all shadow-sm">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"></path></svg>
                                             </button>
                                         </div>
@@ -239,8 +252,8 @@
                                     {{ if .IsAccepted }}
                                     <!-- Final Accepted Milestone -->
                                     <div class="flex-shrink-0">
-                                        <div class="px-4 py-1.5 rounded-lg border-2 border-double bg-green-50 border-green-600 text-center shadow-sm">
-                                            <p class="text-[9px] font-black text-green-800 uppercase tracking-tighter">Accepted</p>
+                                        <div class="px-4 py-1.5 rounded-lg border-2 border-double bg-green-50 dark:bg-green-900/20 border-green-600 dark:border-green-500 text-center shadow-sm">
+                                            <p class="text-[9px] font-black text-green-800 dark:text-green-400 uppercase tracking-tighter">{{ Tr "accepted" }}</p>
                                         </div>
                                     </div>
                                     {{ end }}
@@ -270,8 +283,14 @@
         background: #e2e8f0;
         border-radius: 10px;
     }
+    .dark ::-webkit-scrollbar-thumb {
+        background: #4a5568;
+    }
     ::-webkit-scrollbar-thumb:hover {
         background: #cbd5e1;
+    }
+    .dark ::-webkit-scrollbar-thumb:hover {
+        background: #718096;
     }
     .flex-nowrap {
         flex-wrap: nowrap !important;
@@ -298,14 +317,14 @@
             deleteBtn.classList.remove('hidden');
             selectAllContainer.classList.remove('hidden');
             selectAllContainer.classList.add('flex');
-            toggleBtn.classList.add('bg-white', 'text-blue-600', 'shadow-sm');
-            toggleBtn.classList.remove('text-gray-500');
+            toggleBtn.classList.add('bg-white', 'dark:bg-gray-600', 'text-blue-600', 'dark:text-blue-400', 'shadow-sm');
+            toggleBtn.classList.remove('text-gray-500', 'dark:text-gray-400');
         } else {
             deleteBtn.classList.add('hidden');
             selectAllContainer.classList.add('hidden');
             selectAllContainer.classList.remove('flex');
-            toggleBtn.classList.remove('bg-white', 'text-blue-600', 'shadow-sm');
-            toggleBtn.classList.add('text-gray-500');
+            toggleBtn.classList.remove('bg-white', 'dark:bg-gray-600', 'text-blue-600', 'dark:text-blue-400', 'shadow-sm');
+            toggleBtn.classList.add('text-gray-500', 'dark:text-gray-400');
             // Uncheck all
             document.querySelectorAll('input[name="sequence_ids"]').forEach(i => i.checked = false);
             document.getElementById('bulk-select-all').checked = false;

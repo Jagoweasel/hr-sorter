@@ -6,7 +6,7 @@ import (
 )
 
 func (h *Handler) handleLogs(w http.ResponseWriter, r *http.Request) {
-	h.templates.RenderWithStatus(w, "logs.html", http.StatusOK, nil, h.getLocale(r))
+	h.templates.RenderWithStatus(w, r, "logs.html", http.StatusOK, nil, h.getLocale(r))
 }
 
 func (h *Handler) handleLogStream(w http.ResponseWriter, r *http.Request) {

@@ -16,5 +16,5 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.templates.RenderWithStatus(w, "index.html", http.StatusOK, accounts, h.getLocale(r))
+	h.templates.RenderWithStatus(w, r, "index.html", http.StatusOK, accounts, h.getLocale(r))
 }

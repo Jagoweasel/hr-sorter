@@ -70,6 +70,10 @@ func (h *Handler) handleAddToSequence(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleUpdateStage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	stageID := r.URL.Query().Get("id")
 	completed := r.URL.Query().Get("completed") == "true"
 
@@ -78,10 +82,19 @@ func (h *Handler) handleUpdateStage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Location", h.getRedirectURL(r))
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	http.Redirect(w, r, h.getRedirectURL(r), 303)
 }
 
 func (h *Handler) handleAddStage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	seqIDStr := r.URL.Query().Get("sequence_id")
 	category := r.URL.Query().Get("category")
 	name := r.URL.Query().Get("name")
@@ -92,10 +105,19 @@ func (h *Handler) handleAddStage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Location", h.getRedirectURL(r))
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	http.Redirect(w, r, h.getRedirectURL(r), 303)
 }
 
 func (h *Handler) handleMoveSequence(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	seqIDStr := r.URL.Query().Get("id")
 	status := r.URL.Query().Get("status")
 	seqID, _ := strconv.ParseInt(seqIDStr, 10, 64)
@@ -105,6 +127,11 @@ func (h *Handler) handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Location", h.getRedirectURL(r))
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	http.Redirect(w, r, h.getRedirectURL(r), 303)
 }
 
@@ -115,7 +142,7 @@ func (h *Handler) handleEditSequenceModal(w http.ResponseWriter, r *http.Request
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	h.templates.RenderWithStatus(w, "fragments/modals/edit_sequence.html", http.StatusOK, seq, h.getLocale(r))
+	h.templates.RenderWithStatus(w, r, "fragments/modals/edit_sequence.html", http.StatusOK, seq, h.getLocale(r))
 }
 
 func (h *Handler) handleUpdateSequence(w http.ResponseWriter, r *http.Request) {
@@ -140,15 +167,28 @@ func (h *Handler) handleUpdateSequence(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleDeleteSequence(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete && r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	seqID := r.URL.Query().Get("id")
 	if err := h.seqRepo.Delete(r.Context(), seqID); err != nil {
 		http.Error(w, err.Error(), 500)
+		return
+	}
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Location", h.getRedirectURL(r))
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 	http.Redirect(w, r, h.getRedirectURL(r), 303)
 }
 
 func (h *Handler) handleBulkDeleteSequences(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), 400)
 		return
@@ -168,7 +208,7 @@ func (h *Handler) handleBulkDeleteSequences(w http.ResponseWriter, r *http.Reque
 
 func (h *Handler) handleAddStageModal(w http.ResponseWriter, r *http.Request) {
 	seqID := r.URL.Query().Get("sequence_id")
-	h.templates.RenderWithStatus(w, "fragments/modals/add_stage.html", http.StatusOK, map[string]string{"SequenceID": seqID}, h.getLocale(r))
+	h.templates.RenderWithStatus(w, r, "fragments/modals/add_stage.html", http.StatusOK, map[string]string{"SequenceID": seqID}, h.getLocale(r))
 }
 
 func (h *Handler) getRedirectURL(r *http.Request) string {

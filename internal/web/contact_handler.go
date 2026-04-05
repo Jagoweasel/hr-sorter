@@ -21,10 +21,14 @@ func (h *Handler) handleContacts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.templates.RenderWithStatus(w, "fragments/contact_list.html", http.StatusOK, filteredContacts, h.getLocale(r))
+	h.templates.RenderWithStatus(w, r, "fragments/contact_list.html", http.StatusOK, filteredContacts, h.getLocale(r))
 }
 
 func (h *Handler) handleIgnoreContact(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	path := r.URL.Path
 	// Expected: /contacts/{id}/ignore or /contacts/{id}/restore
 	action := "ignore"
@@ -56,7 +60,7 @@ func (h *Handler) handleContactActions(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(path, "/actions") {
 		id := strings.TrimPrefix(strings.TrimSuffix(path, "/actions"), "/contacts/")
 		contact, _ := h.conRepo.GetByID(r.Context(), id)
-		h.templates.RenderWithStatus(w, "fragments/modals/actions.html", http.StatusOK, contact, h.getLocale(r))
+		h.templates.RenderWithStatus(w, r, "fragments/modals/actions.html", http.StatusOK, contact, h.getLocale(r))
 		return
 	}
 
@@ -73,7 +77,7 @@ func (h *Handler) handleContactActions(w http.ResponseWriter, r *http.Request) {
 
 		firstMsgDate := time.Now().Format("2006-01-02T15:04")
 
-		h.templates.RenderWithStatus(w, "fragments/modals/create_sequence.html", http.StatusOK, struct {
+		h.templates.RenderWithStatus(w, r, "fragments/modals/create_sequence.html", http.StatusOK, struct {
 			ContactID    string
 			CompanyName  string
 			VacancyName  string
@@ -91,7 +95,7 @@ func (h *Handler) handleContactActions(w http.ResponseWriter, r *http.Request) {
 		contactID := strings.TrimPrefix(strings.TrimSuffix(path, "/add-to-sequence-modal"), "/contacts/")
 		sequences, _ := h.seqRepo.GetAll(r.Context(), "")
 
-		h.templates.RenderWithStatus(w, "fragments/modals/add_to_sequence.html", http.StatusOK, struct {
+		h.templates.RenderWithStatus(w, r, "fragments/modals/add_to_sequence.html", http.StatusOK, struct {
 			ContactID string
 			Sequences interface{}
 		}{

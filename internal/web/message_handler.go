@@ -17,7 +17,7 @@ func (h *Handler) handleMessages(w http.ResponseWriter, r *http.Request) {
 
 	contact, _ := h.conRepo.GetByID(r.Context(), id)
 
-	h.templates.RenderWithStatus(w, "fragments/chat_container.html", http.StatusOK, struct {
+	h.templates.RenderWithStatus(w, r, "fragments/chat_container.html", http.StatusOK, struct {
 		ContactID string
 		Contact   interface{}
 		Messages  interface{}
@@ -38,7 +38,7 @@ func (h *Handler) handleMessageList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.templates.RenderWithStatus(w, "fragments/message_list.html", http.StatusOK, struct {
+	h.templates.RenderWithStatus(w, r, "fragments/message_list.html", http.StatusOK, struct {
 		ContactID string
 		Messages  interface{}
 	}{

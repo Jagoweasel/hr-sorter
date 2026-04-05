@@ -90,7 +90,10 @@ func main() {
 	hhManager := hhclient.NewManager(database.DB, conRepo, msgRepo, intRepo)
 
 	// Initialize Localization
-	ls := i18n.NewLocalizationService()
+	ls, err := i18n.NewLocalizationService()
+	if err != nil {
+		log.Fatalf("[Main] Failed to initialize localization: %v", err)
+	}
 
 	// Initialize Template Manager
 	tm, err := web.NewTemplateManager(ls)
@@ -133,9 +136,8 @@ func main() {
 		}
 	}
 
-	mux := http.NewServeMux()
 	handler := web.NewHandler(ctx, manager, hhManager, logBroadcaster, tm, ls, accRepo, intRepo, conRepo, msgRepo, seqRepo, fltRepo, mapRepo, accService, intService, seqService, conService, fltService, repService)
-	handler.RegisterRoutes(mux)
+	wrappedHandler := handler.InitHandler()
 
 	port := os.Getenv("HTTP_PORT")
 	if port == "" {
@@ -144,7 +146,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:    "127.0.0.1:" + port,
-		Handler: mux,
+		Handler: wrappedHandler,
 	}
 
 	go func() {

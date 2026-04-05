@@ -12,10 +12,15 @@ func (h *Handler) handleMapping(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	h.templates.RenderWithStatus(w, "mapping.html", http.StatusOK, rules, h.getLocale(r))
+	h.templates.RenderWithStatus(w, r, "mapping.html", http.StatusOK, rules, h.getLocale(r))
 }
 
 func (h *Handler) handleSaveMapping(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	idStr := r.FormValue("id")
 	pattern := r.FormValue("pattern")
 	category := r.FormValue("category")
@@ -34,17 +39,30 @@ func (h *Handler) handleSaveMapping(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("HX-Location", "/mapping")
-	w.WriteHeader(http.StatusOK)
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Location", "/mapping")
+		w.WriteHeader(http.StatusOK)
+	} else {
+		http.Redirect(w, r, "/mapping", http.StatusSeeOther)
+	}
 }
 
 func (h *Handler) handleDeleteMapping(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete && r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	id := r.URL.Query().Get("id")
 	if err := h.mapRepo.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	w.Header().Set("HX-Location", "/mapping")
-	w.WriteHeader(http.StatusOK)
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Location", "/mapping")
+		w.WriteHeader(http.StatusOK)
+	} else {
+		http.Redirect(w, r, "/mapping", http.StatusSeeOther)
+	}
 }

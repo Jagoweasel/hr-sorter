@@ -77,13 +77,13 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 	}
 
 	columnDefs := []ColumnDef{
-		{ID: "initial", Label: "Initial", ColorClass: "bg-blue-50", BorderClass: "border-blue-200"},
-		{ID: "screening", Label: "Screening", ColorClass: "bg-indigo-50", BorderClass: "border-indigo-200"},
-		{ID: "tech", Label: "Technical", ColorClass: "bg-purple-50", BorderClass: "border-purple-200"},
-		{ID: "final", Label: "Final Interview", ColorClass: "bg-pink-50", BorderClass: "border-pink-200"},
-		{ID: "offer", Label: "Offer", ColorClass: "bg-yellow-50", BorderClass: "border-yellow-200"},
-		{ID: "accepted", Label: "Accepted", ColorClass: "bg-green-50", BorderClass: "border-green-200"},
-		{ID: "rejected", Label: "Rejected", ColorClass: "bg-red-50", BorderClass: "border-red-200"},
+		{ID: "initial", Label: h.i18n.Tr("initial", h.getLocale(r)), ColorClass: "bg-blue-50", BorderClass: "border-blue-200"},
+		{ID: "screening", Label: h.i18n.Tr("screening", h.getLocale(r)), ColorClass: "bg-indigo-50", BorderClass: "border-indigo-200"},
+		{ID: "tech", Label: h.i18n.Tr("technical", h.getLocale(r)), ColorClass: "bg-purple-50", BorderClass: "border-purple-200"},
+		{ID: "final", Label: h.i18n.Tr("final_interview", h.getLocale(r)), ColorClass: "bg-pink-50", BorderClass: "border-pink-200"},
+		{ID: "offer", Label: h.i18n.Tr("offer", h.getLocale(r)), ColorClass: "bg-yellow-50", BorderClass: "border-yellow-200"},
+		{ID: "accepted", Label: h.i18n.Tr("accepted", h.getLocale(r)), ColorClass: "bg-green-50", BorderClass: "border-green-200"},
+		{ID: "rejected", Label: h.i18n.Tr("rejected", h.getLocale(r)), ColorClass: "bg-red-50", BorderClass: "border-red-200"},
 	}
 
 	var groups []*AccountGroup
@@ -138,5 +138,5 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 		HideAccepted: hideAccepted,
 	}
 
-	h.templates.RenderWithStatus(w, "pipeline.html", http.StatusOK, data, h.getLocale(r))
+	h.templates.RenderWithStatus(w, r, "pipeline.html", http.StatusOK, data, h.getLocale(r))
 }

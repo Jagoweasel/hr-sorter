@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"github.com/gorilla/csrf"
 	"hr-sorter/internal/hhclient"
 	"hr-sorter/internal/i18n"
 	"hr-sorter/internal/repository"
@@ -9,6 +10,7 @@ import (
 	"hr-sorter/internal/streaming"
 	"hr-sorter/internal/tgclient"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -91,6 +93,24 @@ func (h *Handler) getLocale(r *http.Request) string {
 		return cookie.Value
 	}
 	return "en"
+}
+
+func (h *Handler) InitHandler() http.Handler {
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	secret := os.Getenv("CSRF_SECRET")
+	if len(secret) < 32 {
+		secret = "32-byte-long-auth-key-hr-sorter-!" // Fallback for dev
+	}
+
+	csrfMiddleware := csrf.Protect(
+		[]byte(secret),
+		csrf.Secure(false), // Change to true in production with HTTPS
+		csrf.Path("/"),
+	)
+
+	return csrfMiddleware(mux)
 }
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {

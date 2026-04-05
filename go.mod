@@ -35,6 +35,8 @@ require (
 	github.com/go-faster/yaml v0.4.6 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.4 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
+	github.com/gorilla/csrf v1.7.3 // indirect
+	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gotd/ige v0.2.2 // indirect
 	github.com/gotd/neo v0.1.5 // indirect
 	github.com/hhrutter/lzw v1.0.0 // indirect
