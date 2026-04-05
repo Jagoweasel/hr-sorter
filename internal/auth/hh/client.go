@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hr-sorter/internal/logger"
 	"io"
 	"net/http"
 	"net/url"
@@ -46,8 +47,11 @@ func (c *HHClientWrapper) ExecuteRequest(ctx context.Context, session *Session, 
 	access, _, expires := session.GetTokens()
 	userAgent := session.GetUserAgent()
 
+	logger.Trace(logger.HH, "[HHAPI] Request: %s %s (Account: %d)", method, path, session.AccountID)
+
 	// If token is expired, refresh first
 	if !expires.IsZero() && time.Now().After(expires) {
+		logger.Debug(logger.HH, "[HHAPI] Token expired for account %d, refreshing before request...", session.AccountID)
 		if err := c.RefreshToken(ctx, session); err != nil {
 			return nil, fmt.Errorf("pre-request refresh failed: %w", err)
 		}
@@ -78,12 +82,16 @@ func (c *HHClientWrapper) ExecuteRequest(ctx context.Context, session *Session, 
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
+			logger.Error(logger.HH, "[HHAPI] Request failed: %v", err)
 			return nil, fmt.Errorf("request failed: %w", err)
 		}
 		defer resp.Body.Close()
 
+		logger.Trace(logger.HH, "[HHAPI] Response: %d (Account: %d)", resp.StatusCode, session.AccountID)
+
 		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
 			if retry == 0 {
+				logger.Debug(logger.HH, "[HHAPI] Auth error (%d), attempting token refresh for account %d...", resp.StatusCode, session.AccountID)
 				if err := c.RefreshToken(ctx, session); err != nil {
 					return nil, fmt.Errorf("refresh failed after 403/401: %w", err)
 				}
@@ -115,8 +123,11 @@ func (c *HHClientWrapper) RefreshToken(ctx context.Context, session *Session) er
 	// Re-check expiry after acquiring lock
 	_, refresh, expires := session.GetTokens()
 	if !expires.IsZero() && time.Now().Before(expires.Add(-time.Minute)) {
+		logger.Debug(logger.HH, "[HHAPI] Token already refreshed by another goroutine for account %d", session.AccountID)
 		return nil // Already refreshed by another goroutine
 	}
+
+	logger.Info(logger.HH, "[HHAPI] Refreshing token for account %d...", session.AccountID)
 
 	data := url.Values{}
 	data.Set("grant_type", "refresh_token")

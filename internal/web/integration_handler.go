@@ -80,17 +80,29 @@ func (h *Handler) handleStartAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	logger.Debug(logger.HH, "[Web] Integration details: ID=%s, Platform=%s, Identifier=%s, HHAuthServiceAvailable=%v",
+		idStr, integration.Platform, integration.Identifier, h.hhAuthService != nil)
+
 	if integration.Platform == "hh" && h.hhAuthService != nil {
-		logger.Info(logger.HH, "[Web] Launching HH Auth Service for %s...", integration.Identifier)
+		logger.Info(logger.HH, "[Web] Launching HH Auth Service for %s (Integration ID: %s, Account ID: %d)...",
+			integration.Identifier, idStr, integration.AccountID)
 		accID := integration.AccountID
 		go func() {
-			_, err := h.hhAuthService.StartAuth(h.rootCtx, integration.Identifier, accID)
+			_, err := h.hhAuthService.StartFlow(h.rootCtx, accID, integration.Identifier)
 			if err != nil {
-				logger.Error(logger.HH, "[Web] Manual start HH auth failed for %s: %v", integration.Identifier, err)
+				logger.Error(logger.HH, "[Web] Manual start HH auth failed for %s (ID: %s): %v",
+					integration.Identifier, idStr, err)
 			}
 		}()
 	} else {
-		logger.Info(logger.HH, "[Web] Cannot start HH auth: Service is nil or platform is not HH")
+
+		if integration.Platform != "hh" {
+			logger.Error(logger.HH, "[Web] Cannot start auth: Platform is %s, integration ID %s (expected hh)",
+				integration.Platform, idStr)
+		}
+		if h.hhAuthService == nil {
+			logger.Error(logger.HH, "[Web] Cannot start HH auth: HHAuthService is nil. Check startup logs for Playwright/Initialization errors.")
+		}
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -113,17 +125,19 @@ func (h *Handler) handleIntegrationStatus(w http.ResponseWriter, r *http.Request
 
 	// If it's HH and pending_auth, check the live auth service state
 	if integration.Platform == "hh" && h.hhAuthService != nil && (status == "pending_auth" || status == "awaiting_code") {
-		liveStatus, _ := h.hhAuthService.GetStatus(r.Context())
-		if liveStatus != nil {
-			switch liveStatus.State {
-			case dto.AuthStateWaitOTP:
-				status = "awaiting_code"
-			case dto.AuthStateWaitCaptcha:
-				status = "awaiting_captcha"
-			case dto.AuthStateCompleted:
-				status = "active"
-			case dto.AuthStateFailed:
-				status = "failed"
+		if flow, ok := h.hhAuthService.GetFlow(integration.AccountID); ok {
+			liveStatus := flow.GetStatus()
+			if liveStatus != nil {
+				switch liveStatus.State {
+				case dto.AuthStateWaitOTP:
+					status = "awaiting_code"
+				case dto.AuthStateWaitCaptcha:
+					status = "awaiting_captcha"
+				case dto.AuthStateCompleted:
+					status = "active"
+				case dto.AuthStateFailed:
+					status = "failed"
+				}
 			}
 		}
 	}

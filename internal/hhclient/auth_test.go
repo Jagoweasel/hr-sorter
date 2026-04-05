@@ -65,7 +65,7 @@ func TestHHAuthService_StateTransitions(t *testing.T) {
 	t.Run("StartAuthTransition", func(t *testing.T) {
 		// Note: this will start a goroutine that might fail due to no playwright browser,
 		// but we just check the initial transition.
-		status, err := s.StartAuth(ctx, "test@example.com")
+		status, err := s.StartAuth(ctx, "test@example.com", 1)
 		if err != nil {
 			t.Fatalf("failed to start auth: %v", err)
 		}

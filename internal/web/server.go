@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"github.com/gorilla/csrf"
+	"hr-sorter/internal/auth/hh"
 	"hr-sorter/internal/hhclient"
 	"hr-sorter/internal/i18n"
 	"hr-sorter/internal/logger"
@@ -21,7 +22,7 @@ type Handler struct {
 	// Managers
 	tgManager      *tgclient.Manager
 	hhManager      *hhclient.Manager
-	hhAuthService  *hhclient.HHAuthService
+	hhAuthService  hh.Authenticator
 	logBroadcaster *streaming.LogBroadcaster
 
 	// Templates
@@ -50,7 +51,7 @@ func NewHandler(
 	ctx context.Context,
 	tgManager *tgclient.Manager,
 	hhManager *hhclient.Manager,
-	hhAuthService *hhclient.HHAuthService,
+	hhAuthService hh.Authenticator,
 	logBroadcaster *streaming.LogBroadcaster,
 	templates *TemplateManager,
 	ls *i18n.LocalizationService,

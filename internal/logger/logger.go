@@ -17,6 +17,7 @@ const (
 	Reports     Category = "reports"
 	Messaging   Category = "msg"
 	Filters     Category = "filters"
+	TraceCat    Category = "trace"
 )
 
 var enabledCategories = make(map[Category]bool)
@@ -30,8 +31,14 @@ func IsEnabled(cat Category) bool {
 }
 
 func Debug(cat Category, format string, v ...interface{}) {
-	if enabledCategories[cat] {
+	if enabledCategories[cat] || enabledCategories[TraceCat] {
 		log.Printf("[DEBUG][%s] %s", strings.ToUpper(string(cat)), fmt.Sprintf(format, v...))
+	}
+}
+
+func Trace(cat Category, format string, v ...interface{}) {
+	if enabledCategories[TraceCat] {
+		log.Printf("[TRACE][%s] %s", strings.ToUpper(string(cat)), fmt.Sprintf(format, v...))
 	}
 }
 

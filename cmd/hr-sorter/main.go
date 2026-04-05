@@ -8,11 +8,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/joho/godotenv"
+	"hr-sorter/internal/auth/hh"
 	"hr-sorter/internal/database"
 	"hr-sorter/internal/hhclient"
 	"hr-sorter/internal/i18n"
@@ -20,7 +20,6 @@ import (
 	"hr-sorter/internal/models"
 	"hr-sorter/internal/repository"
 	"hr-sorter/internal/service"
-	"hr-sorter/internal/storage"
 	"hr-sorter/internal/streaming"
 	"hr-sorter/internal/tgclient"
 	"hr-sorter/internal/web"
@@ -35,6 +34,7 @@ func main() {
 	debugReports := flag.Bool("debug-reports", false, "Enable debug logs for report generation")
 	debugMsg := flag.Bool("debug-msg", false, "Enable debug logs for messaging")
 	debugFilters := flag.Bool("debug-filters", false, "Enable debug logs for message filtering")
+	debugTrace := flag.Bool("debug-trace", false, "Enable extreme detailed trace logs (network, playwright internal)")
 	debugAll := flag.Bool("debug-all", false, "Enable all debug logs")
 	flag.Parse()
 
@@ -62,6 +62,9 @@ func main() {
 	if *debugAll || *debugFilters {
 		logger.Enable(logger.Filters)
 	}
+	if *debugAll || *debugTrace {
+		logger.Enable(logger.TraceCat)
+	}
 
 	log.Println("[Main] Starting application...")
 	_ = godotenv.Load()
@@ -78,15 +81,6 @@ func main() {
 	database.InitDB(dbPath)
 	log.Println("[Main] Database initialized successfully.")
 
-	// Initialize Unified Repository for Services that need it (like HH Auth)
-	dsn := dbPath
-	if !strings.Contains(dbPath, "?") {
-		dsn = dbPath + "?_pragma=foreign_keys=1&_journal_mode=WAL&_busy_timeout=5000"
-	}
-	// We need to import storage package
-	// ... wait, I'll check imports
-	unifiedRepo, _ := storage.NewSQLiteRepository(dsn)
-
 	// Initialize repositories
 	accRepo := repository.NewAccountRepository(database.DB)
 	intRepo := repository.NewIntegrationRepository(database.DB)
@@ -100,11 +94,20 @@ func main() {
 	manager := tgclient.NewManager(database.DB, conRepo, msgRepo, stRepo, intRepo)
 	hhManager := hhclient.NewManager(database.DB, conRepo, msgRepo, intRepo)
 
-	// Initialize HH Auth Service (New Playwright-based)
-	hhAuthService, err := hhclient.NewHHAuthService(unifiedRepo)
+	// Initialize HH Auth Module (New)
+	hhConfig := hh.GetDefaultClientConfig()
+	hhStorage := hh.NewSQLiteSessionStorage(database.DB)
+	hhUAGen := hh.NewAndroidUserAgentGenerator()
+
+	headless := os.Getenv("HEADLESS") != "false"
+	log.Printf("[Main] Initializing HH Auth Authenticator (headless=%v)...", headless)
+
+	hhAuthService, err := hh.NewPlaywrightAuthenticator(hhStorage, hhConfig, hhUAGen, headless)
 	if err != nil {
-		log.Printf("[Main] ERROR: Failed to initialize HH Auth Service (Browser flow will not work): %v", err)
+		log.Printf("[Main] CRITICAL ERROR: Failed to initialize HH Auth Service: %v", err)
+		log.Printf("[Main] Hint: Ensure Playwright browsers are installed: 'go run github.com/playwright-community/playwright-go/cmd/playwright install --with-deps'")
 	} else if hhAuthService != nil {
+		log.Println("[Main] HH Auth Service (Playwright) initialized successfully.")
 		defer hhAuthService.Close()
 	}
 

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"hr-sorter/internal/auth/hh"
 	"hr-sorter/internal/hhclient"
 	"hr-sorter/internal/logger"
 	"hr-sorter/internal/repository"
@@ -14,10 +15,10 @@ type IntegrationService struct {
 	intRepo       *repository.IntegrationRepository
 	tgManager     *tgclient.Manager
 	hhManager     *hhclient.Manager
-	hhAuthService *hhclient.HHAuthService
+	hhAuthService hh.Authenticator
 }
 
-func NewIntegrationService(intRepo *repository.IntegrationRepository, tgManager *tgclient.Manager, hhManager *hhclient.Manager, hhAuthService *hhclient.HHAuthService) *IntegrationService {
+func NewIntegrationService(intRepo *repository.IntegrationRepository, tgManager *tgclient.Manager, hhManager *hhclient.Manager, hhAuthService hh.Authenticator) *IntegrationService {
 	return &IntegrationService{
 		intRepo:       intRepo,
 		tgManager:     tgManager,
@@ -54,7 +55,7 @@ func (s *IntegrationService) CreateIntegration(ctx context.Context, accID, platf
 		// We need a context that lives long enough for the browser flow
 		accID := integration.AccountID
 		go func() {
-			_, err := s.hhAuthService.StartAuth(rootCtx, identifier, accID)
+			_, err := s.hhAuthService.StartFlow(rootCtx, accID, identifier)
 			if err != nil {
 				logger.Error(logger.HH, "Failed to start HH auth flow: %v", err)
 			}
@@ -108,6 +109,13 @@ func (s *IntegrationService) HandleHHAuth(ctx context.Context, id int64, code st
 	integration, err := s.intRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	// If there's an active flow, submit the code to it
+	if s.hhAuthService != nil {
+		if flow, ok := s.hhAuthService.GetFlow(integration.AccountID); ok {
+			return flow.SubmitCode(code)
+		}
 	}
 
 	ua := ""

@@ -42,12 +42,14 @@ type HHAuthService struct {
 }
 
 func NewHHAuthService(repo domain.Repository) (*HHAuthService, error) {
+	logger.Debug(logger.HH, "[HHAuth] Starting Playwright engine...")
 	pw, err := playwright.Run()
 	if err != nil {
 		return nil, fmt.Errorf("failed to start playwright: %w", err)
 	}
 
 	headless := os.Getenv("HEADLESS") != "false"
+	logger.Debug(logger.HH, "[HHAuth] Launching Chromium (headless=%v)...", headless)
 	browser, err := pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
 		Headless: playwright.Bool(headless),
 		Args: []string{
@@ -60,6 +62,7 @@ func NewHHAuthService(repo domain.Repository) (*HHAuthService, error) {
 		return nil, fmt.Errorf("failed to launch browser: %w", err)
 	}
 
+	logger.Info(logger.HH, "[HHAuth] Playwright service initialized successfully")
 	return &HHAuthService{
 		status:      &dto.HHAuthStatus{State: dto.AuthStateNone},
 		repo:        repo,
@@ -166,6 +169,7 @@ func (s *HHAuthService) runFlow(identify string) {
 
 	// Capture redirect to hhandroid://
 	s.sessionContext.OnRequest(func(request playwright.Request) {
+		logger.Trace(logger.HH, "[HHAuth][Network] Request: %s", request.URL())
 		if strings.HasPrefix(request.URL(), "hhandroid://") {
 			logger.Info(logger.HH, "[HHAuth] Detected redirect: %s", request.URL())
 			u, _ := url.Parse(request.URL())

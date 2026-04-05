@@ -12,9 +12,11 @@
                 <button onclick="setLogCategory('ADD-SEQUENCE')" id="btn-add-sequence" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-orange-500">ADD-SEQ</button>
                 <button onclick="setLogCategory('HISTORY')" id="btn-history" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-yellow-500">HISTORY</button>
                 <button onclick="setLogCategory('REPORTS')" id="btn-reports" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-green-500">REPORTS</button>
-                <button onclick="setLogCategory('MSG')" id="btn-msg" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-purple-500">MSG</button>
+                 <button onclick="setLogCategory('MSG')" id="btn-msg" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-purple-500">MSG</button>
                 <button onclick="setLogCategory('FILTERS')" id="btn-filters" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-slate-500">FILTERS</button>
+                <button onclick="setLogCategory('TRACE')" id="btn-trace" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-pink-500">TRACE</button>
             </div>
+
 
             <button onclick="clearLogs()" class="px-4 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg text-xs font-bold transition-colors border dark:border-gray-600">
                 {{ Tr "clear" }}
@@ -46,7 +48,7 @@
         currentCategory = cat;
         
         // Update button styles
-        ['all', 'sync', 'hh', 'tg', 'add-sequence', 'history', 'reports', 'msg', 'filters'].forEach(c => {
+        ['all', 'sync', 'hh', 'tg', 'add-sequence', 'history', 'reports', 'msg', 'filters', 'trace'].forEach(c => {
             const btn = document.getElementById(`btn-${c}`);
             if (!btn) return;
             if (c === cat.toLowerCase()) {
