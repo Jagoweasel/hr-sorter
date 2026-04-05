@@ -11,16 +11,18 @@ import (
 )
 
 type IntegrationService struct {
-	intRepo   *repository.IntegrationRepository
-	tgManager *tgclient.Manager
-	hhManager *hhclient.Manager
+	intRepo       *repository.IntegrationRepository
+	tgManager     *tgclient.Manager
+	hhManager     *hhclient.Manager
+	hhAuthService *hhclient.HHAuthService
 }
 
-func NewIntegrationService(intRepo *repository.IntegrationRepository, tgManager *tgclient.Manager, hhManager *hhclient.Manager) *IntegrationService {
+func NewIntegrationService(intRepo *repository.IntegrationRepository, tgManager *tgclient.Manager, hhManager *hhclient.Manager, hhAuthService *hhclient.HHAuthService) *IntegrationService {
 	return &IntegrationService{
-		intRepo:   intRepo,
-		tgManager: tgManager,
-		hhManager: hhManager,
+		intRepo:       intRepo,
+		tgManager:     tgManager,
+		hhManager:     hhManager,
+		hhAuthService: hhAuthService,
 	}
 }
 
@@ -47,9 +49,16 @@ func (s *IntegrationService) CreateIntegration(ctx context.Context, accID, platf
 
 	if platform == "tg" {
 		go s.tgManager.StartIntegration(rootCtx, *integration)
-	} else if platform == "hh" {
-		logger.Debug(logger.HH, "[Service] Starting HH worker for new integration %s", identifier)
-		go s.hhManager.StartIntegration(rootCtx, *integration)
+	} else if platform == "hh" && s.hhAuthService != nil {
+		logger.Debug(logger.HH, "[Service] Starting Playwright Auth Flow for %s", identifier)
+		// We need a context that lives long enough for the browser flow
+		accID := integration.AccountID
+		go func() {
+			_, err := s.hhAuthService.StartAuth(rootCtx, identifier, accID)
+			if err != nil {
+				logger.Error(logger.HH, "Failed to start HH auth flow: %v", err)
+			}
+		}()
 	}
 
 	return nil

@@ -70,6 +70,7 @@ func (r *reporter) GeneratePDF(ctx context.Context, data *models.ReportData) ([]
 
 	// Additional Sections per Account
 	for _, section := range data.Sections {
+		m.AddRow(20, col.New(12).Add(line.New(props.Line{Thickness: 2, Color: &props.Color{Red: 200, Green: 200, Blue: 200}})))
 		r.buildSection(m, section.AccountName, section.KPI, section.Funnel, section.Sequences, false)
 	}
 
@@ -132,33 +133,38 @@ func (r *reporter) buildSection(m core.Maroto, title string, kpi models.ReportKP
 	m.AddRow(10, col.New(12).Add(text.New("Recruitment Funnel", props.Text{Size: 12, Style: fontstyle.Bold})))
 	m.AddRow(15,
 		col.New(2).Add(text.New(fmt.Sprintf("App: %d", funnel.Applied), props.Text{Size: 8, Align: align.Center})),
+		col.New(1).Add(text.New("->", props.Text{Size: 8, Align: align.Center})),
 		col.New(2).Add(text.New(fmt.Sprintf("Init: %d", funnel.Initial), props.Text{Size: 8, Align: align.Center})),
 		col.New(2).Add(text.New(fmt.Sprintf("Scr: %d", funnel.Screening), props.Text{Size: 8, Align: align.Center})),
 		col.New(2).Add(text.New(fmt.Sprintf("Tech: %d", funnel.Tech), props.Text{Size: 8, Align: align.Center})),
-		col.New(2).Add(text.New(fmt.Sprintf("Off: %d", funnel.Offer), props.Text{Size: 8, Align: align.Center})),
-		col.New(2).Add(text.New(fmt.Sprintf("Acc: %d", funnel.Accepted), props.Text{Size: 8, Align: align.Center})),
+		col.New(1).Add(text.New("->", props.Text{Size: 8, Align: align.Center})),
+		col.New(2).Add(text.New(fmt.Sprintf("Off: %d (Acc: %d)", funnel.Offer, funnel.Accepted), props.Text{Size: 8, Align: align.Center})),
 	)
 
 	// Sequences Table
 	m.AddRow(10, col.New(12).Add(text.New("Details", props.Text{Size: 12, Style: fontstyle.Bold})))
+
+	// Table Header - BOLD
 	m.AddRow(10,
 		col.New(3).Add(text.New("Company", props.Text{Style: fontstyle.Bold, Size: 9})),
 		col.New(4).Add(text.New("Vacancy", props.Text{Style: fontstyle.Bold, Size: 9})),
 		col.New(2).Add(text.New("Category", props.Text{Style: fontstyle.Bold, Size: 9})),
 		col.New(3).Add(text.New("Status", props.Text{Style: fontstyle.Bold, Size: 9})),
 	)
-	m.AddRow(2, col.New(12).Add(line.New(props.Line{Thickness: 0.2})))
+	m.AddRow(1, col.New(12).Add(line.New(props.Line{Thickness: 0.5}))) // Table line
 
 	for _, seq := range sequences {
 		category := "N/A"
 		if seq.Category != nil {
 			category = *seq.Category
 		}
+		// Company name BOLD
 		m.AddRow(8,
-			col.New(3).Add(text.New(seq.CompanyName, props.Text{Size: 8})),
+			col.New(3).Add(text.New(seq.CompanyName, props.Text{Size: 8, Style: fontstyle.Bold})),
 			col.New(4).Add(text.New(seq.VacancyName, props.Text{Size: 8})),
 			col.New(2).Add(text.New(category, props.Text{Size: 8})),
 			col.New(3).Add(text.New(seq.Status, props.Text{Size: 8})),
 		)
+		m.AddRow(1, col.New(12).Add(line.New(props.Line{Thickness: 0.1}))) // Row divider
 	}
 }

@@ -2,7 +2,8 @@ package web
 
 import (
 	"fmt"
-	"hr-sorter/internal/hhclient"
+	"hr-sorter/internal/domain/dto"
+	"hr-sorter/internal/logger"
 	"net/http"
 	"strconv"
 )
@@ -68,6 +69,32 @@ func (h *Handler) handleDeleteIntegration(w http.ResponseWriter, r *http.Request
 	http.Redirect(w, r, "/accounts", 303)
 }
 
+func (h *Handler) handleStartAuth(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	logger.Info(logger.HH, "[Web] StartAuth requested for integration ID: %s", idStr)
+	integration, err := h.intRepo.GetByID(r.Context(), idStr)
+	if err != nil {
+		logger.Error(logger.HH, "[Web] Failed to fetch integration %s: %v", idStr, err)
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	if integration.Platform == "hh" && h.hhAuthService != nil {
+		logger.Info(logger.HH, "[Web] Launching HH Auth Service for %s...", integration.Identifier)
+		accID := integration.AccountID
+		go func() {
+			_, err := h.hhAuthService.StartAuth(h.rootCtx, integration.Identifier, accID)
+			if err != nil {
+				logger.Error(logger.HH, "[Web] Manual start HH auth failed for %s: %v", integration.Identifier, err)
+			}
+		}()
+	} else {
+		logger.Info(logger.HH, "[Web] Cannot start HH auth: Service is nil or platform is not HH")
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func (h *Handler) handleIntegrationStatus(w http.ResponseWriter, r *http.Request) {
 	idStr := r.URL.Query().Get("id")
 	integration, err := h.intRepo.GetByID(r.Context(), idStr)
@@ -77,9 +104,24 @@ func (h *Handler) handleIntegrationStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	status := integration.Status
 	authURL := ""
-	if integration.Platform == "hh" && integration.Status == "pending_auth" {
-		authURL = hhclient.GetAuthorizeURL()
+
+	// If it's HH and pending_auth, check the live auth service state
+	if integration.Platform == "hh" && h.hhAuthService != nil && (status == "pending_auth" || status == "awaiting_code") {
+		liveStatus, _ := h.hhAuthService.GetStatus(r.Context())
+		if liveStatus != nil {
+			switch liveStatus.State {
+			case dto.AuthStateWaitOTP:
+				status = "awaiting_code"
+			case dto.AuthStateWaitCaptcha:
+				status = "awaiting_captcha"
+			case dto.AuthStateCompleted:
+				status = "active"
+			case dto.AuthStateFailed:
+				status = "failed"
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -89,7 +131,7 @@ func (h *Handler) handleIntegrationStatus(w http.ResponseWriter, r *http.Request
 		Platform   string `json:"platform"`
 		AuthURL    string `json:"auth_url"`
 	}{
-		Status:     integration.Status,
+		Status:     status,
 		Identifier: integration.Identifier,
 		Platform:   integration.Platform,
 		AuthURL:    authURL,

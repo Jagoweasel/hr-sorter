@@ -10,7 +10,7 @@ import (
 // HHClient interface for HeadHunter integration
 type HHClient interface {
 	// StartAuth begins the OAuth flow with Playwright-go
-	StartAuth(ctx context.Context, identify string) (*dto.HHAuthStatus, error)
+	StartAuth(ctx context.Context, identify string, accountID int64) (*dto.HHAuthStatus, error)
 	// SubmitOTP enters the received code into the flow
 	SubmitOTP(ctx context.Context, code string) (*dto.HHAuthStatus, error)
 	// SubmitCaptcha provides resolution for an HH-requested captcha

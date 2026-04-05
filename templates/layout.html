@@ -45,14 +45,12 @@
             }
         }
 
-        // Request notification permission on first user interaction
-        let notificationRequested = false;
-        document.addEventListener('click', function() {
-            if (!notificationRequested && Notification.permission !== 'granted') {
+        // Request notification permission only if supported and not denied
+        function requestNotificationPermission() {
+            if ('Notification' in window && Notification.permission === 'default') {
                 Notification.requestPermission();
-                notificationRequested = true;
             }
-        }, { once: true });
+        }
 
         // Handle new message events from HTMX
         document.body.addEventListener('new-message', function(evt) {

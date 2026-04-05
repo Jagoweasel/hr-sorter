@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"hr-sorter/internal/hhclient"
 	"log"
 	"net/http"
 	"net/url"
@@ -87,7 +88,15 @@ func exchangeToken(clientID, clientSecret, code string) (*Token, error) {
 		"grant_type":    {"authorization_code"},
 	}
 
-	resp, err := http.Post(HHOAuthURL+"token", "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+	req, err := http.NewRequest("POST", HHOAuthURL+"token", strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", hhclient.GenerateAndroidUserAgent())
+	req.Header.Set("X-HH-App-Active", "true")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request token: %w", err)
 	}

@@ -153,6 +153,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/integrations/create", h.handleCreateIntegration)
 	mux.HandleFunc("/integrations/toggle", h.handleToggleIntegration)
 	mux.HandleFunc("/integrations/delete", h.handleDeleteIntegration)
+	mux.HandleFunc("/integrations/start-auth", h.handleStartAuth)
 	mux.HandleFunc("/integrations/status", h.handleIntegrationStatus)
 	mux.HandleFunc("/integrations/submit-code", h.handleSubmitCode)
 	mux.HandleFunc("/integrations/submit-password", h.handleSubmitPassword)

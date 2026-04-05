@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hr-sorter/internal/database"
 	"hr-sorter/internal/domain/dto"
+	"hr-sorter/internal/logger"
 	"hr-sorter/internal/models"
 	"sync"
 
@@ -140,16 +141,20 @@ func (r *SQLiteRepository) GetTotalApplications(ctx context.Context, accountID s
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	query := "SELECT COALESCE(SUM(applications_count), 0) FROM negotiations_stats ns JOIN integrations i ON ns.integration_id = i.id"
+	query := "SELECT COALESCE(SUM(ns.applications_count), 0) FROM negotiations_stats ns"
 	var args []interface{}
 	if accountID != "" {
-		query += " WHERE i.account_id = ?"
+		query += " JOIN integrations i ON ns.integration_id = i.id WHERE i.account_id = ?"
 		args = append(args, accountID)
 	}
 
 	var count int
 	err := r.db.GetContext(ctx, &count, query, args...)
-	return count, err
+	if err != nil {
+		logger.Debug(logger.HH, "GetTotalApplications error: %v", err)
+		return 0, err
+	}
+	return count, nil
 }
 
 func (r *SQLiteRepository) GetMappingRules(ctx context.Context) (map[string]string, error) {

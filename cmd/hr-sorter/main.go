@@ -101,8 +101,10 @@ func main() {
 	hhManager := hhclient.NewManager(database.DB, conRepo, msgRepo, intRepo)
 
 	// Initialize HH Auth Service (New Playwright-based)
-	hhAuthService, _ := hhclient.NewHHAuthService(unifiedRepo)
-	if hhAuthService != nil {
+	hhAuthService, err := hhclient.NewHHAuthService(unifiedRepo)
+	if err != nil {
+		log.Printf("[Main] ERROR: Failed to initialize HH Auth Service (Browser flow will not work): %v", err)
+	} else if hhAuthService != nil {
 		defer hhAuthService.Close()
 	}
 
@@ -120,7 +122,7 @@ func main() {
 
 	// Initialize services
 	accService := service.NewAccountService(accRepo, intRepo, manager, hhManager)
-	intService := service.NewIntegrationService(intRepo, manager, hhManager)
+	intService := service.NewIntegrationService(intRepo, manager, hhManager, hhAuthService)
 	conService := service.NewContactService(conRepo, fltRepo, msgRepo, manager, hhManager)
 	seqService := service.NewSequenceService(seqRepo, conRepo, accRepo, conService)
 	fltService := service.NewFilterService(fltRepo)

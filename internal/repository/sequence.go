@@ -357,10 +357,10 @@ func (r *SequenceRepository) GetPlatformStats(ctx context.Context, accountID str
 }
 
 func (r *SequenceRepository) GetTotalApplications(ctx context.Context, accountID string) (int, error) {
-	query := "SELECT COALESCE(SUM(applications_count), 0) FROM negotiations_stats ns JOIN integrations i ON ns.integration_id = i.id"
+	query := "SELECT COALESCE(SUM(ns.applications_count), 0) FROM negotiations_stats ns"
 	var args []interface{}
 	if accountID != "" {
-		query += " WHERE i.account_id = ?"
+		query += " JOIN integrations i ON ns.integration_id = i.id WHERE i.account_id = ?"
 		args = append(args, accountID)
 	}
 	var count int

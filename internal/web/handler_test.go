@@ -34,7 +34,7 @@ func TestGETEndpoints(t *testing.T) {
 
 	// 3. Setup Services
 	accService := service.NewAccountService(accRepo, intRepo, nil, nil)
-	intService := service.NewIntegrationService(intRepo, nil, nil)
+	intService := service.NewIntegrationService(intRepo, nil, nil, nil)
 	conService := service.NewContactService(conRepo, fltRepo, msgRepo, nil, nil)
 	seqService := service.NewSequenceService(seqRepo, conRepo, accRepo, conService)
 	fltService := service.NewFilterService(fltRepo)

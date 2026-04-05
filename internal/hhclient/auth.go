@@ -28,6 +28,7 @@ type HHAuthService struct {
 	sessionContext playwright.BrowserContext
 	sessionPage    playwright.Page
 
+	codeChan    chan string
 	otpChan     chan string
 	captchaChan chan string
 	errChan     chan error
@@ -36,6 +37,7 @@ type HHAuthService struct {
 
 	isRunning bool
 	identify  string
+	accountID int64
 }
 
 func NewHHAuthService(repo domain.Repository) (*HHAuthService, error) {
@@ -55,6 +57,7 @@ func NewHHAuthService(repo domain.Repository) (*HHAuthService, error) {
 	return &HHAuthService{
 		status:      &dto.HHAuthStatus{State: dto.AuthStateNone},
 		repo:        repo,
+		codeChan:    make(chan string, 1),
 		otpChan:     make(chan string),
 		captchaChan: make(chan string),
 		errChan:     make(chan error),
@@ -89,17 +92,20 @@ func (s *HHAuthService) stop() {
 	})
 }
 
-func (s *HHAuthService) StartAuth(ctx context.Context, identify string) (*dto.HHAuthStatus, error) {
+func (s *HHAuthService) StartAuth(ctx context.Context, identify string, accountID int64) (*dto.HHAuthStatus, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.isRunning {
+		logger.Info(logger.HH, "[HHAuth] Auth already running for %s", s.identify)
 		return s.status, nil
 	}
 
+	logger.Info(logger.HH, "[HHAuth] Starting auth flow for %s (Acc ID %d, Browser: headless=false)", identify, accountID)
 	s.status = &dto.HHAuthStatus{State: dto.AuthStateWaitIdentify}
 	s.isRunning = true
 	s.identify = identify
+	s.accountID = accountID
 	s.stopChan = make(chan struct{})
 	s.closeOnce = sync.Once{}
 
@@ -109,6 +115,7 @@ func (s *HHAuthService) StartAuth(ctx context.Context, identify string) (*dto.HH
 }
 
 func (s *HHAuthService) runFlow(identify string) {
+	logger.Debug(logger.HH, "[HHAuth] runFlow started for %s", identify)
 	defer func() {
 		s.mu.Lock()
 		s.isRunning = false
@@ -121,6 +128,7 @@ func (s *HHAuthService) runFlow(identify string) {
 			s.sessionContext = nil
 		}
 		s.mu.Unlock()
+		logger.Info(logger.HH, "[HHAuth] Flow finished for %s", identify)
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
@@ -128,14 +136,16 @@ func (s *HHAuthService) runFlow(identify string) {
 
 	userAgent := GenerateAndroidUserAgent()
 	var err error
+	logger.Debug(logger.HH, "[HHAuth] Creating browser context...")
+
+	// Use standard device for browser profile
+	device := s.pw.Devices["Pixel 7"]
 	s.sessionContext, err = s.browser.NewContext(playwright.BrowserNewContextOptions{
-		UserAgent: playwright.String(userAgent),
-		Viewport: &playwright.Size{
-			Width:  390,
-			Height: 844,
-		},
-		IsMobile: playwright.Bool(true),
-		HasTouch: playwright.Bool(true),
+		UserAgent:         playwright.String(device.UserAgent),
+		Viewport:          device.Viewport,
+		DeviceScaleFactor: playwright.Float(device.DeviceScaleFactor),
+		IsMobile:          playwright.Bool(device.IsMobile),
+		HasTouch:          playwright.Bool(device.HasTouch),
 	})
 	if err != nil {
 		s.fail(fmt.Errorf("failed to create context: %w", err))
@@ -151,21 +161,43 @@ func (s *HHAuthService) runFlow(identify string) {
 	// Capture redirect to hhandroid://
 	s.sessionContext.OnRequest(func(request playwright.Request) {
 		if strings.HasPrefix(request.URL(), "hhandroid://") {
+			logger.Info(logger.HH, "[HHAuth] Detected redirect: %s", request.URL())
 			u, _ := url.Parse(request.URL())
 			code := u.Query().Get("code")
 			if code != "" {
-				s.complete(code, userAgent)
+				select {
+				case s.codeChan <- code:
+				default:
+				}
 			}
 		}
 	})
 
-	_, err = s.sessionPage.Goto(GetAuthorizeURL())
-	if err != nil {
-		s.fail(fmt.Errorf("failed to go to authorize URL: %w", err))
+	authURL := GetAuthorizeURL()
+	logger.Info(logger.HH, "[HHAuth] Navigating to %s", authURL)
+
+	// Race between Goto and Code interception
+	go func() {
+		// Just trigger navigation, don't block main loop if it redirects quickly
+		_, _ = s.sessionPage.Goto(authURL, playwright.PageGotoOptions{
+			WaitUntil: playwright.WaitUntilStateLoad,
+		})
+	}()
+
+	// Check if we already got the code (immediate redirect)
+	select {
+	case code := <-s.codeChan:
+		logger.Info(logger.HH, "[HHAuth] Captured code immediately after Goto trigger")
+		s.complete(code, userAgent)
+		return
+	case <-time.After(5 * time.Second):
+		// No immediate redirect, proceed to identification
+	case <-s.stopChan:
 		return
 	}
 
 	// 1. Identify
+	logger.Debug(logger.HH, "[HHAuth] Entering login: %s", identify)
 	err = s.handleIdentify(identify)
 	if err != nil {
 		s.fail(err)
@@ -174,6 +206,18 @@ func (s *HHAuthService) runFlow(identify string) {
 
 	// Main flow loop
 	for {
+		// Check for code constantly in the background
+		select {
+		case code := <-s.codeChan:
+			logger.Info(logger.HH, "[HHAuth] Captured code during flow")
+			s.complete(code, userAgent)
+			return
+		case <-s.stopChan:
+			return
+		default:
+		}
+
+		logger.Debug(logger.HH, "[HHAuth] Detecting page state...")
 		state, err := s.detectState(ctx)
 		if err != nil {
 			s.fail(err)
@@ -182,13 +226,14 @@ func (s *HHAuthService) runFlow(identify string) {
 
 		switch state {
 		case dto.AuthStateWaitOTP:
+			logger.Info(logger.HH, "[HHAuth] State: Waiting for OTP from user")
 			s.mu.Lock()
 			s.status.State = dto.AuthStateWaitOTP
 			s.mu.Unlock()
 			select {
 			case code := <-s.otpChan:
+				logger.Debug(logger.HH, "[HHAuth] Received OTP, filling form...")
 				if err := s.sessionPage.Fill("input[data-qa='magritte-pincode-input-field']", code); err != nil {
-					// Fallback to older selector
 					_ = s.sessionPage.Fill("input[name='code']", code)
 				}
 				if err := s.sessionPage.Keyboard().Press("Enter"); err != nil {
@@ -202,6 +247,7 @@ func (s *HHAuthService) runFlow(identify string) {
 				return
 			}
 		case dto.AuthStateWaitCaptcha:
+			logger.Info(logger.HH, "[HHAuth] State: Waiting for Captcha from user")
 			s.mu.Lock()
 			s.status.State = dto.AuthStateWaitCaptcha
 			imgElement := s.sessionPage.Locator("img[data-qa='account-captcha-picture']")
@@ -213,6 +259,7 @@ func (s *HHAuthService) runFlow(identify string) {
 			s.mu.Unlock()
 			select {
 			case resolution := <-s.captchaChan:
+				logger.Debug(logger.HH, "[HHAuth] Received Captcha, filling form...")
 				if err := s.sessionPage.Fill("input[data-qa='account-captcha-input']", resolution); err != nil {
 					_ = s.sessionPage.Fill("input[name='captcha']", resolution)
 				}
@@ -243,7 +290,7 @@ func (s *HHAuthService) runFlow(identify string) {
 
 func (s *HHAuthService) detectState(ctx context.Context) (dto.HHAuthState, error) {
 	// Wait for any selector that indicates a state change
-	_, err := s.sessionPage.WaitForSelector("input[data-qa='magritte-pincode-input-field'], input[name='code'], img[data-qa='account-captcha-picture'], img[src*='captcha'], div.bloko-notification--error", playwright.PageWaitForSelectorOptions{
+	_, err := s.sessionPage.WaitForSelector("input[data-qa='magritte-pincode-input-field'], input[name='code'], img[data-qa='account-captcha-picture'], img[src*='captcha'], div.bloko-notification--error, div[data-qa='login-error']", playwright.PageWaitForSelectorOptions{
 		Timeout: playwright.Float(5000),
 	})
 	if err != nil {
@@ -251,6 +298,15 @@ func (s *HHAuthService) detectState(ctx context.Context) (dto.HHAuthState, error
 			return dto.AuthStateNone, nil
 		}
 		return dto.AuthStateNone, fmt.Errorf("wait for selector failed: %w", err)
+	}
+
+	if visible, _ := s.sessionPage.Locator("div.bloko-notification--error").IsVisible(); visible {
+		msg, _ := s.sessionPage.Locator("div.bloko-notification--error").InnerText()
+		return dto.AuthStateFailed, fmt.Errorf("HH error: %s", msg)
+	}
+	if visible, _ := s.sessionPage.Locator("div[data-qa='login-error']").IsVisible(); visible {
+		msg, _ := s.sessionPage.Locator("div[data-qa='login-error']").InnerText()
+		return dto.AuthStateFailed, fmt.Errorf("HH login error: %s", msg)
 	}
 
 	if visible, _ := s.sessionPage.Locator("input[data-qa='magritte-pincode-input-field']").IsVisible(); visible {
@@ -321,7 +377,7 @@ func (s *HHAuthService) complete(code string, userAgent string) {
 	integration := &models.Integration{
 		Platform:     "hh",
 		Identifier:   s.identify,
-		AccountID:    1, // Default account for now, or we could fetch it
+		AccountID:    s.accountID,
 		AccessToken:  &tr.AccessToken,
 		RefreshToken: &tr.RefreshToken,
 		ExpiresAt:    &expiresAt,

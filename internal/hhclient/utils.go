@@ -5,6 +5,8 @@ import (
 	"math/rand"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func GenerateAndroidUserAgent() string {
@@ -15,6 +17,6 @@ func GenerateAndroidUserAgent() string {
 	patch := rnd.Intn(5001) + 10000 // 10000-15000
 	android := rnd.Intn(5) + 11     // 11-15
 
-	return fmt.Sprintf("ru.hh.android/7.%d.%d, Device: %s, Android OS: %d",
-		minor, patch, device, android)
+	return fmt.Sprintf("ru.hh.android/7.%d.%d, Device: %s, Android OS: %d (UUID: %s)",
+		minor, patch, device, android, uuid.New().String())
 }

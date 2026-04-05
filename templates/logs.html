@@ -4,12 +4,16 @@
         <h2 class="text-2xl font-bold text-gray-800 dark:text-white">{{ Tr "system_logs" }}</h2>
         <div class="flex flex-wrap items-center gap-3">
             <!-- Filter Controls -->
-            <div class="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-lg border dark:border-gray-600">
-                <button onclick="setLogLevel('ALL')" id="btn-all" class="px-3 py-1 rounded-md text-xs font-bold transition-colors bg-white dark:bg-gray-600 shadow-sm">{{ Tr "all" }}</button>
-                <button onclick="setLogLevel('DEBUG')" id="btn-debug" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-gray-500">DEBUG</button>
-                <button onclick="setLogLevel('INFO')" id="btn-info" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-blue-500">INFO</button>
-                <button onclick="setLogLevel('WARN')" id="btn-warn" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-yellow-600">WARN</button>
-                <button onclick="setLogLevel('ERROR')" id="btn-error" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-red-500">ERROR</button>
+            <div class="flex flex-wrap bg-gray-100 dark:bg-gray-700 p-1 rounded-lg border dark:border-gray-600 gap-1">
+                <button onclick="setLogCategory('ALL')" id="btn-all" class="px-3 py-1 rounded-md text-xs font-bold transition-colors bg-white dark:bg-gray-600 shadow-sm">{{ Tr "all" }}</button>
+                <button onclick="setLogCategory('SYNC')" id="btn-sync" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-blue-500">SYNC</button>
+                <button onclick="setLogCategory('HH')" id="btn-hh" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-red-500">HH</button>
+                <button onclick="setLogCategory('TG')" id="btn-tg" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-sky-500">TG</button>
+                <button onclick="setLogCategory('ADD-SEQUENCE')" id="btn-add-sequence" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-orange-500">ADD-SEQ</button>
+                <button onclick="setLogCategory('HISTORY')" id="btn-history" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-yellow-500">HISTORY</button>
+                <button onclick="setLogCategory('REPORTS')" id="btn-reports" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-green-500">REPORTS</button>
+                <button onclick="setLogCategory('MSG')" id="btn-msg" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-purple-500">MSG</button>
+                <button onclick="setLogCategory('FILTERS')" id="btn-filters" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-slate-500">FILTERS</button>
             </div>
 
             <button onclick="clearLogs()" class="px-4 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg text-xs font-bold transition-colors border dark:border-gray-600">
@@ -22,8 +26,8 @@
         </div>
     </div>
 
-    <div class="bg-black text-green-400 p-4 rounded-lg shadow-inner font-mono text-sm h-[600px] overflow-y-auto" id="log-container">
-        <div class="opacity-50 italic">{{ Tr "waiting_for_logs" }}</div>
+    <div id="log-container" class="bg-gray-900 text-gray-300 font-mono text-xs p-6 rounded-2xl h-[calc(100vh-250px)] overflow-y-auto border border-gray-800 shadow-2xl">
+        <div class="text-gray-500 italic mb-4 opacity-50">{{ Tr "awaiting_logs" }}...</div>
     </div>
 </div>
 
@@ -34,16 +38,18 @@
         live: '{{ Tr "live" }}',
         disconnected: '{{ Tr "disconnected" }}'
     };
-    let eventSource;
-    let currentLogLevel = 'ALL';
 
-    function setLogLevel(level) {
-        currentLogLevel = level;
+    let eventSource;
+    let currentCategory = 'ALL';
+
+    function setLogCategory(cat) {
+        currentCategory = cat;
         
         // Update button styles
-        ['all', 'debug', 'info', 'warn', 'error'].forEach(l => {
-            const btn = document.getElementById(`btn-${l}`);
-            if (l === level.toLowerCase()) {
+        ['all', 'sync', 'hh', 'tg', 'add-sequence', 'history', 'reports', 'msg', 'filters'].forEach(c => {
+            const btn = document.getElementById(`btn-${c}`);
+            if (!btn) return;
+            if (c === cat.toLowerCase()) {
                 btn.classList.add('bg-white', 'dark:bg-gray-600', 'shadow-sm');
                 btn.classList.remove('hover:bg-white/50', 'dark:hover:bg-gray-600/50');
             } else {
@@ -55,7 +61,7 @@
         // Filter existing logs
         const entries = logContainer.querySelectorAll('div.log-entry');
         entries.forEach(entry => {
-            if (shouldShow(entry.textContent, level)) {
+            if (shouldShow(entry.textContent, cat)) {
                 entry.classList.remove('hidden');
             } else {
                 entry.classList.add('hidden');
@@ -63,10 +69,10 @@
         });
     }
 
-    function shouldShow(text, level) {
-        if (level === 'ALL') return true;
+    function shouldShow(text, cat) {
+        if (cat === 'ALL') return true;
         const upperText = text.toUpperCase();
-        return upperText.includes(`[${level}]`) || upperText.includes(`"LEVEL":"${level.toLowerCase()}"`);
+        return upperText.includes(`[${cat}]`);
     }
 
     function connect() {
@@ -76,7 +82,7 @@
         
         eventSource.onopen = () => {
             statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>${translations.live}`;
-            statusEl.className = 'flex items-center px-3 py-1.5 rounded-lg text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 border border-green-200 dark:border-green-800';
+            statusEl.className = 'flex items-center px-3 py-1.5 rounded-lg text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 border border-green-200 dark:border-yellow-800';
         };
 
         eventSource.onerror = (e) => {
@@ -90,30 +96,27 @@
             const div = document.createElement('div');
             div.className = 'log-entry mb-1 border-l-2 border-transparent hover:border-gray-700 dark:hover:border-gray-500 pl-2 transition-colors';
             
-            // Basic syntax highlighting for common log levels
             let line = e.data;
-            if (line.includes('[ERROR]') || line.includes('"level":"error"')) {
+            if (line.includes('[ERROR]')) {
                 div.classList.add('text-red-400');
-            } else if (line.includes('[WARN]') || line.includes('"level":"warn"')) {
+            } else if (line.includes('[WARN]')) {
                 div.classList.add('text-yellow-400');
-            } else if (line.includes('[DEBUG]') || line.includes('"level":"debug"')) {
+            } else if (line.includes('[DEBUG]')) {
                 div.classList.add('text-gray-500');
             }
 
-            if (!shouldShow(line, currentLogLevel)) {
+            if (!shouldShow(line, currentCategory)) {
                 div.classList.add('hidden');
             }
 
             div.textContent = line;
             logContainer.appendChild(div);
             
-            // Auto-scroll to bottom if near bottom
             if (logContainer.scrollHeight - logContainer.scrollTop - logContainer.clientHeight < 100) {
                 logContainer.scrollTop = logContainer.scrollHeight;
             }
 
-            // Keep log container size manageable
-            if (logContainer.children.length > 1000) {
+            if (logContainer.children.length > 2000) {
                 logContainer.removeChild(logContainer.firstChild);
             }
         };
@@ -125,7 +128,6 @@
 
     connect();
 
-    // Cleanup on page leave
     window.addEventListener('beforeunload', () => {
         if (eventSource) eventSource.close();
     });
