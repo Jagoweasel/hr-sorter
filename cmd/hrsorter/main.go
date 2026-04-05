@@ -26,7 +26,10 @@ func main() {
 	}
 
 	// 2. Initialize i18n
-	translator := i18n.NewLocalizationService()
+	translator, err := i18n.NewLocalizationService()
+	if err != nil {
+		log.Fatal(err)
+	}
 	if err := translator.Load("en", "ru"); err != nil {
 		log.Fatal(err)
 	}

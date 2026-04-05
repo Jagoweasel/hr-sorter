@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"path/filepath"
+	"path"
 	"strings"
 	"sync"
 )
@@ -19,12 +19,14 @@ type LocalizationService struct {
 	translations map[string]map[string]string // locale -> key -> value
 }
 
-func NewLocalizationService() *LocalizationService {
+func NewLocalizationService() (*LocalizationService, error) {
 	ls := &LocalizationService{
 		translations: make(map[string]map[string]string),
 	}
-	_ = ls.Load() // Load all available locales on start
-	return ls
+	if err := ls.Load(); err != nil {
+		return nil, fmt.Errorf("failed to load translations: %w", err)
+	}
+	return ls, nil
 }
 
 func (s *LocalizationService) Load(locales ...string) error {
@@ -62,7 +64,7 @@ func (s *LocalizationService) Load(locales ...string) error {
 			}
 		}
 
-		content, err := fs.ReadFile(localesAssets, filepath.Join("locales", fileName))
+		content, err := fs.ReadFile(localesAssets, path.Join("locales", fileName))
 		if err != nil {
 			return fmt.Errorf("failed to read locale file %s: %w", fileName, err)
 		}
