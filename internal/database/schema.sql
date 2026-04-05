@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS messages (
     FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE
 );
 
+CREATE INDEX IF NOT EXISTS idx_messages_integration_timestamp ON messages(integration_id, timestamp);
+
 CREATE TABLE IF NOT EXISTS sequences (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     account_id INTEGER,
@@ -63,6 +65,8 @@ CREATE TABLE IF NOT EXISTS sequences (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
 );
+
+CREATE INDEX IF NOT EXISTS idx_sequences_account_status ON sequences(account_id, status);
 
 CREATE TABLE IF NOT EXISTS sequence_contacts (
     sequence_id INTEGER,

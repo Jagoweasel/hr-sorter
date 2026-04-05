@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"hr-sorter/internal/domain/dto"
+	"hr-sorter/internal/models"
 	"io"
 )
 
@@ -55,4 +56,14 @@ type Repository interface {
 	GetAccount(ctx context.Context, id string) (interface{}, error)
 	SaveNegotiations(ctx context.Context, negotiations []dto.HHNegotiation) error
 	GetMappingRules(ctx context.Context) (map[string]string, error)
+
+	// Caching support
+	GetMessageFilters(ctx context.Context) ([]models.MessageFilter, error)
+	SaveMessageFilter(ctx context.Context, filter *models.MessageFilter) error
+
+	GetIntegration(ctx context.Context, id int64) (*models.Integration, error)
+	SaveIntegration(ctx context.Context, integration *models.Integration) error
+
+	GetSequence(ctx context.Context, id int64) (*models.Sequence, error)
+	SaveSequence(ctx context.Context, sequence *models.Sequence) error
 }

@@ -13,7 +13,7 @@ import (
 )
 
 //go:embed schema.sql
-var schema string
+var Schema string
 
 var DB *sqlx.DB
 
@@ -49,7 +49,7 @@ func InitDB(path string) {
 		DB.MustExec("ALTER TABLE messages RENAME TO messages_old")
 
 		// 2. Create new schema
-		DB.MustExec(schema)
+		DB.MustExec(Schema)
 
 		// 3. Create a default account
 		var accountID int64
@@ -87,7 +87,7 @@ func InitDB(path string) {
 
 		log.Println("[DB] Migration finished.")
 	} else {
-		DB.MustExec(schema)
+		DB.MustExec(Schema)
 		log.Println("[DB] Schema verified.")
 	}
 
