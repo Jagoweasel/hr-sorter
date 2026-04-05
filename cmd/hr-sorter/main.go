@@ -164,7 +164,7 @@ func main() {
 	}
 
 	srv := &http.Server{
-		Addr:    "127.0.0.1:" + port,
+		Addr:    ":" + port,
 		Handler: wrappedHandler,
 	}
 

@@ -9,6 +9,7 @@ import (
 	"hr-sorter/internal/models"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -46,8 +47,13 @@ func NewHHAuthService(repo domain.Repository) (*HHAuthService, error) {
 		return nil, fmt.Errorf("failed to start playwright: %w", err)
 	}
 
+	headless := os.Getenv("HEADLESS") != "false"
 	browser, err := pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
-		Headless: playwright.Bool(false),
+		Headless: playwright.Bool(headless),
+		Args: []string{
+			"--no-sandbox",
+			"--disable-setuid-sandbox",
+		},
 	})
 	if err != nil {
 		_ = pw.Stop()

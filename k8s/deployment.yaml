@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hr-sorter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hr-sorter
+  strategy:
+    type: Recreate # Since we're using a single SQLite DB with ReadWriteOnce PVC
+  template:
+    metadata:
+      labels:
+        app: hr-sorter
+    spec:
+      containers:
+        - name: hr-sorter
+          image: your-registry/hr-sorter:latest # Replace with your image
+          ports:
+            - containerPort: 8080
+          env:
+            - name: API_ID
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: API_ID
+            - name: API_HASH
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: API_HASH
+            - name: HH_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: HH_CLIENT_ID
+            - name: HH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: HH_CLIENT_SECRET
+            - name: DB_PATH
+              value: "/app/data/hr-sorter.db"
+            - name: HTTP_PORT
+              value: "8080"
+            - name: HEADLESS
+              value: "true"
+          volumeMounts:
+            - name: db-storage
+              mountPath: /app/data
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+      volumes:
+        - name: db-storage
+          persistentVolumeClaim:
+            claimName: sqlite-pvc

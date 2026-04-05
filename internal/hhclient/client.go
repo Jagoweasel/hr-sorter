@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 )
 
@@ -69,9 +70,22 @@ type TokenResponse struct {
 	ExpiresIn    int    `json:"expires_in"`
 }
 
+func getHHConfig() (string, string) {
+	id := os.Getenv("HH_CLIENT_ID")
+	secret := os.Getenv("HH_CLIENT_SECRET")
+	if id == "" {
+		id = "HIOMIAS39CA9DICTA7JIO64LQKQJF5AGIK74G9ITJKLNEDAOH5FHS5G1JI7FOEGD"
+	}
+	if secret == "" {
+		secret = "V9M870DE342BGHFRUJ5FTCGCUA1482AN0DI8C5TFI9ULMA89H10N60NOP8I4JMVS"
+	}
+	return id, secret
+}
+
 func GetAuthorizeURL() string {
+	id, _ := getHHConfig()
 	params := url.Values{
-		"client_id":     {AndroidClientID},
+		"client_id":     {id},
 		"response_type": {"code"},
 	}
 	return HHOAuthURL + "authorize?" + params.Encode()
@@ -79,9 +93,10 @@ func GetAuthorizeURL() string {
 
 func ExchangeToken(code string, userAgent string) (*TokenResponse, error) {
 	logger.Debug(logger.HH, "Exchanging code for token...")
+	id, secret := getHHConfig()
 	data := url.Values{
-		"client_id":     {AndroidClientID},
-		"client_secret": {AndroidClientSecret},
+		"client_id":     {id},
+		"client_secret": {secret},
 		"code":          {code},
 		"grant_type":    {"authorization_code"},
 	}
@@ -115,9 +130,12 @@ func ExchangeToken(code string, userAgent string) (*TokenResponse, error) {
 
 func RefreshToken(refreshToken string, userAgent string) (*TokenResponse, error) {
 	logger.Debug(logger.HH, "Refreshing access token...")
+	id, secret := getHHConfig()
 	data := url.Values{
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {refreshToken},
+		"client_id":     {id},
+		"client_secret": {secret},
 	}
 
 	req, _ := http.NewRequest("POST", HHOAuthURL+"token", strings.NewReader(data.Encode()))

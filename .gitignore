@@ -14,3 +14,5 @@ add-account
 cmd/add-hh/add-hh
 add-account
 *.har
+hr-sorter.db-shm
+hr-sorter.db-wal
