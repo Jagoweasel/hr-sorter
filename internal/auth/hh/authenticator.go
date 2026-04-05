@@ -54,12 +54,33 @@ type AuthFlow interface {
 
 // Session represents a fully authenticated HH session for an integration.
 type Session struct {
+	mu           sync.RWMutex
 	AccountID    int64
 	Identifier   string // email or phone
 	AccessToken  string
 	RefreshToken string
 	ExpiresAt    time.Time
 	UserAgent    string
+}
+
+func (s *Session) GetTokens() (string, string, time.Time) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.AccessToken, s.RefreshToken, s.ExpiresAt
+}
+
+func (s *Session) SetTokens(access, refresh string, expires time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.AccessToken = access
+	s.RefreshToken = refresh
+	s.ExpiresAt = expires
+}
+
+func (s *Session) GetUserAgent() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.UserAgent
 }
 
 type PlaywrightAuthenticator struct {
@@ -120,6 +141,11 @@ func (a *PlaywrightAuthenticator) StartFlow(ctx context.Context, accountID int64
 		userAgent:  a.uaGen.Generate(),
 		browser:    a.browser,
 		pw:         a.pw,
+		onComplete: func() {
+			a.mu.Lock()
+			delete(a.flows, accountID)
+			a.mu.Unlock()
+		},
 	}
 
 	a.flows[accountID] = flow
@@ -178,6 +204,7 @@ type PlaywrightAuthFlow struct {
 	pw         *playwright.Playwright
 	session    *Session
 	err        error
+	onComplete func()
 
 	// Playwright objects
 	context playwright.BrowserContext
@@ -230,6 +257,9 @@ func (f *PlaywrightAuthFlow) Result() (*Session, error) {
 func (f *PlaywrightAuthFlow) run() {
 	defer close(f.done)
 	defer func() {
+		if f.onComplete != nil {
+			f.onComplete()
+		}
 		if f.page != nil {
 			f.page.Close()
 		}
@@ -242,10 +272,10 @@ func (f *PlaywrightAuthFlow) run() {
 	defer cancel()
 
 	var err error
-	// Set up browser context with mobile emulation
+	// Set up browser context with mobile emulation and correct User-Agent
 	device := f.pw.Devices["Pixel 7"]
 	f.context, err = f.browser.NewContext(playwright.BrowserNewContextOptions{
-		UserAgent:         playwright.String(device.UserAgent),
+		UserAgent:         playwright.String(f.userAgent), // Correct: use our generated UA
 		Viewport:          device.Viewport,
 		DeviceScaleFactor: playwright.Float(device.DeviceScaleFactor),
 		IsMobile:          playwright.Bool(device.IsMobile),
@@ -265,7 +295,17 @@ func (f *PlaywrightAuthFlow) run() {
 	// Request Interception for hhandroid://
 	f.context.OnRequest(func(request playwright.Request) {
 		if strings.HasPrefix(request.URL(), "hhandroid://") {
-			logger.Info(logger.HH, "[HHAuth] Detected redirect: %s", request.URL())
+			redactedURL := request.URL()
+			if u, err := url.Parse(redactedURL); err == nil {
+				q := u.Query()
+				if q.Get("code") != "" {
+					q.Set("code", "[REDACTED]")
+					u.RawQuery = q.Encode()
+					redactedURL = u.String()
+				}
+			}
+			logger.Info(logger.HH, "[HHAuth] Detected redirect: %s", redactedURL)
+
 			u, _ := url.Parse(request.URL())
 			code := u.Query().Get("code")
 			if code != "" {
@@ -280,11 +320,13 @@ func (f *PlaywrightAuthFlow) run() {
 	// Get authorize URL (adapted from ExchangeToken logic)
 	authURL := fmt.Sprintf("https://hh.ru/oauth/authorize?response_type=code&client_id=%s&state=skip", f.config.ClientID)
 
-	go func() {
-		_, _ = f.page.Goto(authURL, playwright.PageGotoOptions{
-			WaitUntil: playwright.WaitUntilStateLoad,
-		})
-	}()
+	_, err = f.page.Goto(authURL, playwright.PageGotoOptions{
+		WaitUntil: playwright.WaitUntilStateLoad,
+	})
+	if err != nil {
+		f.fail(fmt.Errorf("failed to navigate to auth URL: %w", err))
+		return
+	}
 
 	// Identification
 	if err := f.handleIdentify(); err != nil {
@@ -454,14 +496,18 @@ func (f *PlaywrightAuthFlow) exchangeToken(code string) (*TokenResponse, error) 
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read token response: %w", err)
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("token exchange failed (%d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("token exchange failed (%d): %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var tr TokenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tr); err != nil {
-		return nil, err
+	if err := json.Unmarshal(bodyBytes, &tr); err != nil {
+		return nil, fmt.Errorf("failed to decode token response: %w", err)
 	}
 	return &tr, nil
 }

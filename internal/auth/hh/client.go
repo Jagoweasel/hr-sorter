@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -20,6 +21,7 @@ type HHClientWrapper struct {
 	config     ClientConfig
 	apiBaseURL string
 	authURL    string
+	refreshMu  sync.Map // Map of accountID -> *sync.Mutex
 }
 
 // NewHHClientWrapper creates a new instance of the HHClientWrapper.
@@ -35,12 +37,21 @@ func NewHHClientWrapper(storage SessionStorage, config ClientConfig) HHClient {
 	}
 }
 
+func (c *HHClientWrapper) getRefreshMu(accountID int64) *sync.Mutex {
+	mu, _ := c.refreshMu.LoadOrStore(accountID, &sync.Mutex{})
+	return mu.(*sync.Mutex)
+}
+
 func (c *HHClientWrapper) ExecuteRequest(ctx context.Context, session *Session, method string, path string, body interface{}) ([]byte, error) {
+	access, _, expires := session.GetTokens()
+	userAgent := session.GetUserAgent()
+
 	// If token is expired, refresh first
-	if !session.ExpiresAt.IsZero() && time.Now().After(session.ExpiresAt) {
+	if !expires.IsZero() && time.Now().After(expires) {
 		if err := c.RefreshToken(ctx, session); err != nil {
 			return nil, fmt.Errorf("pre-request refresh failed: %w", err)
 		}
+		access, _, _ = session.GetTokens()
 	}
 
 	for retry := 0; retry < 2; retry++ {
@@ -59,8 +70,8 @@ func (c *HHClientWrapper) ExecuteRequest(ctx context.Context, session *Session, 
 			return nil, fmt.Errorf("failed to create request: %w", err)
 		}
 
-		req.Header.Set("Authorization", "Bearer "+session.AccessToken)
-		req.Header.Set("User-Agent", session.UserAgent)
+		req.Header.Set("Authorization", "Bearer "+access)
+		req.Header.Set("User-Agent", userAgent)
 		if body != nil {
 			req.Header.Set("Content-Type", "application/json")
 		}
@@ -76,6 +87,7 @@ func (c *HHClientWrapper) ExecuteRequest(ctx context.Context, session *Session, 
 				if err := c.RefreshToken(ctx, session); err != nil {
 					return nil, fmt.Errorf("refresh failed after 403/401: %w", err)
 				}
+				access, _, _ = session.GetTokens()
 				continue // retry
 			}
 		}
@@ -96,9 +108,19 @@ func (c *HHClientWrapper) ExecuteRequest(ctx context.Context, session *Session, 
 }
 
 func (c *HHClientWrapper) RefreshToken(ctx context.Context, session *Session) error {
+	mu := c.getRefreshMu(session.AccountID)
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Re-check expiry after acquiring lock
+	_, refresh, expires := session.GetTokens()
+	if !expires.IsZero() && time.Now().Before(expires.Add(-time.Minute)) {
+		return nil // Already refreshed by another goroutine
+	}
+
 	data := url.Values{}
 	data.Set("grant_type", "refresh_token")
-	data.Set("refresh_token", session.RefreshToken)
+	data.Set("refresh_token", refresh)
 	data.Set("client_id", c.config.ClientID)
 	data.Set("client_secret", c.config.ClientSecret)
 
@@ -108,7 +130,7 @@ func (c *HHClientWrapper) RefreshToken(ctx context.Context, session *Session) er
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", session.UserAgent)
+	req.Header.Set("User-Agent", session.GetUserAgent())
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -116,19 +138,21 @@ func (c *HHClientWrapper) RefreshToken(ctx context.Context, session *Session) er
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read refresh response body: %w", err)
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("refresh failed (%d): %s", resp.StatusCode, string(body))
+		return fmt.Errorf("refresh failed (%d): %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var tr TokenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tr); err != nil {
+	if err := json.Unmarshal(bodyBytes, &tr); err != nil {
 		return fmt.Errorf("failed to decode refresh response: %w", err)
 	}
 
-	session.AccessToken = tr.AccessToken
-	session.RefreshToken = tr.RefreshToken
-	session.ExpiresAt = time.Now().Add(time.Duration(tr.ExpiresIn) * time.Second)
+	session.SetTokens(tr.AccessToken, tr.RefreshToken, time.Now().Add(time.Duration(tr.ExpiresIn)*time.Second))
 
 	if err := c.storage.Save(ctx, session); err != nil {
 		return fmt.Errorf("failed to save refreshed session: %w", err)

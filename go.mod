@@ -4,12 +4,13 @@ go 1.25.1
 
 require (
 	github.com/google/uuid v1.6.0
+	github.com/gorilla/csrf v1.7.3
 	github.com/gotd/td v0.142.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/jmoiron/sqlx v1.4.0
-	github.com/johnfercher/maroto v1.0.0
 	github.com/johnfercher/maroto/v2 v2.0.0-beta.10
 	github.com/joho/godotenv v1.5.1
+	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/playwright-community/playwright-go v0.5700.1
 	github.com/stretchr/testify v1.11.1
 	github.com/xuri/excelize/v2 v2.10.1
@@ -35,7 +36,6 @@ require (
 	github.com/go-faster/yaml v0.4.6 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.4 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
-	github.com/gorilla/csrf v1.7.3 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gotd/ige v0.2.2 // indirect
 	github.com/gotd/neo v0.1.5 // indirect
@@ -56,9 +56,9 @@ require (
 	github.com/richardlehane/mscfb v1.0.6 // indirect
 	github.com/richardlehane/msoleps v1.0.6 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
-	github.com/ruudk/golang-pdf417 v0.0.0-20201230142125-a7e3863a1245 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/tiendc/go-deepcopy v1.7.2 // indirect
 	github.com/xuri/efp v0.0.1 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect

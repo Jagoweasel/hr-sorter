@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -102,6 +103,7 @@ func TestHHClientWrapper_ExecuteRequest_Refresh(t *testing.T) {
 		AccessToken:  "old-access",
 		RefreshToken: "old-refresh",
 		ExpiresAt:    time.Now().Add(-time.Hour), // Expired
+		UserAgent:    "old-ua",
 	}
 
 	resp, err := client.ExecuteRequest(context.Background(), session, "GET", "/test", nil)
@@ -112,7 +114,53 @@ func TestHHClientWrapper_ExecuteRequest_Refresh(t *testing.T) {
 	_ = json.Unmarshal(resp, &data)
 	assert.Equal(t, "ok", data["status"])
 
-	assert.Equal(t, "new-access", session.AccessToken)
-	assert.Equal(t, "new-refresh", session.RefreshToken)
+	access, refresh, _ := session.GetTokens()
+	assert.Equal(t, "new-access", access)
+	assert.Equal(t, "new-refresh", refresh)
 	storage.AssertCalled(t, "Save", mock.Anything, session)
+}
+
+func TestHHClientWrapper_ExecuteRequest_ConcurrentRefresh(t *testing.T) {
+	refreshCalled := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth/token" {
+			time.Sleep(100 * time.Millisecond)
+			refreshCalled++
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token": "new-access", "refresh_token": "new-refresh", "expires_in": 3600}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status": "ok"}`))
+	}))
+	defer server.Close()
+
+	storage := new(MockSessionStorage)
+	storage.On("Save", mock.Anything, mock.Anything).Return(nil)
+
+	client := &HHClientWrapper{
+		httpClient: server.Client(),
+		storage:    storage,
+		config:     ClientConfig{ClientID: "id", ClientSecret: "secret"},
+		apiBaseURL: server.URL,
+		authURL:    server.URL + "/oauth/token",
+	}
+
+	session := &Session{
+		AccountID:    1,
+		RefreshToken: "refresh",
+		ExpiresAt:    time.Now().Add(-time.Hour),
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = client.ExecuteRequest(context.Background(), session, "GET", "/test", nil)
+		}()
+	}
+	wg.Wait()
+
+	assert.Equal(t, 1, refreshCalled)
 }
