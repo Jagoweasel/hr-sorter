@@ -253,11 +253,10 @@ func (r *SQLiteRepository) SaveIntegration(ctx context.Context, integration *mod
 
 	query := `INSERT INTO integrations (id, account_id, platform, identifier, api_id, api_hash, access_token, refresh_token, expires_at, user_agent, status, session_path, created_at)
 			  VALUES (:id, :account_id, :platform, :identifier, :api_id, :api_hash, :access_token, :refresh_token, :expires_at, :user_agent, :status, :session_path, :created_at)
-			  ON CONFLICT(id) DO UPDATE SET
-			  account_id=excluded.account_id, platform=excluded.platform, identifier=excluded.identifier, 
-			  api_id=excluded.api_id, api_hash=excluded.api_hash, user_agent=excluded.user_agent, 
-			  status=excluded.status, session_path=excluded.session_path, 
-			  access_token=excluded.access_token, refresh_token=excluded.refresh_token, expires_at=excluded.expires_at`
+			  ON CONFLICT(platform, identifier) DO UPDATE SET
+			  account_id=excluded.account_id, api_id=excluded.api_id, api_hash=excluded.api_hash, 
+			  access_token=excluded.access_token, refresh_token=excluded.refresh_token, expires_at=excluded.expires_at,
+			  user_agent=excluded.user_agent, status=excluded.status, session_path=excluded.session_path`
 	_, err := r.db.NamedExecContext(ctx, query, integration)
 	if err != nil {
 		return fmt.Errorf("failed to save integration: %w", err)

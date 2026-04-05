@@ -328,6 +328,98 @@ func TestSQLiteRepository_SaveSequence_Upsert(t *testing.T) {
 	}
 }
 
+func TestSQLiteRepository_SaveIntegration_ConflictByPlatformIdentifier(t *testing.T) {
+	dbPath := "test_integration_platform_conflict.db"
+	defer os.Remove(dbPath)
+
+	repo, err := NewSQLiteRepository(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create repository: %v", err)
+	}
+	defer repo.Close()
+
+	ctx := context.Background()
+
+	// 0. Create accounts
+	_ = repo.SaveAccount(ctx, &models.Account{ID: 1, Name: "Acc 1"})
+	_ = repo.SaveAccount(ctx, &models.Account{ID: 2, Name: "Acc 2"})
+
+	// 1. Initial save
+	integration1 := &models.Integration{
+		ID:         1,
+		AccountID:  1,
+		Platform:   "hh",
+		Identifier: "user@example.com",
+		Status:     "active",
+		CreatedAt:  time.Now().Truncate(time.Second),
+	}
+
+	err = repo.SaveIntegration(ctx, integration1)
+	if err != nil {
+		t.Fatalf("failed to save integration 1: %v", err)
+	}
+
+	var id1 int64
+	err = repo.db.Get(&id1, "SELECT id FROM integrations WHERE platform = 'hh' AND identifier = 'user@example.com'")
+	if err != nil {
+		t.Fatalf("failed to get id 1: %v", err)
+	}
+	t.Logf("Integration 1 ID: %d", id1)
+
+	// 2. Save another one with SAME platform and identifier, but DIFFERENT account_id and status
+	// and a DIFFERENT suggested ID
+	// It should update the existing one because of ON CONFLICT(platform, identifier)
+	integration2 := &models.Integration{
+		ID:         2,
+		AccountID:  2,
+		Platform:   "hh",
+		Identifier: "user@example.com",
+		Status:     "inactive",
+		UserAgent:  ptr("Mozilla/5.0"),
+		CreatedAt:  time.Now().Truncate(time.Second),
+	}
+
+	err = repo.SaveIntegration(ctx, integration2)
+	if err != nil {
+		t.Fatalf("failed to save integration 2: %v", err)
+	}
+
+	var id2 int64
+	err = repo.db.Get(&id2, "SELECT id FROM integrations WHERE platform = 'hh' AND identifier = 'user@example.com'")
+	if err != nil {
+		t.Fatalf("failed to get id 2: %v", err)
+	}
+	t.Logf("Integration 2 ID: %d", id2)
+
+	if id1 != id2 {
+		t.Errorf("Expected same ID (1), got %d then %d", id1, id2)
+	}
+
+	// 3. Verify there is only ONE record in DB
+	var count int
+	err = repo.db.Get(&count, "SELECT COUNT(*) FROM integrations WHERE platform = 'hh' AND identifier = 'user@example.com'")
+	if err != nil {
+		t.Fatalf("failed to count integrations: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 integration, got %d", count)
+	}
+
+	// 4. Verify updates
+	var saved models.Integration
+	err = repo.db.Get(&saved, "SELECT * FROM integrations WHERE platform = 'hh' AND identifier = 'user@example.com'")
+	if err != nil {
+		t.Fatalf("failed to get integration: %v", err)
+	}
+
+	if saved.AccountID != 2 {
+		t.Errorf("expected AccountID 2, got %d", saved.AccountID)
+	}
+	if saved.Status != "inactive" {
+		t.Errorf("expected Status 'inactive', got %s", saved.Status)
+	}
+}
+
 func TestSQLiteRepository_SaveMappingRule(t *testing.T) {
 	dbPath := "test_mapping_rule.db"
 	defer os.Remove(dbPath)
