@@ -25,9 +25,9 @@ type HHClient interface {
 
 // Reporter interface for PDF generation
 type Reporter interface {
-	// CreateReport generates a professional-grade PDF using maroto/v2
+	// GeneratePDF generates a professional-grade PDF using maroto/v2
 	// Uses embedded fonts and grid layout.
-	CreateReport(ctx context.Context, data dto.HHKPI) (io.ReadCloser, error)
+	GeneratePDF(ctx context.Context, data *models.ReportData) ([]byte, error)
 }
 
 // Translator interface for i18n

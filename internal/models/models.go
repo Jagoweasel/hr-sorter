@@ -65,6 +65,28 @@ type Sequence struct {
 	CreatedAt       time.Time `db:"created_at" json:"created_at"`
 }
 
+type ReportData struct {
+	AccountName string     `json:"account_name"`
+	ReportDate  time.Time  `json:"report_date"`
+	KPI         ReportKPI  `json:"kpi"`
+	Funnel      Funnel     `json:"funnel"`
+	Sequences   []Sequence `json:"sequences"`
+}
+
+type ReportKPI struct {
+	TotalSequences int     `json:"total_sequences"`
+	ResponseRate   float64 `json:"response_rate"`
+	HireRate       float64 `json:"hire_rate"`
+}
+
+type Funnel struct {
+	Initial   int `json:"initial"`
+	Screening int `json:"screening"`
+	Tech      int `json:"tech"`
+	Offer     int `json:"offer"`
+	Accepted  int `json:"accepted"`
+}
+
 type MappingRule struct {
 	ID       int64  `db:"id" json:"id"`
 	Pattern  string `db:"pattern" json:"pattern"`
