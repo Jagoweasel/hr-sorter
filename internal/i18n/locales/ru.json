@@ -92,5 +92,21 @@
   "delete": "Удалить",
   "no_mapping_rules": "Правила мэппинга не определены",
   "pattern_regex": "Паттерн (regex)",
-  "save": "Сохранить"
+  "save": "Сохранить",
+  "finish_auth": "Завершить авт.",
+  "verification_code_placeholder": "12345",
+  "telegram_password_placeholder": "Ваш пароль Telegram",
+  "account_name_placeholder": "напр. Личный, Работа, Агентство",
+  "phone_placeholder": "+79991234567",
+  "api_id_placeholder": "12345678",
+  "api_hash_placeholder": "abcdef0123456789...",
+  "hh_code_placeholder": "Вставьте код из URL сюда",
+  "failed": "Ошибка",
+  "network_error": "Ошибка сети",
+  "pattern_placeholder": "напр. .*Golang.*",
+  "category_placeholder": "напр. backend",
+  "sequences": "Воронки",
+  "awaiting_code": "Ожидание кода",
+  "awaiting_password": "Ожидание пароля",
+  "pending_auth": "Ожидание авт."
 }

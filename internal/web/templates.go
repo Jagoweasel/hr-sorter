@@ -84,6 +84,18 @@ func NewTemplateManager(ls *i18n.LocalizationService) (*TemplateManager, error) 
 		"T": func(locale, key string, args ...interface{}) string {
 			return ls.Translate(key, locale, args...)
 		},
+		"Tr": func(key string, args ...interface{}) string {
+			return "" // Placeholder
+		},
+		"Locale": func() string {
+			return "" // Placeholder
+		},
+		"csrfField": func() template.HTML {
+			return "" // Placeholder
+		},
+		"csrfToken": func() string {
+			return "" // Placeholder
+		},
 	}
 
 	layoutPath := filepath.Join("templates", "layout.html")

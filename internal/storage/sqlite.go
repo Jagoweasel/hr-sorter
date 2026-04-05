@@ -36,6 +36,7 @@ func NewSQLiteRepository(dsn string) (*SQLiteRepository, error) {
 	}
 	for _, pragma := range pragmas {
 		if _, err := db.Exec(pragma); err != nil {
+			db.Close()
 			return nil, fmt.Errorf("failed to execute pragma %s: %w", pragma, err)
 		}
 	}
@@ -43,11 +44,13 @@ func NewSQLiteRepository(dsn string) (*SQLiteRepository, error) {
 	// 3. Initialize golang-lru cache
 	cache, err := lru.New[string, interface{}](1024)
 	if err != nil {
+		db.Close()
 		return nil, fmt.Errorf("failed to initialize cache: %w", err)
 	}
 
 	// 4. Run migrations/schema
 	if _, err := db.Exec(database.Schema); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("failed to execute schema: %w", err)
 	}
 

@@ -44,6 +44,20 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var seqIDs []int64
+	for _, s := range sequences {
+		if hideRejected && s.Status == "rejected" {
+			continue
+		}
+		if hideAccepted && s.Status == "accepted" {
+			continue
+		}
+		seqIDs = append(seqIDs, s.ID)
+	}
+
+	recruitersMap, _ := h.seqRepo.GetRecruitersBatch(r.Context(), seqIDs)
+	stagesMap, _ := h.seqRepo.GetStagesBatch(r.Context(), seqIDs)
+
 	var detailedSeqs []repository.SequenceWithDetails
 	for _, s := range sequences {
 		if hideRejected && s.Status == "rejected" {
@@ -53,8 +67,8 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		recruiters, _ := h.seqRepo.GetRecruiters(r.Context(), s.ID)
-		stages, _ := h.seqRepo.GetStages(r.Context(), s.ID)
+		recruiters := recruitersMap[s.ID]
+		stages := stagesMap[s.ID]
 
 		var history []models.InterviewStage
 		var historyNames []string

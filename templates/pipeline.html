@@ -75,10 +75,10 @@
                                 <div class="w-7 h-7 shrink-0 rounded-lg bg-gray-900 dark:bg-blue-600 text-white flex items-center justify-center text-[10px] font-black">
                                     {{ if .Account }}{{ slice .Account.Name 0 1 }}{{ else }}?{{ end }}
                                 </div>
-                                <div class="truncate">
-                                    <p class="font-black text-gray-900 dark:text-white text-[10px] truncate leading-none mb-1">{{ if .Account }}{{ .Account.Name }}{{ else }}{{ Tr "general" }}{{ end }}</p>
-                                    <p class="text-[7px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-tighter">{{ len .Sequences }} Active</p>
-                                </div>
+                                    <div class="truncate">
+                                        <p class="font-black text-gray-900 dark:text-white text-[10px] truncate leading-none mb-1">{{ if .Account }}{{ .Account.Name }}{{ else }}{{ Tr "general" }}{{ end }}</p>
+                                        <p class="text-[7px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-tighter">{{ len .Sequences }} {{ Tr "active" }}</p>
+                                    </div>
                             </div>
                         </div>
 
@@ -118,18 +118,7 @@
                                 <!-- Actions -->
                                 <div class="flex items-center justify-between space-x-1 pt-1">
                                     <select class="flex-1 text-[8px] bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-1 py-0.5 font-black text-gray-500 dark:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500/10 outline-none appearance-none hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer"
-                                            onchange="if(this.value) { 
-                                                const form = document.createElement('form');
-                                                form.method = 'POST';
-                                                form.action = '/sequences/move?id={{ .ID }}&status=' + this.value;
-                                                const csrf = document.createElement('input');
-                                                csrf.type = 'hidden';
-                                                csrf.name = 'gorilla.csrf.Token';
-                                                csrf.value = '{{ csrfToken }}';
-                                                form.appendChild(csrf);
-                                                document.body.appendChild(form);
-                                                form.submit();
-                                            }">
+                                            hx-post="/sequences/move?id={{ .ID }}" hx-trigger="change" name="status" hx-target="body">
                                         <option value="">{{ Tr "status" }}...</option>
                                         {{ range $.ColumnDefs }}
                                         <option value="{{ .ID }}" {{ if eq .ID $colDef.ID }}selected{{ end }}>{{ .Label }}</option>
@@ -159,7 +148,7 @@
                         <div class="w-6 h-6 rounded bg-blue-600 flex items-center justify-center text-white shadow-sm font-black text-[10px]">
                             {{ if .Account }}{{ slice .Account.Name 0 1 }}{{ else }}?{{ end }}
                         </div>
-                        <h2 class="font-black text-xs text-gray-800 dark:text-white tracking-tight">{{ if .Account }}{{ .Account.Name }}{{ else }}{{ Tr "general" }} Sequences{{ end }}</h2>
+                        <h2 class="font-black text-xs text-gray-800 dark:text-white tracking-tight">{{ if .Account }}{{ .Account.Name }}{{ else }}{{ Tr "general" }} {{ Tr "sequences" }}{{ end }}</h2>
                     </div>
 
                     <div class="space-y-4">

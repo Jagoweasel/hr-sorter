@@ -143,6 +143,58 @@ func (r *SequenceRepository) GetStages(ctx context.Context, sequenceID int64) ([
 	return stages, err
 }
 
+func (r *SequenceRepository) GetRecruitersBatch(ctx context.Context, sequenceIDs []int64) (map[int64][]models.Contact, error) {
+	if len(sequenceIDs) == 0 {
+		return make(map[int64][]models.Contact), nil
+	}
+	query, args, err := sqlx.In(`
+		SELECT sc.sequence_id, c.* FROM contacts c 
+		JOIN sequence_contacts sc ON c.id = sc.contact_id 
+		WHERE sc.sequence_id IN (?)`, sequenceIDs)
+	if err != nil {
+		return nil, err
+	}
+	query = r.db.Rebind(query)
+
+	var results []struct {
+		SequenceID int64 `db:"sequence_id"`
+		models.Contact
+	}
+	err = r.db.SelectContext(ctx, &results, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make(map[int64][]models.Contact)
+	for _, r := range results {
+		res[r.SequenceID] = append(res[r.SequenceID], r.Contact)
+	}
+	return res, nil
+}
+
+func (r *SequenceRepository) GetStagesBatch(ctx context.Context, sequenceIDs []int64) (map[int64][]models.InterviewStage, error) {
+	if len(sequenceIDs) == 0 {
+		return make(map[int64][]models.InterviewStage), nil
+	}
+	query, args, err := sqlx.In("SELECT * FROM interview_stages WHERE sequence_id IN (?) ORDER BY order_index ASC", sequenceIDs)
+	if err != nil {
+		return nil, err
+	}
+	query = r.db.Rebind(query)
+
+	var stages []models.InterviewStage
+	err = r.db.SelectContext(ctx, &stages, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make(map[int64][]models.InterviewStage)
+	for _, s := range stages {
+		res[s.SequenceID] = append(res[s.SequenceID], s)
+	}
+	return res, nil
+}
+
 func (r *SequenceRepository) GetStageByID(ctx context.Context, id interface{}) (*models.InterviewStage, error) {
 	var s models.InterviewStage
 	err := r.db.GetContext(ctx, &s, "SELECT * FROM interview_stages WHERE id = ?", id)

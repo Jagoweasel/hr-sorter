@@ -92,5 +92,21 @@
   "delete": "Delete",
   "no_mapping_rules": "No mapping rules defined",
   "pattern_regex": "Pattern (regex)",
-  "save": "Save"
+  "save": "Save",
+  "finish_auth": "Finish Auth",
+  "verification_code_placeholder": "12345",
+  "telegram_password_placeholder": "Your Telegram password",
+  "account_name_placeholder": "e.g. Personal, Work, Agency",
+  "phone_placeholder": "+79991234567",
+  "api_id_placeholder": "12345678",
+  "api_hash_placeholder": "abcdef0123456789...",
+  "hh_code_placeholder": "Paste the code from the URL here",
+  "failed": "Failed",
+  "network_error": "Network Error",
+  "pattern_placeholder": "e.g. .*Golang.*",
+  "category_placeholder": "e.g. backend",
+  "sequences": "Sequences",
+  "awaiting_code": "Awaiting Code",
+  "awaiting_password": "Awaiting Password",
+  "pending_auth": "Pending Auth"
 }

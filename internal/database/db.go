@@ -40,7 +40,11 @@ func InitDB(path string) {
 	// Check if we need to migrate from old accounts table
 	var hasIntegrations bool
 	err = DB.Get(&hasIntegrations, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='integrations'")
-	if err == nil && !hasIntegrations {
+
+	var hasAccounts bool
+	_ = DB.Get(&hasAccounts, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='accounts'")
+
+	if err == nil && !hasIntegrations && hasAccounts {
 		log.Println("[DB] Old schema detected. Starting migration...")
 
 		// 1. Rename old tables

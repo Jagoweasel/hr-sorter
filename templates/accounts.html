@@ -70,13 +70,13 @@
                             </div>
                             <div>
                                 <p class="text-sm font-black text-gray-900 dark:text-white">{{ .Identifier }}</p>
-                                <p class="text-[10px] font-bold uppercase tracking-tighter status-badge {{ if eq .Status "active" }}text-green-600{{ else if eq .Status "awaiting_code" }}text-yellow-600{{ else if eq .Status "awaiting_password" }}text-yellow-600{{ else if eq .Status "pending_auth" }}text-orange-500{{ else }}text-gray-400{{ end }}">{{ .Status }}</p>
+                                <p class="text-[10px] font-bold uppercase tracking-tighter status-badge {{ if eq .Status "active" }}text-green-600{{ else if eq .Status "awaiting_code" }}text-yellow-600{{ else if eq .Status "awaiting_password" }}text-yellow-600{{ else if eq .Status "pending_auth" }}text-orange-500{{ else }}text-gray-400{{ end }}">{{ Tr .Status }}</p>
                             </div>
                         </div>
                         <div class="flex items-center space-x-2">
                             {{ if eq .Status "pending_auth" }}
                             <button onclick="manualFinishAuth('{{ .ID }}')" class="px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded text-[9px] font-black uppercase tracking-widest hover:bg-orange-200 transition-colors">
-                                Finish Auth
+                                {{ Tr "finish_auth" }}
                             </button>
                             {{ end }}
                             <div class="opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-2">
@@ -125,7 +125,7 @@
             <input type="hidden" name="integration_id" id="auth-integration-id">
             <div>
                 <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{{ Tr "verification_code" }}</label>
-                <input type="text" name="code" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors text-center tracking-widest text-lg" placeholder="12345" autofocus>
+                <input type="text" name="code" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors text-center tracking-widest text-lg" placeholder="{{ Tr "verification_code_placeholder" }}" autofocus>
             </div>
             <div class="flex justify-between space-x-3 pt-2">
                 <button type="button" onclick="closeAllModals()" class="px-4 py-2 text-[10px] font-black text-gray-400 uppercase">{{ Tr "cancel" }}</button>
@@ -146,7 +146,7 @@
             <input type="hidden" name="integration_id" id="auth-password-integration-id">
             <div>
                 <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{{ Tr "password" }}</label>
-                <input type="password" name="password" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors" placeholder="Your Telegram password" autofocus>
+                <input type="password" name="password" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors" placeholder="{{ Tr "telegram_password_placeholder" }}" autofocus>
             </div>
             <div class="flex justify-between space-x-3 pt-2">
                 <button type="button" onclick="closeAllModals()" class="px-4 py-2 text-[10px] font-black text-gray-400 uppercase">{{ Tr "cancel" }}</button>
@@ -165,7 +165,7 @@
             {{ csrfField }}
             <div>
                 <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{{ Tr "account_name" }}</label>
-                <input type="text" name="name" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors" placeholder="e.g. Personal, Work, Agency">
+                <input type="text" name="name" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors" placeholder="{{ Tr "account_name_placeholder" }}">
             </div>
             <div class="flex justify-end space-x-3">
                 <button type="button" onclick="document.getElementById('new-account-modal').classList.add('hidden')" class="px-4 py-2 text-[10px] font-black text-gray-400 uppercase">{{ Tr "cancel" }}</button>
@@ -185,16 +185,16 @@
             <input type="hidden" name="platform" id="platform-input">
             <div>
                 <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{{ Tr "identifier_phone" }}</label>
-                <input type="text" name="identifier" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors" placeholder="+79991234567">
+                <input type="text" name="identifier" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors" placeholder="{{ Tr "phone_placeholder" }}">
             </div>
             <div id="tg-creds" class="space-y-4 hidden">
                 <div>
                     <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{{ Tr "telegram_api_id" }}</label>
-                    <input type="number" name="api_id" class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors" placeholder="12345678">
+                    <input type="number" name="api_id" class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors" placeholder="{{ Tr "api_id_placeholder" }}">
                 </div>
                 <div>
                     <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{{ Tr "telegram_api_hash" }}</label>
-                    <input type="text" name="api_hash" class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors" placeholder="abcdef0123456789...">
+                    <input type="text" name="api_hash" class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors" placeholder="{{ Tr "api_hash_placeholder" }}">
                 </div>
             </div>
             <div class="flex justify-end space-x-3 pt-4">
@@ -219,7 +219,7 @@
             <input type="hidden" name="integration_id" id="auth-hh-integration-id">
             <div>
                 <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{{ Tr "authorization_code" }}</label>
-                <input type="text" name="code" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors text-center" placeholder="Paste the code from the URL here" autofocus>
+                <input type="text" name="code" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors text-center" placeholder="{{ Tr "hh_code_placeholder" }}" autofocus>
             </div>
             <div class="flex justify-between space-x-3 pt-2">
                 <button type="button" onclick="closeAllModals()" class="px-4 py-2 text-[10px] font-black text-gray-400 uppercase">{{ Tr "cancel" }}</button>
@@ -249,10 +249,17 @@
             if (card) {
                 const badge = card.querySelector('.status-badge');
                 if (badge) {
-                    badge.textContent = data.status;
+                    const statusTranslations = {
+                        'active': '{{ Tr "active" }}',
+                        'awaiting_code': '{{ Tr "awaiting_code" }}',
+                        'awaiting_password': '{{ Tr "awaiting_password" }}',
+                        'pending_auth': '{{ Tr "pending_auth" }}'
+                    };
+                    badge.textContent = statusTranslations[data.status] || data.status;
                     badge.className = 'text-[10px] font-bold uppercase tracking-tighter status-badge ' + 
                         (data.status === 'active' ? 'text-green-600' : 
                          data.status === 'awaiting_code' ? 'text-yellow-600' : 
+                         data.status === 'awaiting_password' ? 'text-yellow-600' : 
                          data.status === 'pending_auth' ? 'text-orange-500' : 'text-gray-400');
                 }
             }
@@ -368,11 +375,11 @@
                 form.closest('.fixed').classList.add('hidden');
                 startPolling(intId);
             } else {
-                errorEl.textContent = res.error || 'Failed';
+                errorEl.textContent = res.error || '{{ Tr "failed" }}';
                 errorEl.classList.remove('hidden');
             }
         } catch (e) {
-            errorEl.textContent = 'Network Error';
+            errorEl.textContent = '{{ Tr "network_error" }}';
             errorEl.classList.remove('hidden');
         }
     }

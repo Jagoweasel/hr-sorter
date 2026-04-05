@@ -46,11 +46,11 @@
                 <input type="hidden" name="id" id="rule-id">
                 <div class="mb-4">
                     <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="pattern">{{ Tr "pattern_regex" }}</label>
-                    <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-white dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="pattern" name="pattern" type="text" placeholder="e.g. .*Golang.*" required>
+                    <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-white dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="pattern" name="pattern" type="text" placeholder="{{ Tr "pattern_placeholder" }}" required>
                 </div>
                 <div class="mb-4">
                     <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="category">{{ Tr "category" }}</label>
-                    <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-white dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="category" name="category" type="text" placeholder="e.g. backend" required>
+                    <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-white dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="category" name="category" type="text" placeholder="{{ Tr "category_placeholder" }}" required>
                 </div>
                 <div class="flex items-center justify-end space-x-2">
                     <button type="button" onclick="closeModal()" class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white px-4 py-2 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">{{ Tr "cancel" }}</button>
