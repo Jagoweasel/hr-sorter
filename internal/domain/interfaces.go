@@ -52,9 +52,10 @@ type LogStreamer interface {
 
 // Repository interface for persistence
 type Repository interface {
-	SaveAccount(ctx context.Context, account interface{}) error
-	GetAccount(ctx context.Context, id string) (interface{}, error)
+	SaveAccount(ctx context.Context, account *models.Account) error
+	GetAccount(ctx context.Context, id int64) (*models.Account, error)
 	SaveNegotiations(ctx context.Context, negotiations []dto.HHNegotiation) error
+	SaveNegotiationsStats(ctx context.Context, stats *models.NegotiationStats) error
 	GetMappingRules(ctx context.Context) (map[string]string, error)
 
 	// Caching support

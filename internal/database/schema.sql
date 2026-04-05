@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS sequences (
     company_name TEXT NOT NULL,
     vacancy_name TEXT NOT NULL,
     vacancy_link TEXT,
+    category TEXT,
     status TEXT DEFAULT 'initial',
     rejection_reason TEXT,
     summary_comment TEXT,
@@ -67,6 +68,19 @@ CREATE TABLE IF NOT EXISTS sequences (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sequences_account_status ON sequences(account_id, status);
+
+CREATE TABLE IF NOT EXISTS mapping_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pattern TEXT NOT NULL,
+    category TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS negotiations_stats (
+    sequence_id INTEGER PRIMARY KEY,
+    applications_count INTEGER DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (sequence_id) REFERENCES sequences(id) ON DELETE CASCADE
+);
 
 CREATE TABLE IF NOT EXISTS sequence_contacts (
     sequence_id INTEGER,

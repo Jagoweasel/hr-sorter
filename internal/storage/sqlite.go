@@ -61,12 +61,7 @@ func (r *SQLiteRepository) Close() error {
 	return r.db.Close()
 }
 
-func (r *SQLiteRepository) SaveAccount(ctx context.Context, account interface{}) error {
-	acc, ok := account.(*models.Account)
-	if !ok {
-		return fmt.Errorf("invalid account type")
-	}
-
+func (r *SQLiteRepository) SaveAccount(ctx context.Context, acc *models.Account) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -84,10 +79,14 @@ func (r *SQLiteRepository) SaveAccount(ctx context.Context, account interface{})
 	return nil
 }
 
-func (r *SQLiteRepository) GetAccount(ctx context.Context, id string) (interface{}, error) {
+func (r *SQLiteRepository) GetAccount(ctx context.Context, id int64) (*models.Account, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	key := fmt.Sprintf("account:%d", id)
 	// Check LRU cache first
-	if val, ok := r.cache.Get("account:" + id); ok {
-		return val, nil
+	if val, ok := r.cache.Get(key); ok {
+		return val.(*models.Account), nil
 	}
 
 	var acc models.Account
@@ -97,7 +96,7 @@ func (r *SQLiteRepository) GetAccount(ctx context.Context, id string) (interface
 	}
 
 	// Update cache
-	r.cache.Add("account:"+id, &acc)
+	r.cache.Add(key, &acc)
 	return &acc, nil
 }
 
@@ -119,20 +118,49 @@ func (r *SQLiteRepository) SaveNegotiations(ctx context.Context, negotiations []
 	return tx.Commit()
 }
 
+func (r *SQLiteRepository) SaveNegotiationsStats(ctx context.Context, stats *models.NegotiationStats) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	query := `INSERT INTO negotiations_stats (sequence_id, applications_count, updated_at)
+			  VALUES (:sequence_id, :applications_count, :updated_at)
+			  ON CONFLICT(sequence_id) DO UPDATE SET
+			  applications_count=excluded.applications_count, updated_at=excluded.updated_at`
+	_, err := r.db.NamedExecContext(ctx, query, stats)
+	if err != nil {
+		return fmt.Errorf("failed to save negotiation stats: %w", err)
+	}
+	return nil
+}
+
 func (r *SQLiteRepository) GetMappingRules(ctx context.Context) (map[string]string, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	// Check LRU cache first
 	if val, ok := r.cache.Get("mapping_rules"); ok {
 		return val.(map[string]string), nil
 	}
 
-	// This is a placeholder since mapping rules table doesn't exist in schema yet.
-	// But in a real scenario, we'd fetch from DB.
+	var rulesList []models.MappingRule
+	err := r.db.SelectContext(ctx, &rulesList, "SELECT * FROM mapping_rules")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get mapping rules: %w", err)
+	}
+
 	rules := make(map[string]string)
+	for _, rule := range rulesList {
+		rules[rule.Pattern] = rule.Category
+	}
+
 	r.cache.Add("mapping_rules", rules)
 	return rules, nil
 }
 
 func (r *SQLiteRepository) GetMessageFilters(ctx context.Context) ([]models.MessageFilter, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	if val, ok := r.cache.Get("message_filters"); ok {
 		return val.([]models.MessageFilter), nil
 	}
@@ -148,6 +176,9 @@ func (r *SQLiteRepository) GetMessageFilters(ctx context.Context) ([]models.Mess
 }
 
 func (r *SQLiteRepository) GetIntegration(ctx context.Context, id int64) (*models.Integration, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	key := fmt.Sprintf("integration:%d", id)
 	if val, ok := r.cache.Get(key); ok {
 		return val.(*models.Integration), nil
@@ -164,6 +195,9 @@ func (r *SQLiteRepository) GetIntegration(ctx context.Context, id int64) (*model
 }
 
 func (r *SQLiteRepository) GetSequence(ctx context.Context, id int64) (*models.Sequence, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	key := fmt.Sprintf("sequence:%d", id)
 	if val, ok := r.cache.Get(key); ok {
 		return val.(*models.Sequence), nil
@@ -217,10 +251,10 @@ func (r *SQLiteRepository) SaveSequence(ctx context.Context, sequence *models.Se
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	query := `INSERT INTO sequences (id, account_id, company_name, vacancy_name, vacancy_link, status, rejection_reason, summary_comment, created_at)
-			  VALUES (:id, :account_id, :company_name, :vacancy_name, :vacancy_link, :status, :rejection_reason, :summary_comment, :created_at)
+	query := `INSERT INTO sequences (id, account_id, company_name, vacancy_name, vacancy_link, category, status, rejection_reason, summary_comment, created_at)
+			  VALUES (:id, :account_id, :company_name, :vacancy_name, :vacancy_link, :category, :status, :rejection_reason, :summary_comment, :created_at)
 			  ON CONFLICT(id) DO UPDATE SET
-			  account_id=excluded.account_id, status=excluded.status, rejection_reason=excluded.rejection_reason, summary_comment=excluded.summary_comment`
+			  account_id=excluded.account_id, status=excluded.status, category=excluded.category, rejection_reason=excluded.rejection_reason, summary_comment=excluded.summary_comment`
 	_, err := r.db.NamedExecContext(ctx, query, sequence)
 	if err != nil {
 		return fmt.Errorf("failed to save sequence: %w", err)

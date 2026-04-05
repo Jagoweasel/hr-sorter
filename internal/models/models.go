@@ -58,10 +58,23 @@ type Sequence struct {
 	CompanyName     string    `db:"company_name" json:"company_name"`
 	VacancyName     string    `db:"vacancy_name" json:"vacancy_name"`
 	VacancyLink     *string   `db:"vacancy_link" json:"vacancy_link"`
+	Category        *string   `db:"category" json:"category"`
 	Status          string    `db:"status" json:"status"` // initial, screening, tech, final, offer, accepted, rejected
 	RejectionReason *string   `db:"rejection_reason" json:"rejection_reason"`
 	SummaryComment  *string   `db:"summary_comment" json:"summary_comment"`
 	CreatedAt       time.Time `db:"created_at" json:"created_at"`
+}
+
+type MappingRule struct {
+	ID       int64  `db:"id" json:"id"`
+	Pattern  string `db:"pattern" json:"pattern"`
+	Category string `db:"category" json:"category"`
+}
+
+type NegotiationStats struct {
+	SequenceID        int64     `db:"sequence_id" json:"sequence_id"`
+	ApplicationsCount int       `db:"applications_count" json:"applications_count"`
+	UpdatedAt         time.Time `db:"updated_at" json:"updated_at"`
 }
 
 type InterviewStage struct {

@@ -161,6 +161,32 @@ func InitDB(path string) {
 		log.Println("[DB] Migration finished.")
 	}
 
+	// Migration: Add category to sequences if it doesn't exist
+	var hasCategory bool
+	err = DB.Get(&hasCategory, "SELECT COUNT(*) FROM pragma_table_info('sequences') WHERE name='category'")
+	if err == nil && !hasCategory {
+		log.Println("[DB] Migrating sequences: adding category column...")
+		DB.MustExec("ALTER TABLE sequences ADD COLUMN category TEXT")
+		log.Println("[DB] Migration finished.")
+	}
+
+	// Migration: Create mapping_rules and negotiations_stats tables if they don't exist
+	DB.MustExec(`
+		CREATE TABLE IF NOT EXISTS mapping_rules (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			pattern TEXT NOT NULL,
+			category TEXT NOT NULL
+		);
+	`)
+	DB.MustExec(`
+		CREATE TABLE IF NOT EXISTS negotiations_stats (
+			sequence_id INTEGER PRIMARY KEY,
+			applications_count INTEGER DEFAULT 0,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (sequence_id) REFERENCES sequences(id) ON DELETE CASCADE
+		);
+	`)
+
 	// Migration: Add unique index to message_filters pattern
 	_, _ = DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_message_filters_pattern ON message_filters(pattern)")
 

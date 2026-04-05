@@ -99,7 +99,7 @@ func TestSQLiteRepository_Caching(t *testing.T) {
 	}
 
 	// 1. Get account (should cache)
-	_, err = repo.GetAccount(ctx, "1")
+	_, err = repo.GetAccount(ctx, 1)
 	if err != nil {
 		t.Fatalf("failed to get account: %v", err)
 	}
@@ -115,12 +115,12 @@ func TestSQLiteRepository_Caching(t *testing.T) {
 	}
 
 	// 3. Get account again (should still be from cache)
-	cachedAcc, err := repo.GetAccount(ctx, "1")
+	cachedAcc, err := repo.GetAccount(ctx, 1)
 	if err != nil {
 		t.Fatalf("failed to get account: %v", err)
 	}
-	if cachedAcc.(*models.Account).Name != "Test Account" {
-		t.Errorf("expected cached name 'Test Account', got %s", cachedAcc.(*models.Account).Name)
+	if cachedAcc.Name != "Test Account" {
+		t.Errorf("expected cached name 'Test Account', got %s", cachedAcc.Name)
 	}
 
 	// 4. Update through repo (should invalidate cache)
@@ -132,5 +132,58 @@ func TestSQLiteRepository_Caching(t *testing.T) {
 
 	if _, ok := repo.cache.Get("account:1"); ok {
 		t.Error("account 1 still in cache after save")
+	}
+}
+
+func TestSQLiteRepository_Concurrency(t *testing.T) {
+	dbPath := "test_concurrency.db"
+	defer os.Remove(dbPath)
+
+	repo, err := NewSQLiteRepository(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create repository: %v", err)
+	}
+	defer repo.Close()
+
+	ctx := context.Background()
+
+	// Initial data
+	acc := &models.Account{
+		ID:        1,
+		Name:      "Concurrent Account",
+		Status:    "active",
+		CreatedAt: time.Now(),
+	}
+	_ = repo.SaveAccount(ctx, acc)
+
+	const (
+		numGoroutines = 50
+		numOpsPerG    = 100
+	)
+
+	done := make(chan bool)
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			for j := 0; j < numOpsPerG; j++ {
+				if j%10 == 0 {
+					// Save account with a new struct to avoid data race in the test itself
+					newAcc := &models.Account{
+						ID:        1,
+						Name:      "Updated",
+						Status:    "active",
+						CreatedAt: time.Now(),
+					}
+					_ = repo.SaveAccount(ctx, newAcc)
+				} else {
+					// Get account
+					_, _ = repo.GetAccount(ctx, 1)
+				}
+			}
+			done <- true
+		}(i)
+	}
+
+	for i := 0; i < numGoroutines; i++ {
+		<-done
 	}
 }
