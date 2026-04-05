@@ -81,6 +81,9 @@ func NewTemplateManager(ls *i18n.LocalizationService) (*TemplateManager, error) 
 			}
 			return strings.Split(s, sep)
 		},
+		"safe": func(s string) template.HTML {
+			return template.HTML(s)
+		},
 		"T": func(locale, key string, args ...interface{}) string {
 			return ls.Translate(key, locale, args...)
 		},

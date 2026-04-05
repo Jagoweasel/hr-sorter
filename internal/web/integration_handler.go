@@ -3,6 +3,7 @@ package web
 import (
 	"fmt"
 	"hr-sorter/internal/domain/dto"
+	"hr-sorter/internal/hhclient"
 	"hr-sorter/internal/logger"
 	"net/http"
 	"strconv"
@@ -106,6 +107,9 @@ func (h *Handler) handleIntegrationStatus(w http.ResponseWriter, r *http.Request
 
 	status := integration.Status
 	authURL := ""
+	if integration.Platform == "hh" {
+		authURL = hhclient.GetAuthorizeURL()
+	}
 
 	// If it's HH and pending_auth, check the live auth service state
 	if integration.Platform == "hh" && h.hhAuthService != nil && (status == "pending_auth" || status == "awaiting_code") {

@@ -212,7 +212,7 @@
     <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 w-full max-w-md relative" onclick="event.stopPropagation()">
         <h2 class="text-xl font-black text-gray-900 dark:text-white tracking-tight mb-2">{{ Tr "headhunter_auth" }}</h2>
         <div class="text-xs text-gray-500 dark:text-gray-400 mb-6 space-y-3 bg-gray-50 dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
-            <p>{{ Tr "hh_auth_step_1" | html }}</p>
+            <p>{{ Tr "hh_auth_step_1" (printf "<a id=\"hh-auth-link-inline\" href=\"#\" target=\"_blank\" class=\"text-blue-600 font-bold hover:underline\">%s</a>" (Tr "hh_auth_step_1_link")) | safe }}</p>
             <p>{{ Tr "hh_auth_step_2" }}</p>
             <a id="hh-auth-link" href="#" target="_blank" class="block text-blue-600 font-bold hover:underline">{{ Tr "open_hh_manually" }}</a>
             <p>{{ Tr "hh_auth_step_3" }}</p>
@@ -274,7 +274,7 @@
             } else if (data.status === 'awaiting_password' && data.platform === 'tg') {
                 showPasswordModal(id, data.identifier);
                 stopPolling();
-            } else if (data.status === 'pending_auth' && data.platform === 'hh') {
+            } else if ((data.status === 'pending_auth' || data.status === 'awaiting_code') && data.platform === 'hh') {
                 // Only auto-show if we haven't shown it yet or manually requested
                 if (pendingIntegrationId === String(id) && isModalHidden('auth-hh-modal')) {
                     showHHModal(id, data.auth_url);
@@ -351,7 +351,10 @@
 
     function showHHModal(id, url) {
         document.getElementById('auth-hh-integration-id').value = id;
-        document.getElementById('hh-auth-link').href = url;
+        const link = document.getElementById('hh-auth-link');
+        if (link) link.href = url;
+        const inlineLink = document.getElementById('hh-auth-link-inline');
+        if (inlineLink) inlineLink.href = url;
         document.getElementById('auth-hh-modal').classList.remove('hidden');
     }
 
