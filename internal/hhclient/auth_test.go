@@ -44,7 +44,12 @@ func (m *MockRepo) SaveSequence(ctx context.Context, sequence *models.Sequence) 
 
 func TestHHAuthService_StateTransitions(t *testing.T) {
 	repo := &MockRepo{}
-	s := NewHHAuthService(repo)
+	s, err := NewHHAuthService(repo)
+	if err != nil {
+		t.Skipf("skipping test because playwright is not available: %v", err)
+		return
+	}
+	defer s.Close()
 	ctx := context.Background()
 
 	t.Run("InitialState", func(t *testing.T) {

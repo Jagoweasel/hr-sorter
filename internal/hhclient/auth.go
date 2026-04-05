@@ -24,18 +24,34 @@ type HHAuthService struct {
 
 	pw      *playwright.Playwright
 	browser playwright.Browser
-	context playwright.BrowserContext
-	page    playwright.Page
+	// Per-session page and context
+	sessionContext playwright.BrowserContext
+	sessionPage    playwright.Page
 
 	otpChan     chan string
 	captchaChan chan string
 	errChan     chan error
 	stopChan    chan struct{}
+	closeOnce   sync.Once
 
 	isRunning bool
+	identify  string
 }
 
-func NewHHAuthService(repo domain.Repository) *HHAuthService {
+func NewHHAuthService(repo domain.Repository) (*HHAuthService, error) {
+	pw, err := playwright.Run()
+	if err != nil {
+		return nil, fmt.Errorf("failed to start playwright: %w", err)
+	}
+
+	browser, err := pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
+		Headless: playwright.Bool(true),
+	})
+	if err != nil {
+		_ = pw.Stop()
+		return nil, fmt.Errorf("failed to launch browser: %w", err)
+	}
+
 	return &HHAuthService{
 		status:      &dto.HHAuthStatus{State: dto.AuthStateNone},
 		repo:        repo,
@@ -43,7 +59,34 @@ func NewHHAuthService(repo domain.Repository) *HHAuthService {
 		captchaChan: make(chan string),
 		errChan:     make(chan error),
 		stopChan:    make(chan struct{}),
+		pw:          pw,
+		browser:     browser,
+	}, nil
+}
+
+func (s *HHAuthService) Close() error {
+	var errs []string
+	if s.browser != nil {
+		if err := s.browser.Close(); err != nil {
+			errs = append(errs, fmt.Sprintf("browser close error: %v", err))
+		}
 	}
+	if s.pw != nil {
+		if err := s.pw.Stop(); err != nil {
+			errs = append(errs, fmt.Sprintf("playwright stop error: %v", err))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("close errors: %s", strings.Join(errs, "; "))
+	}
+	return nil
+}
+
+func (s *HHAuthService) stop() {
+	s.closeOnce.Do(func() {
+		close(s.stopChan)
+	})
 }
 
 func (s *HHAuthService) StartAuth(ctx context.Context, identify string) (*dto.HHAuthStatus, error) {
@@ -56,6 +99,9 @@ func (s *HHAuthService) StartAuth(ctx context.Context, identify string) (*dto.HH
 
 	s.status = &dto.HHAuthStatus{State: dto.AuthStateWaitIdentify}
 	s.isRunning = true
+	s.identify = identify
+	s.stopChan = make(chan struct{})
+	s.closeOnce = sync.Once{}
 
 	go s.runFlow(identify)
 
@@ -66,52 +112,48 @@ func (s *HHAuthService) runFlow(identify string) {
 	defer func() {
 		s.mu.Lock()
 		s.isRunning = false
+		if s.sessionPage != nil {
+			s.sessionPage.Close()
+			s.sessionPage = nil
+		}
+		if s.sessionContext != nil {
+			s.sessionContext.Close()
+			s.sessionContext = nil
+		}
 		s.mu.Unlock()
 	}()
 
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer cancel()
+
+	userAgent := GenerateAndroidUserAgent()
 	var err error
-	s.pw, err = playwright.Run()
-	if err != nil {
-		s.fail(fmt.Errorf("failed to start playwright: %w", err))
-		return
-	}
-	defer s.pw.Stop()
-
-	s.browser, err = s.pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
-		Headless: playwright.Bool(true),
-	})
-	if err != nil {
-		s.fail(fmt.Errorf("failed to launch browser: %w", err))
-		return
-	}
-	defer s.browser.Close()
-
-	s.context, err = s.browser.NewContext(playwright.BrowserNewContextOptions{
-		UserAgent: playwright.String("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36"),
+	s.sessionContext, err = s.browser.NewContext(playwright.BrowserNewContextOptions{
+		UserAgent: playwright.String(userAgent),
 	})
 	if err != nil {
 		s.fail(fmt.Errorf("failed to create context: %w", err))
 		return
 	}
 
-	s.page, err = s.context.NewPage()
+	s.sessionPage, err = s.sessionContext.NewPage()
 	if err != nil {
 		s.fail(fmt.Errorf("failed to create page: %w", err))
 		return
 	}
 
 	// Capture redirect to hhandroid://
-	s.context.OnRequest(func(request playwright.Request) {
+	s.sessionContext.OnRequest(func(request playwright.Request) {
 		if strings.HasPrefix(request.URL(), "hhandroid://") {
 			u, _ := url.Parse(request.URL())
 			code := u.Query().Get("code")
 			if code != "" {
-				s.complete(code)
+				s.complete(code, userAgent)
 			}
 		}
 	})
 
-	_, err = s.page.Goto(GetAuthorizeURL())
+	_, err = s.sessionPage.Goto(GetAuthorizeURL())
 	if err != nil {
 		s.fail(fmt.Errorf("failed to go to authorize URL: %w", err))
 		return
@@ -124,40 +166,91 @@ func (s *HHAuthService) runFlow(identify string) {
 		return
 	}
 
-	// The flow continues based on what HH asks (OTP or Captcha)
+	// Main flow loop
 	for {
-		select {
-		case <-s.stopChan:
+		state, err := s.detectState(ctx)
+		if err != nil {
+			s.fail(err)
 			return
-		case <-time.After(10 * time.Minute): // Max auth time
-			s.fail(fmt.Errorf("auth timeout"))
-			return
+		}
+
+		switch state {
+		case dto.AuthStateWaitOTP:
+			s.mu.Lock()
+			s.status.State = dto.AuthStateWaitOTP
+			s.mu.Unlock()
+			select {
+			case code := <-s.otpChan:
+				if err := s.sessionPage.Fill("input[name='code']", code); err != nil {
+					s.fail(fmt.Errorf("failed to fill OTP: %w", err))
+					return
+				}
+				if err := s.sessionPage.Keyboard().Press("Enter"); err != nil {
+					s.fail(fmt.Errorf("failed to submit OTP: %w", err))
+					return
+				}
+			case <-ctx.Done():
+				s.fail(fmt.Errorf("auth timeout"))
+				return
+			case <-s.stopChan:
+				return
+			}
+		case dto.AuthStateWaitCaptcha:
+			s.mu.Lock()
+			s.status.State = dto.AuthStateWaitCaptcha
+			imgElement := s.sessionPage.Locator("img[src*='captcha']")
+			screenshot, _ := imgElement.Screenshot()
+			s.status.CaptchaImg = screenshot
+			s.mu.Unlock()
+			select {
+			case resolution := <-s.captchaChan:
+				if err := s.sessionPage.Fill("input[name='captcha']", resolution); err != nil {
+					s.fail(fmt.Errorf("failed to fill captcha: %w", err))
+					return
+				}
+				if err := s.sessionPage.Keyboard().Press("Enter"); err != nil {
+					s.fail(fmt.Errorf("failed to submit captcha: %w", err))
+					return
+				}
+			case <-ctx.Done():
+				s.fail(fmt.Errorf("auth timeout"))
+				return
+			case <-s.stopChan:
+				return
+			}
 		default:
-			// Check for Captcha
-			hasCaptcha, _ := s.page.Locator("img[src*='captcha']").Count()
-			if hasCaptcha > 0 {
-				err = s.handleCaptcha()
-				if err != nil {
-					s.fail(err)
-					return
-				}
+			// Check if we already succeeded or stopped
+			select {
+			case <-s.stopChan:
+				return
+			case <-ctx.Done():
+				s.fail(fmt.Errorf("auth timeout"))
+				return
+			case <-time.After(2 * time.Second):
 				continue
 			}
-
-			// Check for OTP
-			hasOTP, _ := s.page.Locator("input[name='code']").Count()
-			if hasOTP > 0 {
-				err = s.handleOTP()
-				if err != nil {
-					s.fail(err)
-					return
-				}
-				continue
-			}
-
-			time.Sleep(1 * time.Second)
 		}
 	}
+}
+
+func (s *HHAuthService) detectState(ctx context.Context) (dto.HHAuthState, error) {
+	// Wait for any selector that indicates a state change
+	// Using a shorter timeout here because we are in a loop
+	_, err := s.sessionPage.WaitForSelector("input[name='code'], img[src*='captcha'], div.bloko-notification--error", playwright.PageWaitForSelectorOptions{
+		Timeout: playwright.Float(5000),
+	})
+	if err != nil {
+		return dto.AuthStateNone, nil
+	}
+
+	if visible, _ := s.sessionPage.Locator("input[name='code']").IsVisible(); visible {
+		return dto.AuthStateWaitOTP, nil
+	}
+	if visible, _ := s.sessionPage.Locator("img[src*='captcha']").IsVisible(); visible {
+		return dto.AuthStateWaitCaptcha, nil
+	}
+
+	return dto.AuthStateNone, nil
 }
 
 func (s *HHAuthService) handleIdentify(identify string) error {
@@ -166,15 +259,15 @@ func (s *HHAuthService) handleIdentify(identify string) error {
 	s.mu.Unlock()
 
 	// Fill email/phone
-	err := s.page.Fill("input[name='login']", identify)
+	err := s.sessionPage.Fill("input[name='login']", identify)
 	if err != nil {
 		return fmt.Errorf("failed to fill login: %w", err)
 	}
 
-	err = s.page.Click("button[data-qa='expand-login-by-password']") // or submit button
+	err = s.sessionPage.Click("button[data-qa='expand-login-by-password']")
 	if err != nil {
-		// Try another button if this fails
-		err = s.page.Click("button[type='submit']")
+		// Try submit button if expand-login-by-password is not there
+		err = s.sessionPage.Click("button[type='submit']")
 	}
 
 	if err != nil {
@@ -184,50 +277,27 @@ func (s *HHAuthService) handleIdentify(identify string) error {
 	return nil
 }
 
-func (s *HHAuthService) handleOTP() error {
-	s.mu.Lock()
-	s.status.State = dto.AuthStateWaitOTP
-	s.mu.Unlock()
-
-	select {
-	case code := <-s.otpChan:
-		return s.page.Fill("input[name='code']", code)
-	case <-s.stopChan:
-		return fmt.Errorf("stopped")
-	}
-}
-
-func (s *HHAuthService) handleCaptcha() error {
-	s.mu.Lock()
-	s.status.State = dto.AuthStateWaitCaptcha
-	imgElement := s.page.Locator("img[src*='captcha']")
-	screenshot, _ := imgElement.Screenshot()
-	s.status.CaptchaImg = screenshot
-	s.mu.Unlock()
-
-	select {
-	case resolution := <-s.captchaChan:
-		return s.page.Fill("input[name='captcha']", resolution)
-	case <-s.stopChan:
-		return fmt.Errorf("stopped")
-	}
-}
-
 func (s *HHAuthService) fail(err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.status.State = dto.AuthStateFailed
-	s.status.ErrorMessage = err.Error()
-	logger.Error(logger.HH, "Auth failed: %v", err)
+	if s.status.State != dto.AuthStateFailed && s.status.State != dto.AuthStateCompleted {
+		s.status.State = dto.AuthStateFailed
+		s.status.ErrorMessage = err.Error()
+		logger.Error(logger.HH, "Auth failed: %v", err)
+		s.stop()
+	}
 }
 
-func (s *HHAuthService) complete(code string) {
+func (s *HHAuthService) complete(code string, userAgent string) {
 	s.mu.Lock()
+	if s.status.State == dto.AuthStateCompleted {
+		s.mu.Unlock()
+		return
+	}
 	s.status.State = dto.AuthStateWaitRedirect
 	s.mu.Unlock()
 
 	// Exchange token
-	userAgent := "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36"
 	tr, err := ExchangeToken(code, userAgent)
 	if err != nil {
 		s.fail(err)
@@ -239,6 +309,8 @@ func (s *HHAuthService) complete(code string) {
 	expiresAt := now.Add(time.Duration(tr.ExpiresIn) * time.Second)
 	integration := &models.Integration{
 		Platform:     "hh",
+		Identifier:   s.identify,
+		AccountID:    1, // Default account for now, or we could fetch it
 		AccessToken:  &tr.AccessToken,
 		RefreshToken: &tr.RefreshToken,
 		ExpiresAt:    &expiresAt,
@@ -256,7 +328,7 @@ func (s *HHAuthService) complete(code string) {
 	s.mu.Lock()
 	s.status.State = dto.AuthStateCompleted
 	s.mu.Unlock()
-	close(s.stopChan)
+	s.stop()
 }
 
 func (s *HHAuthService) SubmitOTP(ctx context.Context, code string) (*dto.HHAuthStatus, error) {
@@ -269,10 +341,11 @@ func (s *HHAuthService) SubmitOTP(ctx context.Context, code string) (*dto.HHAuth
 
 	select {
 	case s.otpChan <- code:
-		// Wait for state change or error
 		return s.GetStatus(ctx)
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	case <-s.stopChan:
+		return s.GetStatus(ctx)
 	}
 }
 
@@ -286,10 +359,11 @@ func (s *HHAuthService) SubmitCaptcha(ctx context.Context, resolution string) (*
 
 	select {
 	case s.captchaChan <- resolution:
-		// Wait for state change or error
 		return s.GetStatus(ctx)
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	case <-s.stopChan:
+		return s.GetStatus(ctx)
 	}
 }
 

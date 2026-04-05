@@ -19,6 +19,8 @@ type HHClient interface {
 	GetStatus(ctx context.Context) (*dto.HHAuthStatus, error)
 	// FetchNegotiations retrieves job applications from HH API
 	FetchNegotiations(ctx context.Context, accountID string) ([]dto.HHNegotiation, error)
+	// Close shuts down the Playwright instance
+	Close() error
 }
 
 // Reporter interface for PDF generation

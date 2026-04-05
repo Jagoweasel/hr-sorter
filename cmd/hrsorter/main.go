@@ -32,7 +32,11 @@ func main() {
 	}
 
 	// 3. Initialize HeadHunter Service (Playwright)
-	hhService := hhclient.NewHHAuthService(repo)
+	hhService, err := hhclient.NewHHAuthService(repo)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer hhService.Close()
 	_ = hhService // To be used by API handlers
 
 	// 4. Initialize Reporting Engine (maroto/v2)
