@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"hr-sorter/internal/auth/hh"
+	"hr-sorter/internal/domain/dto"
 	"hr-sorter/internal/hhclient"
 	"hr-sorter/internal/logger"
 	"hr-sorter/internal/repository"
@@ -111,13 +112,26 @@ func (s *IntegrationService) HandleHHAuth(ctx context.Context, id int64, code st
 		return err
 	}
 
-	// If there's an active flow, submit the code to it
+	// If there's an active flow, check its state
 	if s.hhAuthService != nil {
 		if flow, ok := s.hhAuthService.GetFlow(integration.AccountID); ok {
+			status := flow.GetStatus()
+			// If we are waiting for OTP or Captcha, send it to the flow instead of treating as OAuth code
+			if status.State == dto.AuthStateWaitOTP || status.State == dto.AuthStateWaitCaptcha {
+				logger.Info(logger.HH, "[Service] Routing input as OTP/Captcha to active flow (Account: %d)", integration.AccountID)
+				if status.State == dto.AuthStateWaitOTP {
+					return flow.SubmitOTP(code)
+				}
+				return flow.SubmitCaptcha(code)
+			}
+
+			// Otherwise, treat as OAuth code and submit to flow
+			logger.Info(logger.HH, "[Service] Routing input as OAuth code to active flow (Account: %d)", integration.AccountID)
 			return flow.SubmitCode(code)
 		}
 	}
 
+	// Fallback for manual code exchange if no active flow exists
 	ua := ""
 	if integration.UserAgent != nil {
 		ua = *integration.UserAgent

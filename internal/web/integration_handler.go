@@ -7,6 +7,7 @@ import (
 	"hr-sorter/internal/logger"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 func (h *Handler) handleCreateIntegration(w http.ResponseWriter, r *http.Request) {
@@ -179,6 +180,34 @@ func (h *Handler) handleSubmitHHCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Write([]byte(`{"ok": true}`))
+}
+
+func (h *Handler) handleResetHHAuth(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	integration, err := h.intRepo.GetByID(r.Context(), idStr)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	if integration.Platform == "hh" && h.hhAuthService != nil {
+		logger.Info(logger.HH, "[Web] Resetting HH Auth for %s...", integration.Identifier)
+		if flow, ok := h.hhAuthService.GetFlow(integration.AccountID); ok {
+			_ = flow.Cancel()
+		}
+		// Small delay to allow cleanup
+		time.Sleep(500 * time.Millisecond)
+
+		go func() {
+			_, err := h.hhAuthService.StartFlow(h.rootCtx, integration.AccountID, integration.Identifier)
+			if err != nil {
+				logger.Error(logger.HH, "[Web] Manual restart HH auth failed for %s: %v", integration.Identifier, err)
+			}
+		}()
+	}
+
+	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"ok": true}`))
 }
 

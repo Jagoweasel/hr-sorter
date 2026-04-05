@@ -382,10 +382,61 @@ func (f *PlaywrightAuthFlow) run() {
 				f.setStatus(dto.AuthStateWaitOTP, "")
 				select {
 				case code := <-f.otpChan:
-					if err := f.page.Fill("input[data-qa='magritte-pincode-input-field']", code); err != nil {
-						_ = f.page.Fill("input[name='code']", code)
+					logger.Info(logger.HH, "[HHAuth] Received OTP code from UI, attempting to type into page...")
+
+					// Wait a bit for the page to settle
+					time.Sleep(1 * time.Second)
+
+					// Try multiple selectors for OTP input
+					otpSelectors := []string{
+						"input[data-qa='magritte-pincode-input-field']",
+						"input[name='code']",
+						"input[name='otp']",
+						"input[data-qa='otp-code-input']",
+						"input[type='number']",
+						"input[type='tel']",
 					}
+
+					typed := false
+					for retry := 0; retry < 3; retry++ {
+						for _, sel := range otpSelectors {
+							if visible, _ := f.page.Locator(sel).IsVisible(); visible {
+								logger.Trace(logger.HH, "[HHAuth] Found OTP field: %s, typing...", sel)
+								_ = f.page.Focus(sel)
+								// Clear field first
+								_ = f.page.Keyboard().Press("Control+A")
+								_ = f.page.Keyboard().Press("Backspace")
+
+								if err := f.page.Keyboard().Type(code, playwright.KeyboardTypeOptions{
+									Delay: playwright.Float(100),
+								}); err == nil {
+									typed = true
+									logger.Debug(logger.HH, "[HHAuth] Successfully typed code into %s", sel)
+									break
+								}
+							}
+						}
+						if typed {
+							break
+						}
+						logger.Debug(logger.HH, "[HHAuth] OTP field not visible yet, retry %d...", retry+1)
+						time.Sleep(1 * time.Second)
+					}
+
+					if !typed {
+						logger.Error(logger.HH, "[HHAuth] Could not find or type into any OTP field after retries. URL: %s", f.page.URL())
+					}
+
+					// Final Enter
 					_ = f.page.Keyboard().Press("Enter")
+					// Also try to click submit button if enter didn't work
+					go func() {
+						time.Sleep(1 * time.Second)
+						_ = f.page.Click("button[type='submit'], button[data-qa='otp-code-submit']", playwright.PageClickOptions{
+							Timeout: playwright.Float(1000),
+						})
+					}()
+
 				case <-f.stopChan:
 					return
 				case <-ctx.Done():

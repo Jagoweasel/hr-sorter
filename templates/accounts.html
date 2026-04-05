@@ -74,12 +74,19 @@
                             </div>
                         </div>
                         <div class="flex items-center space-x-2">
-                            {{ if eq .Status "pending_auth" }}
-                            <button hx-post="/integrations/start-auth?id={{ .ID }}" 
-                                    hx-on:click="startPolling('{{ .ID }}')"
-                                    class="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded text-[9px] font-black uppercase tracking-widest hover:bg-blue-200 transition-colors">
-                                {{ Tr "start_auth" }}
-                            </button>
+                            {{ if or (eq .Status "pending_auth") (eq .Status "awaiting_code") }}
+                                {{ if eq .Platform "hh" }}
+                                <button onclick="showHHModal('{{ .ID }}', '')"
+                                        class="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded text-[9px] font-black uppercase tracking-widest hover:bg-red-200 transition-colors">
+                                    {{ Tr "finish_auth" }}
+                                </button>
+                                {{ else }}
+                                <button hx-post="/integrations/start-auth?id={{ .ID }}" 
+                                        hx-on:click="startPolling('{{ .ID }}')"
+                                        class="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded text-[9px] font-black uppercase tracking-widest hover:bg-blue-200 transition-colors">
+                                    {{ Tr "start_auth" }}
+                                </button>
+                                {{ end }}
                             {{ end }}
                             <div class="opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-2">
                                 <button hx-post="/integrations/toggle?id={{ .ID }}" class="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-400" title="Toggle Active">
@@ -209,26 +216,29 @@
 
 <!-- Modal: HH Auth Code Entry -->
 <div id="auth-hh-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-[300]" onclick="if(event.target === this) { /* don't close */ }">
-    <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 w-full max-w-md relative" onclick="event.stopPropagation()">
+    <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 w-full max-w-sm relative" onclick="event.stopPropagation()">
         <h2 class="text-xl font-black text-gray-900 dark:text-white tracking-tight mb-2">{{ Tr "headhunter_auth" }}</h2>
-        <div class="text-xs text-gray-500 dark:text-gray-400 mb-6 space-y-3 bg-gray-50 dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
-            <p>{{ Tr "hh_auth_step_1" (printf "<a id=\"hh-auth-link-inline\" href=\"#\" target=\"_blank\" class=\"text-blue-600 font-bold hover:underline\">%s</a>" (Tr "hh_auth_step_1_link")) | safe }}</p>
-            <p>{{ Tr "hh_auth_step_2" }}</p>
-            <a id="hh-auth-link" href="#" target="_blank" class="block text-blue-600 font-bold hover:underline">{{ Tr "open_hh_manually" }}</a>
-            <p>{{ Tr "hh_auth_step_3" }}</p>
-        </div>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">{{ Tr "hh_auth_instructions" }}</p>
+        
         <form id="auth-hh-form" class="space-y-4">
             {{ csrfField }}
             <input type="hidden" name="integration_id" id="auth-hh-integration-id">
             <div>
-                <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{{ Tr "authorization_code" }}</label>
-                <input type="text" name="code" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors text-center" placeholder="{{ Tr "hh_code_placeholder" }}" autofocus>
+                <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{{ Tr "verification_code" }}</label>
+                <input type="text" name="code" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-red-500 outline-none transition-colors text-center tracking-widest text-lg" placeholder="{{ Tr "hh_code_placeholder" }}" autofocus>
             </div>
             <div class="flex justify-between space-x-3 pt-2">
                 <button type="button" onclick="closeAllModals()" class="px-4 py-2 text-[10px] font-black text-gray-400 uppercase">{{ Tr "cancel" }}</button>
                 <button type="submit" class="px-6 py-2 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-red-700">{{ Tr "link_hh_account" }}</button>
             </div>
         </form>
+        
+        <div class="mt-8 pt-6 border-t dark:border-gray-700">
+            <button onclick="resetHHAuth()" class="w-full py-2 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl text-[10px] font-black text-gray-400 uppercase hover:text-red-500 hover:border-red-200 transition-all">
+                ↺ {{ Tr "hh_auth_retry" }}
+            </button>
+        </div>
+        
         <div id="hh-auth-error" class="mt-4 text-center text-red-500 text-xs font-bold hidden"></div>
     </div>
 </div>
@@ -351,11 +361,17 @@
 
     function showHHModal(id, url) {
         document.getElementById('auth-hh-integration-id').value = id;
-        const link = document.getElementById('hh-auth-link');
-        if (link) link.href = url;
-        const inlineLink = document.getElementById('hh-auth-link-inline');
-        if (inlineLink) inlineLink.href = url;
         document.getElementById('auth-hh-modal').classList.remove('hidden');
+    }
+
+    async function resetHHAuth() {
+        const id = document.getElementById('auth-hh-integration-id').value;
+        try {
+            await fetch(`/integrations/reset-auth?id=${id}`);
+            startPolling(id);
+        } catch (e) {
+            console.error('Reset failed:', e);
+        }
     }
 
     // --- Submissions ---
