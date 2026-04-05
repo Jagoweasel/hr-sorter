@@ -3,3 +3,14 @@ hr-sorter.db
 sessions/**
 .env
 tmp
+.opencode
+add-account
+db-check
+hr-sorter
+hr-sorter copy.db
+hr-sorter.db-journal
+remove-integration
+add-account
+cmd/add-hh/add-hh
+add-account
+*.har
