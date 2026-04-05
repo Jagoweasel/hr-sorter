@@ -31,7 +31,7 @@ func (h *Handler) handleReports(w http.ResponseWriter, r *http.Request) {
 		Report:    reportData,
 	}
 
-	h.templates.RenderWithStatus(w, "reports.html", http.StatusOK, dataInterface)
+	h.templates.RenderWithStatus(w, "reports.html", http.StatusOK, dataInterface, h.getLocale(r))
 }
 
 func (h *Handler) handleExportXLSX(w http.ResponseWriter, r *http.Request) {
@@ -51,7 +51,7 @@ func (h *Handler) handleExportXLSX(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleExportPDFOptions(w http.ResponseWriter, r *http.Request) {
 	accountID := r.URL.Query().Get("account_id")
-	h.templates.RenderWithStatus(w, "fragments/modals/export_pdf_options.html", http.StatusOK, map[string]string{"AccountID": accountID})
+	h.templates.RenderWithStatus(w, "fragments/modals/export_pdf_options.html", http.StatusOK, map[string]string{"AccountID": accountID}, h.getLocale(r))
 }
 
 func (h *Handler) handleExportPDF(w http.ResponseWriter, r *http.Request) {

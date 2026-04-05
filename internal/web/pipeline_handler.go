@@ -138,5 +138,5 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 		HideAccepted: hideAccepted,
 	}
 
-	h.templates.RenderWithStatus(w, "pipeline.html", http.StatusOK, data)
+	h.templates.RenderWithStatus(w, "pipeline.html", http.StatusOK, data, h.getLocale(r))
 }

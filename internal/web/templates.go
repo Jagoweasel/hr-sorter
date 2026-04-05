@@ -2,6 +2,7 @@ package web
 
 import (
 	"fmt"
+	"hr-sorter/internal/i18n"
 	"html/template"
 	"io"
 	"log"
@@ -14,11 +15,13 @@ import (
 
 type TemplateManager struct {
 	templates map[string]*template.Template
+	i18n      *i18n.LocalizationService
 }
 
-func NewTemplateManager() (*TemplateManager, error) {
+func NewTemplateManager(ls *i18n.LocalizationService) (*TemplateManager, error) {
 	tm := &TemplateManager{
 		templates: make(map[string]*template.Template),
+		i18n:      ls,
 	}
 
 	funcMap := template.FuncMap{
@@ -76,6 +79,9 @@ func NewTemplateManager() (*TemplateManager, error) {
 				return nil
 			}
 			return strings.Split(s, sep)
+		},
+		"T": func(locale, key string, args ...interface{}) string {
+			return ls.Translate(key, locale, args...)
 		},
 	}
 
@@ -139,11 +145,26 @@ func NewTemplateManager() (*TemplateManager, error) {
 	return tm, nil
 }
 
-func (tm *TemplateManager) Render(w io.Writer, name string, data interface{}) error {
+func (tm *TemplateManager) Render(w io.Writer, name string, data interface{}, locale string) error {
 	t, ok := tm.templates[name]
 	if !ok {
 		return fmt.Errorf("template %s not found", name)
 	}
+
+	// Clone to safely add request-specific Funcs
+	t, err := t.Clone()
+	if err != nil {
+		return err
+	}
+
+	t.Funcs(template.FuncMap{
+		"Tr": func(key string, args ...interface{}) string {
+			return tm.i18n.Translate(key, locale, args...)
+		},
+		"Locale": func() string {
+			return locale
+		},
+	})
 
 	// If it's a main page (no slash), use ExecuteTemplate with layout.html
 	if !strings.Contains(name, "/") {
@@ -153,13 +174,11 @@ func (tm *TemplateManager) Render(w io.Writer, name string, data interface{}) er
 	return t.Execute(w, data)
 }
 
-func (tm *TemplateManager) RenderWithStatus(w http.ResponseWriter, name string, status int, data interface{}) {
+func (tm *TemplateManager) RenderWithStatus(w http.ResponseWriter, name string, status int, data interface{}, locale string) {
 	// Set status before rendering
 	w.WriteHeader(status)
-	if err := tm.Render(w, name, data); err != nil {
+	if err := tm.Render(w, name, data, locale); err != nil {
 		log.Printf("Template error: %v", err)
-		// Note: header is already sent, so this Error call might not behave as expected
-		// but it's better than silence. In production, we'd handle this differently.
 		fmt.Fprintf(w, "Error rendering template: %v", err)
 	}
 }

@@ -21,7 +21,7 @@ func (h *Handler) handleContacts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.templates.RenderWithStatus(w, "fragments/contact_list.html", http.StatusOK, filteredContacts)
+	h.templates.RenderWithStatus(w, "fragments/contact_list.html", http.StatusOK, filteredContacts, h.getLocale(r))
 }
 
 func (h *Handler) handleIgnoreContact(w http.ResponseWriter, r *http.Request) {
@@ -56,7 +56,7 @@ func (h *Handler) handleContactActions(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(path, "/actions") {
 		id := strings.TrimPrefix(strings.TrimSuffix(path, "/actions"), "/contacts/")
 		contact, _ := h.conRepo.GetByID(r.Context(), id)
-		h.templates.RenderWithStatus(w, "fragments/modals/actions.html", http.StatusOK, contact)
+		h.templates.RenderWithStatus(w, "fragments/modals/actions.html", http.StatusOK, contact, h.getLocale(r))
 		return
 	}
 
@@ -83,7 +83,7 @@ func (h *Handler) handleContactActions(w http.ResponseWriter, r *http.Request) {
 			CompanyName:  companyName,
 			VacancyName:  vacancyName,
 			FirstMsgDate: firstMsgDate,
-		})
+		}, h.getLocale(r))
 		return
 	}
 
@@ -97,7 +97,7 @@ func (h *Handler) handleContactActions(w http.ResponseWriter, r *http.Request) {
 		}{
 			ContactID: contactID,
 			Sequences: sequences,
-		})
+		}, h.getLocale(r))
 		return
 	}
 }

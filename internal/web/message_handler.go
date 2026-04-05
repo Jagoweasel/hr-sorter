@@ -25,7 +25,7 @@ func (h *Handler) handleMessages(w http.ResponseWriter, r *http.Request) {
 		ContactID: id,
 		Contact:   contact,
 		Messages:  messages,
-	})
+	}, h.getLocale(r))
 }
 
 func (h *Handler) handleMessageList(w http.ResponseWriter, r *http.Request) {
@@ -44,7 +44,7 @@ func (h *Handler) handleMessageList(w http.ResponseWriter, r *http.Request) {
 	}{
 		ContactID: id,
 		Messages:  messages,
-	})
+	}, h.getLocale(r))
 }
 
 func (h *Handler) handleSendMessage(w http.ResponseWriter, r *http.Request) {

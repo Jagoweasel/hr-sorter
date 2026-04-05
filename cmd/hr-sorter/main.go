@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -13,10 +14,12 @@ import (
 	"github.com/joho/godotenv"
 	"hr-sorter/internal/database"
 	"hr-sorter/internal/hhclient"
+	"hr-sorter/internal/i18n"
 	"hr-sorter/internal/logger"
 	"hr-sorter/internal/models"
 	"hr-sorter/internal/repository"
 	"hr-sorter/internal/service"
+	"hr-sorter/internal/streaming"
 	"hr-sorter/internal/tgclient"
 	"hr-sorter/internal/web"
 )
@@ -61,6 +64,10 @@ func main() {
 	log.Println("[Main] Starting application...")
 	_ = godotenv.Load()
 
+	// Initialize log streaming
+	logBroadcaster := streaming.NewLogBroadcaster()
+	log.SetOutput(io.MultiWriter(os.Stdout, logBroadcaster))
+
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
 		dbPath = "hr-sorter.db"
@@ -76,13 +83,17 @@ func main() {
 	msgRepo := repository.NewMessageRepository(database.DB)
 	seqRepo := repository.NewSequenceRepository(database.DB)
 	fltRepo := repository.NewFilterRepository(database.DB)
+	mapRepo := repository.NewMappingRepository(database.DB)
 	stRepo := repository.NewStateRepository(database.DB)
 
 	manager := tgclient.NewManager(database.DB, conRepo, msgRepo, stRepo, intRepo)
 	hhManager := hhclient.NewManager(database.DB, conRepo, msgRepo, intRepo)
 
+	// Initialize Localization
+	ls := i18n.NewLocalizationService()
+
 	// Initialize Template Manager
-	tm, err := web.NewTemplateManager()
+	tm, err := web.NewTemplateManager(ls)
 	if err != nil {
 		log.Fatalf("[Main] Failed to initialize templates: %v", err)
 	}
@@ -123,7 +134,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	handler := web.NewHandler(ctx, manager, hhManager, tm, accRepo, intRepo, conRepo, msgRepo, seqRepo, fltRepo, accService, intService, seqService, conService, fltService, repService)
+	handler := web.NewHandler(ctx, manager, hhManager, logBroadcaster, tm, ls, accRepo, intRepo, conRepo, msgRepo, seqRepo, fltRepo, mapRepo, accService, intService, seqService, conService, fltService, repService)
 	handler.RegisterRoutes(mux)
 
 	port := os.Getenv("HTTP_PORT")

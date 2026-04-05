@@ -2,7 +2,9 @@ package streaming
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"net/http"
 	"sync"
 )
 
@@ -19,16 +21,47 @@ func NewLogBroadcaster() *LogBroadcaster {
 }
 
 func (b *LogBroadcaster) Stream(ctx context.Context, writer io.Writer) error {
-	// Create a new channel for this subscriber
-	// Start an SSE/WS loop to send messages to writer
-	panic("implement me with streaming loop")
+	flusher, ok := writer.(http.Flusher)
+	if !ok {
+		return fmt.Errorf("streaming not supported")
+	}
+
+	ch := make(chan string, 100)
+	b.mu.Lock()
+	b.subscribers[ch] = struct{}{}
+	b.mu.Unlock()
+
+	defer func() {
+		b.mu.Lock()
+		delete(b.subscribers, ch)
+		b.mu.Unlock()
+		close(ch)
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case entry := <-ch:
+			_, err := fmt.Fprintf(writer, "data: %s\n\n", entry)
+			if err != nil {
+				return err
+			}
+			flusher.Flush()
+		}
+	}
 }
 
 func (b *LogBroadcaster) Broadcast(entry string) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	// Send entry to all subscriber channels
-	panic("implement me with fan-out logic")
+	for ch := range b.subscribers {
+		select {
+		case ch <- entry:
+		default:
+			// Buffer full, skip to avoid blocking the logger
+		}
+	}
 }
 
 // Write implements io.Writer to be used as a zap core output

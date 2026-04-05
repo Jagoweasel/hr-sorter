@@ -11,7 +11,7 @@ func (h *Handler) handleAccounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.templates.RenderWithStatus(w, "accounts.html", http.StatusOK, data)
+	h.templates.RenderWithStatus(w, "accounts.html", http.StatusOK, data, h.getLocale(r))
 }
 
 func (h *Handler) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
@@ -40,7 +40,7 @@ func (h *Handler) handleEditAccountModal(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	h.templates.RenderWithStatus(w, "fragments/modals/edit_account.html", http.StatusOK, acc)
+	h.templates.RenderWithStatus(w, "fragments/modals/edit_account.html", http.StatusOK, acc, h.getLocale(r))
 }
 
 func (h *Handler) handleUpdateAccount(w http.ResponseWriter, r *http.Request) {

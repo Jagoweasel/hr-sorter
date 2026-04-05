@@ -1,14 +1,50 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ Locale }}" class="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HR Sorter</title>
+    <title>{{ Tr "hr_sorter" }}</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 font-sans">
     <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: '#1a202c',
+                            text: '#e2e8f0',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans transition-colors duration-200">
+    <script>
+        // Check for saved theme preference or use system preference
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark')
+            document.documentElement.classList.remove('light')
+        } else {
+            document.documentElement.classList.remove('dark')
+            document.documentElement.classList.add('light')
+        }
+
+        function toggleTheme() {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark')
+                document.documentElement.classList.add('light')
+                localStorage.setItem('theme', 'light')
+            } else {
+                document.documentElement.classList.add('dark')
+                document.documentElement.classList.remove('light')
+                localStorage.setItem('theme', 'dark')
+            }
+        }
+
         // Request notification permission on first user interaction
         let notificationRequested = false;
         document.addEventListener('click', function() {
@@ -22,25 +58,43 @@
         document.body.addEventListener('new-message', function(evt) {
             const data = evt.detail.value;
             if (Notification.permission === 'granted') {
-                new Notification("New Recruiter Message", {
+                new Notification("{{ Tr "new_recruiter_message" }}", {
                     body: `${data.sender}: ${data.text}`,
                     icon: '/static/icon.png' // Optional icon
                 });
             }
         });
     </script>
-    <nav class="bg-blue-600 text-white p-4 shadow-md">
-        <div class="container mx-auto flex justify-between">
-            <h1 class="text-xl font-bold">HR Sorter</h1>
-            <div>
-                <a href="/" class="px-3 hover:underline">Dashboard</a>
-                <a href="/pipeline" class="px-3 hover:underline">Pipeline</a>
-                <a href="/reports" class="px-3 hover:underline">Reports</a>
-                <a href="/accounts" class="px-3 hover:underline">Accounts</a>
+    <nav class="bg-blue-600 dark:bg-blue-800 text-white p-4 shadow-md">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center">
+                <h1 class="text-xl font-bold mr-6">{{ Tr "hr_sorter" }}</h1>
+                <a href="/" class="px-3 hover:underline">{{ Tr "dashboard" }}</a>
+                <a href="/pipeline" class="px-3 hover:underline">{{ Tr "pipeline" }}</a>
+                <a href="/reports" class="px-3 hover:underline">{{ Tr "reports" }}</a>
+                <a href="/accounts" class="px-3 hover:underline">{{ Tr "accounts" }}</a>
+                <a href="/mapping" class="px-3 hover:underline">{{ Tr "vacancy_mapping" }}</a>
+                <a href="/logs" class="px-3 hover:underline">{{ Tr "system_logs" }}</a>
+            </div>
+            <div class="flex items-center">
+                <button onclick="toggleTheme()" class="p-2 rounded-full hover:bg-blue-700 dark:hover:bg-blue-900 focus:outline-none transition-colors" title="{{ Tr "toggle_theme" }}">
+                    <!-- Sun icon -->
+                    <svg id="theme-icon-sun" class="w-6 h-6 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 9h-1m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 5a7 7 0 100 14 7 7 0 000-14z"></path>
+                    </svg>
+                    <!-- Moon icon -->
+                    <svg id="theme-icon-moon" class="w-6 h-6 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                    </svg>
+                </button>
+                <div class="ml-4 border-l border-blue-500 pl-4 flex space-x-2">
+                    <button hx-get="/set-lang?lang=en" class="hover:text-blue-200 {{ if eq Locale "en" }}font-bold underline{{ end }}">EN</button>
+                    <button hx-get="/set-lang?lang=ru" class="hover:text-blue-200 {{ if eq Locale "ru" }}font-bold underline{{ end }}">RU</button>
+                </div>
             </div>
         </div>
     </nav>
-    <main class="container mx-auto mt-8 p-4">
+    <main class="container mx-auto mt-8 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
         {{ template "content" . }}
     </main>
     <div id="modal-container"></div>

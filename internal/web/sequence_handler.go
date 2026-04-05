@@ -115,7 +115,7 @@ func (h *Handler) handleEditSequenceModal(w http.ResponseWriter, r *http.Request
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	h.templates.RenderWithStatus(w, "fragments/modals/edit_sequence.html", http.StatusOK, seq)
+	h.templates.RenderWithStatus(w, "fragments/modals/edit_sequence.html", http.StatusOK, seq, h.getLocale(r))
 }
 
 func (h *Handler) handleUpdateSequence(w http.ResponseWriter, r *http.Request) {
@@ -168,7 +168,7 @@ func (h *Handler) handleBulkDeleteSequences(w http.ResponseWriter, r *http.Reque
 
 func (h *Handler) handleAddStageModal(w http.ResponseWriter, r *http.Request) {
 	seqID := r.URL.Query().Get("sequence_id")
-	h.templates.RenderWithStatus(w, "fragments/modals/add_stage.html", http.StatusOK, map[string]string{"SequenceID": seqID})
+	h.templates.RenderWithStatus(w, "fragments/modals/add_stage.html", http.StatusOK, map[string]string{"SequenceID": seqID}, h.getLocale(r))
 }
 
 func (h *Handler) getRedirectURL(r *http.Request) string {

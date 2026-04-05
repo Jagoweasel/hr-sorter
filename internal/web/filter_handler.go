@@ -13,7 +13,7 @@ func (h *Handler) handleGetFilters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.templates.RenderWithStatus(w, "fragments/filter_list.html", http.StatusOK, filters)
+	h.templates.RenderWithStatus(w, "fragments/filter_list.html", http.StatusOK, filters, h.getLocale(r))
 }
 
 func (h *Handler) handleAddFilter(w http.ResponseWriter, r *http.Request) {

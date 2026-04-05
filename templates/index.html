@@ -4,13 +4,13 @@
     <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
         <div class="flex items-center space-x-6">
             <div class="flex flex-col">
-                <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Active Account</label>
+                <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{{ Tr "active_account" }}</label>
                 <select name="account_id" 
-                        class="bg-gray-50 border-2 border-gray-100 rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
+                        class="bg-gray-50 border-2 border-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:text-white rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
                         hx-get="/contacts"
                         hx-target="#contact-list"
                         hx-include="[name='platform'], [name='show_declines'], [name='hide_screened'], [name='hide_unanswered'], [name='sequence_filter']">
-                    <option value="">All Accounts</option>
+                    <option value="">{{ Tr "all_accounts" }}</option>
                     {{ range . }}
                     <option value="{{ .ID }}">{{ .Name }}</option>
                     {{ end }}
@@ -18,19 +18,19 @@
             </div>
 
             <div class="flex flex-col">
-                <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Platform Filter</label>
+                <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{{ Tr "platform_filter" }}</label>
                 <input type="hidden" name="platform" id="platform-filter-input" value="">
                 <div class="flex items-center space-x-2" id="plat-filters">
-                    <button class="px-3 py-2 rounded-lg border-2 border-blue-500 bg-blue-50 transition-colors plat-btn active"
+                    <button class="px-3 py-2 rounded-lg border-2 border-blue-500 bg-blue-50 dark:bg-blue-900 transition-colors plat-btn active"
                             onclick="setPlatformFilter('', this)">
-                        <span class="text-[10px] font-black uppercase">All</span>
+                        <span class="text-[10px] font-black uppercase">{{ Tr "all" }}</span>
                     </button>
-                    <button class="p-2 rounded-lg border-2 border-gray-100 hover:border-blue-500 transition-colors flex items-center space-x-2 plat-btn"
+                    <button class="p-2 rounded-lg border-2 border-gray-100 dark:border-gray-700 hover:border-blue-500 transition-colors flex items-center space-x-2 plat-btn"
                             onclick="setPlatformFilter('tg', this)">
                         <svg class="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.02-1.96 1.25-5.54 3.69-.52.35-.97.52-1.35.51-.42-.01-1.24-.24-1.84-.44-.74-.24-1.33-.37-1.28-.79.03-.22.33-.44.89-.67 3.49-1.52 5.82-2.52 6.99-3.01 3.32-1.39 4.02-1.63 4.47-1.63.1 0 .32.02.46.14.12.1.15.23.16.33.01.07.02.21.01.35z"/></svg>
                         <span class="text-[10px] font-black uppercase">TG</span>
                     </button>
-                    <button class="p-2 rounded-lg border-2 border-gray-100 hover:border-blue-500 transition-colors flex items-center space-x-2 plat-btn"
+                    <button class="p-2 rounded-lg border-2 border-gray-100 dark:border-gray-700 hover:border-blue-500 transition-colors flex items-center space-x-2 plat-btn"
                             onclick="setPlatformFilter('hh', this)">
                         <span class="text-red-500 font-black text-[10px] border border-red-200 px-1 rounded bg-red-50">HH</span>
                         <span class="text-[10px] font-black uppercase">HH</span>
@@ -39,68 +39,68 @@
             </div>
 
             <div class="flex flex-col">
-                <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Declines</label>
+                <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{{ Tr "declines" }}</label>
                 <select name="show_declines" 
-                        class="bg-gray-50 border-2 border-gray-100 rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
+                        class="bg-gray-50 border-2 border-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:text-white rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
                         hx-get="/contacts"
                         hx-target="#contact-list"
                         hx-include="[name='account_id'], [name='platform'], [name='hide_screened'], [name='hide_unanswered'], [name='sequence_filter']">
-                    <option value="false">Hide Declines</option>
-                    <option value="true">Show All</option>
+                    <option value="false">{{ Tr "hide_declines" }}</option>
+                    <option value="true">{{ Tr "show_all" }}</option>
                 </select>
             </div>
 
             <div class="flex flex-col">
-                <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Screening</label>
+                <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{{ Tr "screening" }}</label>
                 <div class="flex items-center space-x-2">
                     <select name="hide_screened" 
-                            class="bg-gray-50 border-2 border-gray-100 rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
+                            class="bg-gray-50 border-2 border-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:text-white rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
                             hx-get="/contacts"
                             hx-target="#contact-list"
                             hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_unanswered'], [name='sequence_filter']">
-                        <option value="true">Hide Filtered</option>
-                        <option value="false">Show All</option>
+                        <option value="true">{{ Tr "hide_filtered" }}</option>
+                        <option value="false">{{ Tr "show_all" }}</option>
                     </select>
-                    <button onclick="openFilterModal()" class="p-2 bg-gray-50 hover:bg-gray-100 border-2 border-gray-100 rounded-lg transition-colors text-gray-500" title="Manage Filters">
+                    <button onclick="openFilterModal()" class="p-2 bg-gray-50 hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 border-2 border-gray-100 dark:border-gray-600 rounded-lg transition-colors text-gray-500" title="Manage Filters">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
                     </button>
                 </div>
             </div>
 
             <div class="flex flex-col">
-                <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Response</label>
+                <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{{ Tr "response" }}</label>
                 <select name="hide_unanswered" 
-                        class="bg-gray-50 border-2 border-gray-100 rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
+                        class="bg-gray-50 border-2 border-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:text-white rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
                         hx-get="/contacts"
                         hx-target="#contact-list"
                         hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened'], [name='show_ignored'], [name='sequence_filter']">
-                    <option value="false">Show All</option>
-                    <option value="true">Hide Unanswered</option>
+                    <option value="false">{{ Tr "show_all" }}</option>
+                    <option value="true">{{ Tr "hide_unanswered" }}</option>
                 </select>
             </div>
 
             <div class="flex flex-col">
-                <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Ignored</label>
+                <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{{ Tr "ignored" }}</label>
                 <select name="show_ignored" 
-                        class="bg-gray-50 border-2 border-gray-100 rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
+                        class="bg-gray-50 border-2 border-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:text-white rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
                         hx-get="/contacts"
                         hx-target="#contact-list"
                         hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened'], [name='hide_unanswered'], [name='sequence_filter']">
-                    <option value="false">Active</option>
-                    <option value="true">Ignored</option>
+                    <option value="false">{{ Tr "active" }}</option>
+                    <option value="true">{{ Tr "ignored" }}</option>
                 </select>
             </div>
 
             <div class="flex flex-col">
-                <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Pipeline</label>
+                <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{{ Tr "pipeline" }}</label>
                 <select name="sequence_filter" 
-                        class="bg-gray-50 border-2 border-gray-100 rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
+                        class="bg-gray-50 border-2 border-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:text-white rounded-lg px-3 py-1.5 text-xs font-bold focus:border-blue-500 outline-none"
                         hx-get="/contacts"
                         hx-target="#contact-list"
                         hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened'], [name='hide_unanswered'], [name='show_ignored']">
-                    <option value="">All</option>
-                    <option value="with">In Pipeline</option>
-                    <option value="without">Not in Pipeline</option>
+                    <option value="">{{ Tr "all" }}</option>
+                    <option value="with">{{ Tr "in_pipeline" }}</option>
+                    <option value="without">{{ Tr "not_in_pipeline" }}</option>
                 </select>
             </div>
         </div>
@@ -112,11 +112,11 @@
                     hx-confirm="Add all visible unfiltered contacts to pipeline?"
                     hx-swap="none">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-                <span>Bulk Add</span>
+                <span>{{ Tr "bulk_add" }}</span>
             </button>
             <div class="flex items-center space-x-2">
                 <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                <span class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Sync Active</span>
+                <span class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">{{ Tr "sync_active" }}</span>
             </div>
         </div>
     </div>

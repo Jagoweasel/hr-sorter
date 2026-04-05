@@ -2,23 +2,43 @@ package logger
 
 import (
 	"io"
+	"os"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // Logger is a thin wrapper around zap.Logger
 type Logger struct {
-	// *zap.SugaredLogger
+	*zap.SugaredLogger
 }
 
 func NewLogger(output io.Writer) *Logger {
-	// 1. Initialize zap with Tee output (Stdout + output)
-	// 2. output will be our LogBroadcaster
-	panic("implement me with zap and streamer output")
+	config := zap.NewDevelopmentEncoderConfig()
+	config.EncodeLevel = zapcore.CapitalColorLevelEncoder
+
+	// Create cores: one for stdout, one for the broadcaster
+	consoleCore := zapcore.NewCore(
+		zapcore.NewConsoleEncoder(config),
+		zapcore.AddSync(os.Stdout),
+		zap.DebugLevel,
+	)
+
+	// Streamer core uses plain JSON for easier parsing in the UI or plain text
+	streamerCore := zapcore.NewCore(
+		zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig()),
+		zapcore.AddSync(output),
+		zap.DebugLevel,
+	)
+
+	core := zapcore.NewTee(consoleCore, streamerCore)
+	return &Logger{zap.New(core).Sugar()}
 }
 
 func (l *Logger) Info(msg string, args ...interface{}) {
-	panic("implement me")
+	l.SugaredLogger.Infof(msg, args...)
 }
 
 func (l *Logger) Error(msg string, err error, args ...interface{}) {
-	panic("implement me")
+	l.SugaredLogger.Errorf(msg+": %v", append(args, err)...)
 }

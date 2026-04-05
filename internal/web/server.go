@@ -3,8 +3,10 @@ package web
 import (
 	"context"
 	"hr-sorter/internal/hhclient"
+	"hr-sorter/internal/i18n"
 	"hr-sorter/internal/repository"
 	"hr-sorter/internal/service"
+	"hr-sorter/internal/streaming"
 	"hr-sorter/internal/tgclient"
 	"net/http"
 	"strings"
@@ -14,11 +16,13 @@ type Handler struct {
 	rootCtx context.Context
 
 	// Managers
-	tgManager *tgclient.Manager
-	hhManager *hhclient.Manager
+	tgManager      *tgclient.Manager
+	hhManager      *hhclient.Manager
+	logBroadcaster *streaming.LogBroadcaster
 
 	// Templates
 	templates *TemplateManager
+	i18n      *i18n.LocalizationService
 
 	// Repositories
 	accRepo *repository.AccountRepository
@@ -27,6 +31,7 @@ type Handler struct {
 	msgRepo *repository.MessageRepository
 	seqRepo *repository.SequenceRepository
 	fltRepo *repository.FilterRepository
+	mapRepo *repository.MappingRepository
 
 	// Services
 	accService *service.AccountService
@@ -41,13 +46,16 @@ func NewHandler(
 	ctx context.Context,
 	tgManager *tgclient.Manager,
 	hhManager *hhclient.Manager,
+	logBroadcaster *streaming.LogBroadcaster,
 	templates *TemplateManager,
+	ls *i18n.LocalizationService,
 	accRepo *repository.AccountRepository,
 	intRepo *repository.IntegrationRepository,
 	conRepo *repository.ContactRepository,
 	msgRepo *repository.MessageRepository,
 	seqRepo *repository.SequenceRepository,
 	fltRepo *repository.FilterRepository,
+	mapRepo *repository.MappingRepository,
 	accService *service.AccountService,
 	intService *service.IntegrationService,
 	seqService *service.SequenceService,
@@ -56,23 +64,33 @@ func NewHandler(
 	repService *service.ReportService,
 ) *Handler {
 	return &Handler{
-		rootCtx:    ctx,
-		tgManager:  tgManager,
-		hhManager:  hhManager,
-		templates:  templates,
-		accRepo:    accRepo,
-		intRepo:    intRepo,
-		conRepo:    conRepo,
-		msgRepo:    msgRepo,
-		seqRepo:    seqRepo,
-		fltRepo:    fltRepo,
-		accService: accService,
-		intService: intService,
-		seqService: seqService,
-		conService: conService,
-		fltService: fltService,
-		repService: repService,
+		rootCtx:        ctx,
+		tgManager:      tgManager,
+		hhManager:      hhManager,
+		logBroadcaster: logBroadcaster,
+		templates:      templates,
+		i18n:           ls,
+		accRepo:        accRepo,
+		intRepo:        intRepo,
+		conRepo:        conRepo,
+		msgRepo:        msgRepo,
+		seqRepo:        seqRepo,
+		fltRepo:        fltRepo,
+		mapRepo:        mapRepo,
+		accService:     accService,
+		intService:     intService,
+		seqService:     seqService,
+		conService:     conService,
+		fltService:     fltService,
+		repService:     repService,
 	}
+}
+
+func (h *Handler) getLocale(r *http.Request) string {
+	if cookie, err := r.Cookie("lang"); err == nil {
+		return cookie.Value
+	}
+	return "en"
 }
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
@@ -127,4 +145,23 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/filters/clear", h.handleClearFilters)
 	mux.HandleFunc("/filters/delete", h.handleDeleteFilter)
 	mux.HandleFunc("/filters/toggle", h.handleToggleFilter)
+	mux.HandleFunc("/set-lang", h.handleSetLang)
+	mux.HandleFunc("/logs", h.handleLogs)
+	mux.HandleFunc("/logs/stream", h.handleLogStream)
+	mux.HandleFunc("/mapping", h.handleMapping)
+	mux.HandleFunc("/mapping/save", h.handleSaveMapping)
+	mux.HandleFunc("/mapping/delete", h.handleDeleteMapping)
+}
+
+func (h *Handler) handleSetLang(w http.ResponseWriter, r *http.Request) {
+	lang := r.URL.Query().Get("lang")
+	if lang != "en" && lang != "ru" {
+		lang = "en"
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:  "lang",
+		Value: lang,
+		Path:  "/",
+	})
+	w.Header().Set("HX-Refresh", "true")
 }

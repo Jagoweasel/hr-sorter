@@ -2,7 +2,11 @@ package i18n
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
+	"io/fs"
+	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -16,24 +20,88 @@ type LocalizationService struct {
 }
 
 func NewLocalizationService() *LocalizationService {
-	return &LocalizationService{
+	ls := &LocalizationService{
 		translations: make(map[string]map[string]string),
 	}
+	_ = ls.Load() // Load all available locales on start
+	return ls
 }
 
 func (s *LocalizationService) Load(locales ...string) error {
-	// Parse JSON from embedded localesAssets
-	panic("implement me with go:embed loading")
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	entries, err := fs.ReadDir(localesAssets, "locales")
+	if err != nil {
+		return fmt.Errorf("failed to read locales dir: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		fileName := entry.Name()
+		if !strings.HasSuffix(fileName, ".json") {
+			continue
+		}
+
+		locale := strings.TrimSuffix(fileName, ".json")
+
+		// If specific locales are requested, skip if not in the list
+		if len(locales) > 0 {
+			found := false
+			for _, l := range locales {
+				if l == locale {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+
+		content, err := fs.ReadFile(localesAssets, filepath.Join("locales", fileName))
+		if err != nil {
+			return fmt.Errorf("failed to read locale file %s: %w", fileName, err)
+		}
+
+		var m map[string]string
+		if err := json.Unmarshal(content, &m); err != nil {
+			return fmt.Errorf("failed to unmarshal locale file %s: %w", fileName, err)
+		}
+
+		s.translations[locale] = m
+	}
+
+	return nil
 }
 
 func (s *LocalizationService) Translate(key string, locale string, args ...interface{}) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Default to English if locale not found
-	// Use fmt.Sprintf for args
-	res := fmt.Sprintf(key, args...)
-	return res
+	trans, ok := s.translations[locale]
+	if !ok {
+		// Fallback to "en" if requested locale is not found
+		trans, ok = s.translations["en"]
+	}
+
+	if ok {
+		if val, exists := trans[key]; exists {
+			if len(args) > 0 {
+				return fmt.Sprintf(val, args...)
+			}
+			return val
+		}
+	}
+
+	// If key not found, return key itself as a fallback
+	if len(args) > 0 {
+		return fmt.Sprintf(key, args...)
+	}
+	return key
 }
 
 func (s *LocalizationService) Tr(key string, locale string) string {

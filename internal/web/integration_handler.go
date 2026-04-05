@@ -85,7 +85,7 @@ func (h *Handler) handleIntegrationStatus(w http.ResponseWriter, r *http.Request
 		Identifier: integration.Identifier,
 		Platform:   integration.Platform,
 		AuthURL:    authURL,
-	})
+	}, h.getLocale(r))
 }
 
 func (h *Handler) handleSubmitCode(w http.ResponseWriter, r *http.Request) {
