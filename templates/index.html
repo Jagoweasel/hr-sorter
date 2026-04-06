@@ -138,21 +138,21 @@
 
 <!-- Modal: Filter Management -->
 <div id="filter-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-[300]" onclick="if(event.target === this) closeFilterModal()">
-    <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-lg relative" onclick="event.stopPropagation()">
+    <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 w-full max-w-lg relative border dark:border-gray-700" onclick="event.stopPropagation()">
         <div class="flex justify-between items-center mb-6">
-            <h2 class="text-xl font-black text-gray-900 tracking-tight">{{ Tr "message_filters_hh" }}</h2>
+            <h2 class="text-xl font-black text-gray-900 dark:text-white tracking-tight">{{ Tr "message_filters_hh" }}</h2>
             <button onclick="closeFilterModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
 
-        <p class="text-xs text-gray-500 mb-6 bg-blue-50 p-3 rounded-xl border border-blue-100">
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-6 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-100 dark:border-blue-800">
             {{ Tr "filters_description" }}
         </p>
 
         <form hx-post="/filters/add" class="mb-6 flex space-x-2">
-            <input type="text" name="pattern" placeholder="{{ Tr "message_filters_placeholder" }}" required class="flex-1 border-2 border-gray-100 rounded-xl px-4 py-2 text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none transition-colors">
-            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200">{{ Tr "add" }}</button>
+            <input type="text" name="pattern" placeholder="{{ Tr "message_filters_placeholder" }}" required class="flex-1 border-2 border-gray-100 dark:border-gray-600 rounded-xl px-4 py-2 text-sm font-bold bg-gray-50 dark:bg-gray-700 dark:text-white focus:border-blue-500 outline-none transition-colors">
+            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 dark:shadow-none">{{ Tr "add" }}</button>
         </form>
 
         <div id="filter-list-content" hx-get="/filters" hx-trigger="load, refreshFilters from:body" class="max-h-96 overflow-y-auto pr-2 mb-6">

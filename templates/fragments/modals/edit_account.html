@@ -1,20 +1,20 @@
 <div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[200]" id="modal" onclick="if(event.target === this) htmx.remove('#modal')">
-    <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 w-full max-sm relative" onclick="event.stopPropagation()">
+    <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 w-full max-sm relative border dark:border-gray-700" onclick="event.stopPropagation()">
         <h2 class="text-xl font-black text-gray-900 dark:text-white tracking-tight mb-6">{{ Tr "edit_account" }}</h2>
         <form action="/accounts/update" method="POST" class="space-y-6">
             <input type="hidden" name="id" value="{{ .ID }}">
             <div>
                 <label class="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">{{ Tr "account_name" }}</label>
-                <input type="text" name="name" value="{{ .Name }}" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-700 dark:text-white focus:border-blue-500 outline-none transition-colors" placeholder="{{ Tr "account_name_placeholder" }}">
+                <input type="text" name="name" value="{{ .Name }}" required class="block w-full border-2 border-gray-100 dark:border-gray-600 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-700 dark:text-white focus:border-blue-500 outline-none transition-colors" placeholder="{{ Tr "account_name_placeholder" }}">
             </div>
             <div>
                 <label class="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">{{ Tr "report_slug" }}</label>
-                <input type="text" name="slug" value="{{ deref .Slug }}" class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-700 dark:text-white focus:border-blue-500 outline-none transition-colors" placeholder="e.g. egor_reshetnikov">
+                <input type="text" name="slug" value="{{ deref .Slug }}" class="block w-full border-2 border-gray-100 dark:border-gray-600 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-700 dark:text-white focus:border-blue-500 outline-none transition-colors" placeholder="e.g. egor_reshetnikov">
                 <p class="text-[9px] text-gray-400 dark:text-gray-500 mt-1 italic">{{ Tr "slug_description" }}</p>
             </div>
             <div class="flex justify-end space-x-3">
-                <button type="button" onclick="htmx.remove('#modal')" class="px-4 py-2 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase">{{ Tr "cancel" }}</button>
-                <button type="submit" class="px-6 py-2 bg-gray-900 dark:bg-gray-700 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg">{{ Tr "save" }}</button>
+                <button type="button" onclick="htmx.remove('#modal')" class="px-4 py-2 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase hover:text-gray-600 dark:hover:text-gray-200 transition-colors">{{ Tr "cancel" }}</button>
+                <button type="submit" class="px-6 py-2 bg-gray-900 dark:bg-gray-700 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-black dark:hover:bg-gray-600 transition-all">{{ Tr "save" }}</button>
             </div>
         </form>
     </div>
