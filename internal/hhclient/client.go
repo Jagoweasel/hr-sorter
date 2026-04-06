@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 )
 
 type loggingRoundTripper struct {
@@ -46,13 +47,26 @@ func (l *loggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	return resp, nil
 }
 
+var (
+	hhHttpClient = &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			IdleConnTimeout:     90 * time.Second,
+			MaxIdleConnsPerHost: 10,
+		},
+		Timeout: 30 * time.Second,
+	}
+)
+
 func GetHHHttpClient() *http.Client {
 	if logger.IsEnabled(logger.HH) {
+		// If logging is enabled, we still use the persistent client but wrap it
 		return &http.Client{
-			Transport: &loggingRoundTripper{next: http.DefaultTransport},
+			Transport: &loggingRoundTripper{next: hhHttpClient.Transport},
+			Timeout:   hhHttpClient.Timeout,
 		}
 	}
-	return http.DefaultClient
+	return hhHttpClient
 }
 
 const (

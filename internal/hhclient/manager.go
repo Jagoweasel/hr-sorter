@@ -190,6 +190,14 @@ func (m *Manager) Sync(ctx context.Context, integrationID int64) error {
 	return m.syncNegotiations(ctx, *integration)
 }
 
+func (m *Manager) SyncContactMessages(ctx context.Context, integrationID, contactID int64, messagesURL string) error {
+	integration, err := m.intRepo.GetByID(ctx, integrationID)
+	if err != nil {
+		return err
+	}
+	return m.syncMessages(ctx, *integration, contactID, messagesURL)
+}
+
 func (m *Manager) syncNegotiations(ctx context.Context, integration models.Integration) error {
 	page := 0
 	for {
@@ -269,6 +277,16 @@ func (m *Manager) syncNegotiations(ctx context.Context, integration models.Integ
 			// If there's an inline message (cover letter), cache it immediately
 			if item.Message != nil && *item.Message != "" {
 				m.cacheMessage(integration.ID, contactID, "hh_msg_initial_"+item.ID, *item.Message, true, item.UpdatedAt)
+			}
+
+			// LAZY SYNC: Only deep sync the first page of results (page 0)
+			// For subsequent pages, only sync if it's the very first time we see this contact
+			if page > 0 {
+				lastMsgTime, _ := m.msgRepo.GetLastMessageTimeByContactID(ctx, contactID)
+				if lastMsgTime != "1970-01-01 00:00:00" {
+					logger.Debug(logger.HH, "[HH] Skipping deep sync for old negotiation %s (Page %d > 0)", item.ID, page)
+					continue
+				}
 			}
 
 			// 2. Delta Sync check: compare UpdatedAt from HH with last message in our DB

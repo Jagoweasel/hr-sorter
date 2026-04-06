@@ -13,11 +13,25 @@ func (h *Handler) handleMessages(w http.ResponseWriter, r *http.Request) {
 	idStr := strings.TrimPrefix(r.URL.Path, "/messages/")
 	id, _ := strconv.ParseInt(idStr, 10, 64)
 
+	contact, _ := h.conRepo.GetByID(r.Context(), id)
+
 	messages, err := h.msgRepo.GetByContactID(r.Context(), id)
 	if err != nil {
 		log.Printf("Web: Error fetching messages for contact %d: %v", id, err)
 		http.Error(w, err.Error(), 500)
 		return
+	}
+
+	// On-demand sync for HH if no messages and not synced recently
+	if contact != nil && contact.Platform == "hh" && len(messages) == 0 {
+		negID := strings.TrimPrefix(contact.ExternalID, "hh_neg_")
+		msgURL := "https://api.hh.ru/negotiations/" + negID + "/messages"
+		// Trigger sync
+		err = h.hhManager.SyncContactMessages(r.Context(), contact.IntegrationID, contact.ID, msgURL)
+		if err == nil {
+			// Fetch again after sync
+			messages, _ = h.msgRepo.GetByContactID(r.Context(), id)
+		}
 	}
 
 	// Merge with HH cache if applicable
@@ -43,7 +57,7 @@ func (h *Handler) handleMessages(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	contact, _ := h.conRepo.GetByID(r.Context(), id)
+	contact, _ = h.conRepo.GetByID(r.Context(), id)
 
 	h.templates.RenderWithStatus(w, r, "fragments/chat_container.html", http.StatusOK, struct {
 		ContactID int64

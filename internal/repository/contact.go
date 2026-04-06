@@ -33,16 +33,23 @@ func (r *ContactRepository) GetByID(ctx context.Context, id interface{}) (*model
 
 func (r *ContactRepository) GetAll(ctx context.Context, accountID, platform string, showDeclines bool) ([]ContactWithLastMsg, error) {
 	query := `
+		WITH LatestMessages AS (
+			SELECT contact_id, text, timestamp, is_incoming,
+				   ROW_NUMBER() OVER (PARTITION BY contact_id ORDER BY timestamp DESC) as rn,
+				   COUNT(*) OVER (PARTITION BY contact_id) as msg_count
+			FROM messages
+		)
 		SELECT c.*, 
-		       COALESCE((SELECT text FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1), '') as last_message,
-			   COALESCE((SELECT datetime(timestamp) FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1), datetime(c.created_at)) as last_time,
-			   COALESCE((SELECT is_incoming FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1), 0) as last_is_incoming,
-			   (SELECT COUNT(*) FROM messages WHERE contact_id = c.id) as msg_count,
+		       COALESCE(m.text, '') as last_message,
+			   COALESCE(datetime(m.timestamp), datetime(c.created_at)) as last_time,
+			   COALESCE(m.is_incoming, 0) as last_is_incoming,
+			   COALESCE(m.msg_count, 0) as msg_count,
 			   EXISTS(SELECT 1 FROM sequence_contacts WHERE contact_id = c.id) as in_sequence,
 			   COALESCE((SELECT s.status FROM sequences s JOIN sequence_contacts sc ON s.id = sc.sequence_id WHERE sc.contact_id = c.id LIMIT 1), '') as seq_status,
 			   COALESCE((SELECT GROUP_CONCAT(sc.sequence_id || ':' || s.status) FROM sequence_contacts sc JOIN sequences s ON sc.sequence_id = s.id WHERE sc.contact_id = c.id), '') as sequence_ids
 		FROM contacts c
 		JOIN integrations i ON c.integration_id = i.id
+		LEFT JOIN LatestMessages m ON c.id = m.contact_id AND m.rn = 1
 		WHERE 1=1`
 
 	var args []interface{}
