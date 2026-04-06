@@ -81,10 +81,11 @@
         </div>
 
         <div class="flex items-end space-x-4 ml-auto pb-0.5">
-            <button class="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-colors shadow-lg shadow-blue-100 dark:shadow-none flex items-center space-x-2"
+            <button class="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-colors shadow-lg shadow-blue-100 dark:shadow-none flex items-center space-x-2 disabled:opacity-50"
                     hx-post="/sequences/bulk-add"
                     hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened'], [name='hide_unanswered'], [name='sequence_filter']"
                     hx-confirm="{{ Tr "bulk_add_confirm" }}"
+                    hx-disabled-elt="this"
                     hx-swap="none">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
                 <span>{{ Tr "bulk_add" }}</span>

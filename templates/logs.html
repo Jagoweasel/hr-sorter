@@ -1,7 +1,14 @@
 {{ define "content" }}
 <div class="max-w-6xl mx-auto">
     <div class="flex justify-between items-center mb-6">
-        <h2 class="text-2xl font-bold text-gray-800 dark:text-white">{{ Tr "system_logs" }}</h2>
+        <div class="flex items-center space-x-4">
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-white">{{ Tr "system_logs" }}</h2>
+            <div class="flex bg-gray-200 dark:bg-gray-700 p-1 rounded-xl gap-1 border dark:border-gray-600">
+                <button onclick="applyPreset('dashboard')" class="px-3 py-1 text-[10px] font-black uppercase rounded-lg hover:bg-white dark:hover:bg-gray-600 transition-all">{{ Tr "preset_dashboard" }}</button>
+                <button onclick="applyPreset('network')" class="px-3 py-1 text-[10px] font-black uppercase rounded-lg hover:bg-white dark:hover:bg-gray-600 transition-all">{{ Tr "preset_network" }}</button>
+                <button onclick="applyPreset('logic')" class="px-3 py-1 text-[10px] font-black uppercase rounded-lg hover:bg-white dark:hover:bg-gray-600 transition-all">{{ Tr "preset_logic" }}</button>
+            </div>
+        </div>
         <div class="flex flex-wrap items-center gap-3">
             <!-- Filter Controls -->
             <div class="flex flex-wrap bg-gray-100 dark:bg-gray-700 p-1.5 rounded-xl border dark:border-gray-600 gap-1">
@@ -94,6 +101,29 @@
             method: 'POST',
             headers: {
                 'X-CSRF-Token': getCsrfToken()
+            }
+        });
+    }
+
+    const presets = {
+        dashboard: ['tg', 'hh', 'sync'],
+        network: ['hh-net', 'hh', 'sync'],
+        logic: ['add-sequence', 'filters', 'msg']
+    };
+
+    function applyPreset(name) {
+        const categories = presets[name];
+        if (!categories) return;
+
+        // First disable all, then enable only specific ones
+        const allCats = ['tg', 'hh', 'sync', 'add-sequence', 'hh-net', 'msg', 'filters', 'reports', 'history', 'trace'];
+        
+        allCats.forEach(cat => {
+            const shouldEnable = categories.includes(cat);
+            const checkbox = document.querySelector(`input[onchange*="'${cat}'"]`);
+            if (checkbox && checkbox.checked !== shouldEnable) {
+                checkbox.checked = shouldEnable;
+                toggleCategory(cat, shouldEnable);
             }
         });
     }

@@ -18,9 +18,22 @@ func (h *Handler) handleLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleUpdateLogConfig(w http.ResponseWriter, r *http.Request) {
+	// Support both Query (for simple fetch) and Form (for standard POST)
 	cat := r.URL.Query().Get("category")
-	enabled := r.URL.Query().Get("enabled") == "true"
+	if cat == "" {
+		cat = r.FormValue("category")
+	}
+
+	enabledStr := r.URL.Query().Get("enabled")
+	if enabledStr == "" {
+		enabledStr = r.FormValue("enabled")
+	}
+	enabled := enabledStr == "true"
+
 	levelStr := r.URL.Query().Get("level")
+	if levelStr == "" {
+		levelStr = r.FormValue("level")
+	}
 
 	if cat != "" {
 		if enabled {

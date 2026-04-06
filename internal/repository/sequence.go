@@ -246,6 +246,20 @@ func (r *SequenceRepository) CreateStage(ctx context.Context, tx *sqlx.Tx, seque
 	return err
 }
 
+func (r *SequenceRepository) CreateStagesBatch(ctx context.Context, tx *sqlx.Tx, stages []models.InterviewStage) error {
+	if len(stages) == 0 {
+		return nil
+	}
+	query := "INSERT INTO interview_stages (sequence_id, name, scheduled_at, is_completed, order_index) VALUES (:sequence_id, :name, :scheduled_at, :is_completed, :order_index)"
+	var err error
+	if tx != nil {
+		_, err = tx.NamedExecContext(ctx, query, stages)
+	} else {
+		_, err = r.db.NamedExecContext(ctx, query, stages)
+	}
+	return err
+}
+
 func (r *SequenceRepository) GetLastCompletedStage(ctx context.Context, sequenceID int64) (*models.InterviewStage, error) {
 	var stages []models.InterviewStage
 	err := r.db.SelectContext(ctx, &stages, "SELECT * FROM interview_stages WHERE sequence_id = ? AND is_completed = 1 ORDER BY order_index DESC LIMIT 1", sequenceID)

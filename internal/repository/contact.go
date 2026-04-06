@@ -13,6 +13,7 @@ type ContactRepository struct {
 
 type ContactWithLastMsg struct {
 	models.Contact
+	AccountID      *int64 `db:"account_id"`
 	LastMessage    string `db:"last_message"`
 	LastTime       string `db:"last_time"`
 	LastIsIncoming bool   `db:"last_is_incoming"`
@@ -39,7 +40,7 @@ func (r *ContactRepository) GetAll(ctx context.Context, accountID, platform stri
 				   COUNT(*) OVER (PARTITION BY contact_id) as msg_count
 			FROM messages
 		)
-		SELECT c.*, 
+		SELECT c.*, i.account_id,
 		       COALESCE(m.text, '') as last_message,
 			   COALESCE(datetime(m.timestamp), datetime(c.created_at)) as last_time,
 			   COALESCE(m.is_incoming, 0) as last_is_incoming,

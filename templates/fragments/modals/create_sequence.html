@@ -26,7 +26,11 @@
             </div>
             <div class="mt-10 flex justify-end space-x-4">
                 <button type="button" onclick="htmx.remove('#modal')" class="px-6 py-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs font-black uppercase tracking-widest">{{ Tr "cancel" }}</button>
-                <button type="submit" class="px-8 py-3 bg-gray-900 dark:bg-gray-700 text-white rounded-xl hover:bg-black dark:hover:bg-gray-600 font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:-translate-y-0.5 transition-all">{{ Tr "create" }}</button>
+                <button type="submit" 
+                        hx-disabled-elt="this"
+                        class="px-8 py-3 bg-gray-900 dark:bg-gray-700 text-white rounded-xl hover:bg-black dark:hover:bg-gray-600 font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    {{ Tr "create" }}
+                </button>
             </div>
         </form>
     </div>

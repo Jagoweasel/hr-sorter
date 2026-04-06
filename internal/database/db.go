@@ -22,7 +22,7 @@ func InitDB(path string) {
 	var err error
 	dsn := path
 	if !strings.Contains(path, "?") {
-		dsn = path + "?_pragma=foreign_keys=1&_journal_mode=WAL&_busy_timeout=5000"
+		dsn = path + "?_pragma=foreign_keys=1&_journal_mode=WAL&_busy_timeout=30000&_txlock=immediate"
 	}
 	log.Printf("[DB] Connecting with DSN: %s", dsn)
 	DB, err = sqlx.Connect("sqlite", dsn)
@@ -30,9 +30,11 @@ func InitDB(path string) {
 		log.Fatalf("[DB] Failed to connect to database: %v", err)
 	}
 	// SQLite only supports one writer at a time, and concurrent readers can conflict with writers.
-	// Setting MaxOpenConns(1) serializes all access, effectively eliminating SQLITE_BUSY.
-	DB.SetMaxOpenConns(1)
-	DB.SetMaxIdleConns(1)
+	// In WAL mode, multiple readers can exist alongside one writer.
+	// busy_timeout (set in DSN) handles write serialization.
+	DB.SetMaxOpenConns(10)
+	DB.SetMaxIdleConns(5)
+	log.Println("[DB] Connection pool configured (MaxOpen: 10, MaxIdle: 5).")
 	log.Println("[DB] Connection established.")
 
 	log.Println("[DB] Verifying schema...")

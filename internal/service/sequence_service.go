@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"hr-sorter/internal/logger"
+	"hr-sorter/internal/models"
 	"hr-sorter/internal/repository"
 	"strings"
 	"time"
@@ -31,8 +32,17 @@ func (s *SequenceService) BulkCreateSequences(ctx context.Context, accountID, pl
 		return 0, err
 	}
 
+	logger.Info(logger.AddSequence, "[BulkCreate] Starting for %d candidates", len(contacts))
+	start := time.Now()
+
+	// Start a single transaction for the entire bulk operation
+	tx, err := s.seqRepo.BeginTx(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
 	count := 0
-	now := time.Now().Format("2006-01-02T15:04")
 
 	for _, c := range contacts {
 		if c.InSequence {
@@ -50,30 +60,53 @@ func (s *SequenceService) BulkCreateSequences(ctx context.Context, accountID, pl
 			vacancy = *c.LastName
 		}
 
-		if c.Platform == "tg" {
-			// For TG, if we only have one name, use it as company and set a placeholder vacancy
-			if company != "Unknown" && vacancy == "Direct Lead" {
-				// keep as is
-			}
+		// Internal logic similar to CreateSequence but using the existing TX
+		seqID, err := s.seqRepo.Create(ctx, tx, c.AccountID, company, vacancy, "initial")
+		if err != nil {
+			logger.Error(logger.AddSequence, "[BulkCreate] Failed to create seq: %v", err)
+			continue
 		}
 
-		_, err := s.CreateSequence(ctx, company, vacancy, fmt.Sprintf("%d", c.ID), now)
-		if err != nil {
-			logger.Error(logger.AddSequence, "Bulk add failed for contact %d: %v", c.ID, err)
-		} else {
-			count++
+		if err := s.seqRepo.LinkContact(ctx, tx, seqID, c.ID); err != nil {
+			logger.Error(logger.AddSequence, "[BulkCreate] Link error: %v", err)
 		}
+
+		initialDate := time.Now()
+		stages := []models.InterviewStage{
+			{SequenceID: seqID, Name: "Initial Contact", ScheduledAt: &initialDate, IsCompleted: true, OrderIndex: 0},
+			{SequenceID: seqID, Name: "HR Screening", OrderIndex: 1},
+			{SequenceID: seqID, Name: "Technical Interview", OrderIndex: 2},
+			{SequenceID: seqID, Name: "Final Interview", OrderIndex: 3},
+			{SequenceID: seqID, Name: "Offer", OrderIndex: 4},
+		}
+
+		if err := s.seqRepo.CreateStagesBatch(ctx, tx, stages); err != nil {
+			logger.Error(logger.AddSequence, "[BulkCreate] Stages error: %v", err)
+		}
+
+		count++
 	}
 
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+
+	logger.Info(logger.AddSequence, "[BulkCreate] SUCCESS: %d sequences created in %v", count, time.Since(start))
 	return count, nil
 }
 
 func (s *SequenceService) CreateSequence(ctx context.Context, company, vacancy, contactID, initialDateStr string) (int64, error) {
+	start := time.Now()
+	logger.Trace(logger.AddSequence, "[CreateSequence] START for %s / %s (contact: %s)", company, vacancy, contactID)
+
 	tx, err := s.seqRepo.BeginTx(ctx)
 	if err != nil {
+		logger.Error(logger.AddSequence, "[CreateSequence] Failed to begin tx: %v", err)
 		return 0, err
 	}
 	defer tx.Rollback()
+
+	logger.Trace(logger.AddSequence, "[CreateSequence] Transaction started after %v", time.Since(start))
 
 	var accountID *int64
 	if contactID != "" {
@@ -99,12 +132,16 @@ func (s *SequenceService) CreateSequence(ctx context.Context, company, vacancy, 
 
 	seqID, err := s.seqRepo.Create(ctx, tx, accountID, company, vacancy, "initial")
 	if err != nil {
+		logger.Error(logger.AddSequence, "[CreateSequence] Failed to create sequence row: %v", err)
 		return 0, err
 	}
+	logger.Trace(logger.AddSequence, "[CreateSequence] Sequence created (ID: %d)", seqID)
 
 	if contactID != "" {
 		if err := s.seqRepo.LinkContact(ctx, tx, seqID, contactID); err != nil {
-			logger.Debug(logger.AddSequence, "Error linking contact: %v", err)
+			logger.Error(logger.AddSequence, "[CreateSequence] Error linking contact: %v", err)
+		} else {
+			logger.Trace(logger.AddSequence, "[CreateSequence] Contact linked")
 		}
 	}
 
@@ -116,14 +153,30 @@ func (s *SequenceService) CreateSequence(ctx context.Context, company, vacancy, 
 			initialDate = d
 		}
 	}
-	s.seqRepo.CreateStage(ctx, tx, seqID, "Initial Contact", initialDate, true, 0)
-	s.seqRepo.CreateStage(ctx, tx, seqID, "HR Screening", nil, false, 1)
-	s.seqRepo.CreateStage(ctx, tx, seqID, "Technical Interview", nil, false, 2)
-	s.seqRepo.CreateStage(ctx, tx, seqID, "Final Interview", nil, false, 3)
-	s.seqRepo.CreateStage(ctx, tx, seqID, "Offer", nil, false, 4)
+
+	stages := []models.InterviewStage{
+		{SequenceID: seqID, Name: "Initial Contact", ScheduledAt: &initialDate, IsCompleted: true, OrderIndex: 0},
+		{SequenceID: seqID, Name: "HR Screening", OrderIndex: 1},
+		{SequenceID: seqID, Name: "Technical Interview", OrderIndex: 2},
+		{SequenceID: seqID, Name: "Final Interview", OrderIndex: 3},
+		{SequenceID: seqID, Name: "Offer", OrderIndex: 4},
+	}
+
+	if err := s.seqRepo.CreateStagesBatch(ctx, tx, stages); err != nil {
+		logger.Error(logger.AddSequence, "[CreateSequence] Failed to create stages batch: %v", err)
+		return 0, err
+	}
+	logger.Trace(logger.AddSequence, "[CreateSequence] Stages batch inserted")
 
 	if err := tx.Commit(); err != nil {
+		logger.Error(logger.AddSequence, "[CreateSequence] Transaction commit failed: %v", err)
 		return 0, err
+	}
+
+	duration := time.Since(start)
+	logger.Info(logger.AddSequence, "[CreateSequence] SUCCESS (ID: %d) in %v", seqID, duration)
+	if duration > 500*time.Millisecond {
+		logger.Warn(logger.AddSequence, "[PERF] CreateSequence took too long: %v", duration)
 	}
 
 	return seqID, nil

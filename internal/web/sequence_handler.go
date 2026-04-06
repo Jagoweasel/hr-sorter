@@ -1,10 +1,12 @@
 package web
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func (h *Handler) handleCreateSequence(w http.ResponseWriter, r *http.Request) {
@@ -18,7 +20,11 @@ func (h *Handler) handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	contactID := r.FormValue("contact_id")
 	initialDateStr := r.FormValue("initial_date")
 
-	if _, err := h.seqService.CreateSequence(r.Context(), company, vacancy, contactID, initialDateStr); err != nil {
+	// Use background context with timeout to avoid "context canceled" if user closes the modal/page too fast
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if _, err := h.seqService.CreateSequence(ctx, company, vacancy, contactID, initialDateStr); err != nil {
 		log.Printf("[Web] Error creating sequence: %v", err)
 		http.Error(w, err.Error(), 500)
 		return
@@ -44,7 +50,12 @@ func (h *Handler) handleBulkAdd(w http.ResponseWriter, r *http.Request) {
 	hideScreened := r.FormValue("hide_screened") == "true"
 	hideUnanswered := r.FormValue("hide_unanswered") == "true"
 
-	if _, err := h.seqService.BulkCreateSequences(r.Context(), accountID, platform, showDeclines, hideScreened, hideUnanswered); err != nil {
+	// Use background context for bulk operation as well
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if _, err := h.seqService.BulkCreateSequences(ctx, accountID, platform, showDeclines, hideScreened, hideUnanswered); err != nil {
+		log.Printf("[Web] Error bulk creating sequences: %v", err)
 		http.Error(w, err.Error(), 500)
 		return
 	}
