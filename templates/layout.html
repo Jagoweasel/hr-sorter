@@ -62,6 +62,18 @@
                 });
             }
         });
+
+        // Global SSE for control signals
+        const globalEventSource = new EventSource('/logs/stream');
+        globalEventSource.onmessage = (e) => {
+            if (e.data.startsWith('[CONTROL]')) {
+                const command = e.data.replace('[CONTROL]', '').trim();
+                if (command === 'refreshContacts') {
+                    document.body.dispatchEvent(new Event('refreshContacts'));
+                    document.body.dispatchEvent(new Event('refresh'));
+                }
+            }
+        };
     </script>
     <nav class="bg-blue-600 dark:bg-blue-800 text-white p-4 shadow-md">
         <div class="container mx-auto flex justify-between items-center">

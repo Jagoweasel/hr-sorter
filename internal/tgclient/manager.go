@@ -19,6 +19,7 @@ import (
 	"hr-sorter/internal/logger"
 	"hr-sorter/internal/models"
 	"hr-sorter/internal/repository"
+	"hr-sorter/internal/streaming"
 )
 
 type Manager struct {
@@ -29,25 +30,27 @@ type Manager struct {
 	passChans map[int64]chan string
 	mu        sync.RWMutex
 
-	db      *sqlx.DB
-	conRepo *repository.ContactRepository
-	msgRepo *repository.MessageRepository
-	stRepo  *repository.StateRepository
-	intRepo *repository.IntegrationRepository
+	db             *sqlx.DB
+	conRepo        *repository.ContactRepository
+	msgRepo        *repository.MessageRepository
+	stRepo         *repository.StateRepository
+	intRepo        *repository.IntegrationRepository
+	logBroadcaster *streaming.LogBroadcaster
 }
 
-func NewManager(db *sqlx.DB, conRepo *repository.ContactRepository, msgRepo *repository.MessageRepository, stRepo *repository.StateRepository, intRepo *repository.IntegrationRepository) *Manager {
+func NewManager(db *sqlx.DB, conRepo *repository.ContactRepository, msgRepo *repository.MessageRepository, stRepo *repository.StateRepository, intRepo *repository.IntegrationRepository, lb *streaming.LogBroadcaster) *Manager {
 	return &Manager{
-		clients:   make(map[int64]*telegram.Client),
-		apis:      make(map[int64]*tg.Client),
-		cancels:   make(map[int64]context.CancelFunc),
-		codeChans: make(map[int64]chan string),
-		passChans: make(map[int64]chan string),
-		db:        db,
-		conRepo:   conRepo,
-		msgRepo:   msgRepo,
-		stRepo:    stRepo,
-		intRepo:   intRepo,
+		clients:        make(map[int64]*telegram.Client),
+		apis:           make(map[int64]*tg.Client),
+		cancels:        make(map[int64]context.CancelFunc),
+		codeChans:      make(map[int64]chan string),
+		passChans:      make(map[int64]chan string),
+		db:             db,
+		conRepo:        conRepo,
+		msgRepo:        msgRepo,
+		stRepo:         stRepo,
+		intRepo:        intRepo,
+		logBroadcaster: lb,
 	}
 }
 

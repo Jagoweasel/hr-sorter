@@ -17,26 +17,40 @@ import (
 	"hr-sorter/internal/logger"
 	"hr-sorter/internal/models"
 	"hr-sorter/internal/repository"
+	"hr-sorter/internal/streaming"
 )
 
 type Manager struct {
 	cancels map[int64]context.CancelFunc
 	mu      sync.RWMutex
 
-	db      *sqlx.DB
-	conRepo *repository.ContactRepository
-	msgRepo *repository.MessageRepository
-	intRepo *repository.IntegrationRepository
+	// In-memory cache for messages during sync
+	// Key: contact_id (int64), Value: []models.Message
+	msgCache sync.Map
+
+	db             *sqlx.DB
+	conRepo        *repository.ContactRepository
+	msgRepo        *repository.MessageRepository
+	intRepo        *repository.IntegrationRepository
+	logBroadcaster *streaming.LogBroadcaster
 }
 
-func NewManager(db *sqlx.DB, conRepo *repository.ContactRepository, msgRepo *repository.MessageRepository, intRepo *repository.IntegrationRepository) *Manager {
+func NewManager(db *sqlx.DB, conRepo *repository.ContactRepository, msgRepo *repository.MessageRepository, intRepo *repository.IntegrationRepository, lb *streaming.LogBroadcaster) *Manager {
 	return &Manager{
-		cancels: make(map[int64]context.CancelFunc),
-		db:      db,
-		conRepo: conRepo,
-		msgRepo: msgRepo,
-		intRepo: intRepo,
+		cancels:        make(map[int64]context.CancelFunc),
+		db:             db,
+		conRepo:        conRepo,
+		msgRepo:        msgRepo,
+		intRepo:        intRepo,
+		logBroadcaster: lb,
 	}
+}
+
+func (m *Manager) GetCachedMessages(contactID int64) []models.Message {
+	if val, ok := m.msgCache.Load(contactID); ok {
+		return val.([]models.Message)
+	}
+	return nil
 }
 
 func (m *Manager) StartIntegration(ctx context.Context, integration models.Integration) error {
@@ -210,7 +224,8 @@ func (m *Manager) syncNegotiations(ctx context.Context, integration models.Integ
 						Name string `json:"name"`
 					} `json:"employer"`
 				} `json:"vacancy"`
-				MessagesURL string `json:"messages_url"`
+				MessagesURL string  `json:"messages_url"`
+				Message     *string `json:"message"` // Cover letter can be here
 			} `json:"items"`
 			Found int `json:"found"`
 			Pages int `json:"pages"`
@@ -222,6 +237,10 @@ func (m *Manager) syncNegotiations(ctx context.Context, integration models.Integ
 		}
 
 		logger.Debug(logger.HH, "[HH] Found %d negotiations on page %d for %s", len(data.Items), data.Page, integration.Identifier)
+
+		// Semaphore for parallel sync of messages (3 воркера)
+		sem := make(chan struct{}, 3)
+		var wg sync.WaitGroup
 
 		// Save total applications count (from the first page response)
 		if page == 0 {
@@ -247,19 +266,38 @@ func (m *Manager) syncNegotiations(ctx context.Context, integration models.Integ
 				continue
 			}
 
+			// If there's an inline message (cover letter), cache it immediately
+			if item.Message != nil && *item.Message != "" {
+				m.cacheMessage(integration.ID, contactID, "hh_msg_initial_"+item.ID, *item.Message, true, item.UpdatedAt)
+			}
+
 			// 2. Delta Sync check: compare UpdatedAt from HH with last message in our DB
 			lastMsgTime, _ := m.msgRepo.GetLastMessageTimeByContactID(ctx, contactID)
 			hhUpdateTime, _ := time.Parse(time.RFC3339, item.UpdatedAt)
 
-			if hhUpdateTime.UTC().Format("2006-01-02 15:04:05") <= lastMsgTime {
+			// If lastMsgTime is old or 1970, or hhUpdateTime is newer, sync
+			if lastMsgTime != "1970-01-01 00:00:00" && hhUpdateTime.UTC().Format("2006-01-02 15:04:05") <= lastMsgTime {
 				logger.Debug(logger.HH, "[HH] Skipping sync for negotiation %s (no changes since %s)", item.ID, lastMsgTime)
 				continue
 			}
 
-			// 3. Sync Messages for this negotiation
-			if err := m.syncMessages(ctx, integration, contactID, item.MessagesURL); err != nil {
-				logger.Debug(logger.HH, "[HH] Failed to sync messages for negotiation %s: %v", item.ID, err)
-			}
+			// 3. Sync Messages for this negotiation (Parallel)
+			wg.Add(1)
+			go func(msgURL string, cid int64, negID string) {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+
+				if err := m.syncMessages(ctx, integration, cid, msgURL); err != nil {
+					logger.Debug(logger.HH, "[HH] Failed to sync messages for negotiation %s: %v", negID, err)
+				}
+			}(item.MessagesURL, contactID, item.ID)
+		}
+		wg.Wait()
+
+		// Notify UI about batch completion
+		if m.logBroadcaster != nil {
+			m.logBroadcaster.Broadcast("[CONTROL] refreshContacts")
 		}
 
 		if data.Page >= data.Pages-1 || len(data.Items) == 0 {
@@ -271,20 +309,39 @@ func (m *Manager) syncNegotiations(ctx context.Context, integration models.Integ
 	return nil
 }
 
-func (m *Manager) getOrCreateContact(integrationID int64, negID, employerName, vacancyName, stateName string) (int64, error) {
-	externalID := fmt.Sprintf("hh_neg_%s", negID)
-	logger.Debug(logger.HH, "[HH] Ensuring contact for negotiation %s (%s - %s)", negID, employerName, vacancyName)
-
-	if err := m.conRepo.UpsertHHContact(context.Background(), integrationID, externalID, employerName, vacancyName, stateName); err != nil {
-		return 0, err
+func (m *Manager) cacheMessage(integrationID, contactID int64, externalID, text string, isIncoming bool, timestamp string) {
+	ts, err := time.Parse(time.RFC3339, timestamp)
+	if err != nil {
+		ts = time.Now()
+	}
+	msg := models.Message{
+		IntegrationID: integrationID,
+		ContactID:     contactID,
+		ExternalID:    &externalID,
+		Text:          text,
+		IsIncoming:    isIncoming,
+		Timestamp:     ts.UTC().Format("2006-01-02 15:04:05"),
 	}
 
-	return m.conRepo.GetIDByExternalID(context.Background(), "hh", externalID)
+	val, _ := m.msgCache.LoadOrStore(contactID, []models.Message{})
+	messages := val.([]models.Message)
+
+	// Check if already in cache
+	for _, m := range messages {
+		if m.ExternalID != nil && *m.ExternalID == externalID {
+			return
+		}
+	}
+
+	messages = append(messages, msg)
+	m.msgCache.Store(contactID, messages)
 }
 
 func (m *Manager) syncMessages(ctx context.Context, integration models.Integration, contactID int64, messagesURL string) error {
 	logger.Debug(logger.HH, "[HH] Syncing messages from %s", messagesURL)
-	req, _ := http.NewRequestWithContext(ctx, "GET", messagesURL, nil)
+
+	// We might want to handle pagination here too if needed, but for now we get the first batch
+	req, _ := http.NewRequestWithContext(ctx, "GET", messagesURL+"?per_page=100", nil)
 	req.Header.Set("Authorization", "Bearer "+*integration.AccessToken)
 	req.Header.Set("User-Agent", *integration.UserAgent)
 	req.Header.Set("X-HH-App-Active", "true")
@@ -312,7 +369,7 @@ func (m *Manager) syncMessages(ctx context.Context, integration models.Integrati
 	}
 
 	newMsgs := 0
-	// Start a transaction for batch insertion
+	// Batch insert and Cache
 	tx, err := m.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return err
@@ -326,7 +383,13 @@ func (m *Manager) syncMessages(ctx context.Context, integration models.Integrati
 		}
 		isIncoming := msg.Author.ParticipantType == "employer"
 
-		if err := m.msgRepo.CreateExt(ctx, tx, integration.ID, contactID, fmt.Sprintf("hh_msg_%s", msg.ID), msg.Text, isIncoming, ts.UTC().Format("2006-01-02 15:04:05")); err != nil {
+		extID := fmt.Sprintf("hh_msg_%s", msg.ID)
+
+		// 1. Cache immediately
+		m.cacheMessage(integration.ID, contactID, extID, msg.Text, isIncoming, msg.CreatedAt)
+
+		// 2. Save to DB
+		if err := m.msgRepo.CreateExt(ctx, tx, integration.ID, contactID, extID, msg.Text, isIncoming, ts.UTC().Format("2006-01-02 15:04:05")); err != nil {
 			logger.Debug(logger.HH, "[HH] DB error saving message: %v", err)
 			continue
 		}
@@ -337,9 +400,16 @@ func (m *Manager) syncMessages(ctx context.Context, integration models.Integrati
 		return err
 	}
 
-	if newMsgs > 0 {
-		logger.Debug(logger.HH, "[HH] Saved %d new messages from contact %d", newMsgs, contactID)
+	return nil
+}
+
+func (m *Manager) getOrCreateContact(integrationID int64, negID, employerName, vacancyName, stateName string) (int64, error) {
+	externalID := fmt.Sprintf("hh_neg_%s", negID)
+	logger.Debug(logger.HH, "[HH] Ensuring contact for negotiation %s (%s - %s)", negID, employerName, vacancyName)
+
+	if err := m.conRepo.UpsertHHContact(context.Background(), integrationID, externalID, employerName, vacancyName, stateName); err != nil {
+		return 0, err
 	}
 
-	return nil
+	return m.conRepo.GetIDByExternalID(context.Background(), "hh", externalID)
 }

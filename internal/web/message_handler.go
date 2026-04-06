@@ -1,24 +1,52 @@
 package web
 
 import (
+	"hr-sorter/internal/models"
 	"log"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 )
 
 func (h *Handler) handleMessages(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(r.URL.Path, "/messages/")
+	idStr := strings.TrimPrefix(r.URL.Path, "/messages/")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+
 	messages, err := h.msgRepo.GetByContactID(r.Context(), id)
 	if err != nil {
-		log.Printf("Web: Error fetching messages for contact %s: %v", id, err)
+		log.Printf("Web: Error fetching messages for contact %d: %v", id, err)
 		http.Error(w, err.Error(), 500)
 		return
+	}
+
+	// Merge with HH cache if applicable
+	cached := h.hhManager.GetCachedMessages(id)
+	if len(cached) > 0 {
+		// Use a map to de-duplicate by ExternalID
+		msgMap := make(map[string]models.Message)
+		for _, m := range messages {
+			if m.ExternalID != nil {
+				msgMap[*m.ExternalID] = m
+			}
+		}
+		for _, m := range cached {
+			if m.ExternalID != nil {
+				if _, exists := msgMap[*m.ExternalID]; !exists {
+					messages = append(messages, m)
+				}
+			}
+		}
+		// Sort by timestamp
+		sort.Slice(messages, func(i, j int) bool {
+			return messages[i].Timestamp < messages[j].Timestamp
+		})
 	}
 
 	contact, _ := h.conRepo.GetByID(r.Context(), id)
 
 	h.templates.RenderWithStatus(w, r, "fragments/chat_container.html", http.StatusOK, struct {
-		ContactID string
+		ContactID int64
 		Contact   interface{}
 		Messages  interface{}
 	}{
@@ -30,16 +58,40 @@ func (h *Handler) handleMessages(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleMessageList(w http.ResponseWriter, r *http.Request) {
 	// Path is /messages/list/{id}
-	id := strings.TrimPrefix(r.URL.Path, "/messages/list/")
+	idStr := strings.TrimPrefix(r.URL.Path, "/messages/list/")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+
 	messages, err := h.msgRepo.GetByContactID(r.Context(), id)
 	if err != nil {
-		log.Printf("Web: Error fetching messages for contact %s: %v", id, err)
+		log.Printf("Web: Error fetching messages for contact %d: %v", id, err)
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
+	// Merge with HH cache
+	cached := h.hhManager.GetCachedMessages(id)
+	if len(cached) > 0 {
+		msgMap := make(map[string]models.Message)
+		for _, m := range messages {
+			if m.ExternalID != nil {
+				msgMap[*m.ExternalID] = m
+			}
+		}
+		for _, m := range cached {
+			if m.ExternalID != nil {
+				if _, exists := msgMap[*m.ExternalID]; !exists {
+					messages = append(messages, m)
+				}
+			}
+		}
+		// Sort by timestamp
+		sort.Slice(messages, func(i, j int) bool {
+			return messages[i].Timestamp < messages[j].Timestamp
+		})
+	}
+
 	h.templates.RenderWithStatus(w, r, "fragments/message_list.html", http.StatusOK, struct {
-		ContactID string
+		ContactID int64
 		Messages  interface{}
 	}{
 		ContactID: id,

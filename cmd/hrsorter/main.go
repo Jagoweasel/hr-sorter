@@ -95,8 +95,8 @@ func main() {
 	mapRepo := repository.NewMappingRepository(database.DB)
 	stRepo := repository.NewStateRepository(database.DB)
 
-	manager := tgclient.NewManager(database.DB, conRepo, msgRepo, stRepo, intRepo)
-	hhManager := hhclient.NewManager(database.DB, conRepo, msgRepo, intRepo)
+	manager := tgclient.NewManager(database.DB, conRepo, msgRepo, stRepo, intRepo, logBroadcaster)
+	hhManager := hhclient.NewManager(database.DB, conRepo, msgRepo, intRepo, logBroadcaster)
 
 	// Initialize HH Auth Module (New)
 	hhConfig := hh.GetDefaultClientConfig()
