@@ -20,14 +20,14 @@ func setupTestDB(t *testing.T) *sqlx.DB {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		account_id INTEGER NOT NULL,
 		platform TEXT NOT NULL,
-		identifier TEXT,
+		identifier TEXT NOT NULL,
 		access_token TEXT,
 		refresh_token TEXT,
 		expires_at DATETIME,
 		user_agent TEXT,
 		status TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(account_id, platform)
+		UNIQUE(platform, identifier)
 	);`
 	_, err = db.Exec(schema)
 	require.NoError(t, err)

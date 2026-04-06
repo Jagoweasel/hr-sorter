@@ -41,8 +41,8 @@ func (s *SQLiteSessionStorage) Save(ctx context.Context, session *Session) error
 	query := `
 		INSERT INTO integrations (account_id, platform, identifier, access_token, refresh_token, expires_at, user_agent, status, created_at)
 		VALUES (?, 'hh', ?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP)
-		ON CONFLICT(account_id, platform) DO UPDATE SET
-			identifier = EXCLUDED.identifier,
+		ON CONFLICT(platform, identifier) DO UPDATE SET
+			account_id = EXCLUDED.account_id,
 			access_token = EXCLUDED.access_token,
 			refresh_token = EXCLUDED.refresh_token,
 			expires_at = EXCLUDED.expires_at,
@@ -54,7 +54,7 @@ func (s *SQLiteSessionStorage) Save(ctx context.Context, session *Session) error
 		session.Identifier,
 		session.AccessToken,
 		session.RefreshToken,
-		session.ExpiresAt,
+		session.ExpiresAt.UTC(),
 		session.UserAgent,
 	)
 	if err != nil {
