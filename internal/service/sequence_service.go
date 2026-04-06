@@ -235,6 +235,9 @@ func (s *SequenceService) UpdateStageCompletion(ctx context.Context, stageID str
 }
 
 func (s *SequenceService) MoveSequence(ctx context.Context, seqID int64, status string) error {
+	if status == "" {
+		return fmt.Errorf("status cannot be empty")
+	}
 	if err := s.seqRepo.UpdateStatus(ctx, seqID, status); err != nil {
 		return err
 	}

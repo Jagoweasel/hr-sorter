@@ -133,7 +133,17 @@ func (h *Handler) handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 	}
 	seqIDStr := r.URL.Query().Get("id")
 	status := r.URL.Query().Get("status")
+	if status == "" {
+		status = r.FormValue("status")
+	}
 	seqID, _ := strconv.ParseInt(seqIDStr, 10, 64)
+
+	if status == "" {
+		log.Printf("[Web] Warning: handleMoveSequence called with empty status for seq %s", seqIDStr)
+		w.Header().Set("HX-Location", h.getRedirectURL(r))
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 
 	if err := h.seqService.MoveSequence(r.Context(), seqID, status); err != nil {
 		http.Error(w, err.Error(), 500)
