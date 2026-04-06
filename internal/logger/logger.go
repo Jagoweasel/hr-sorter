@@ -18,6 +18,7 @@ const (
 	Messaging   Category = "msg"
 	Filters     Category = "filters"
 	TraceCat    Category = "trace"
+	HHNet       Category = "hh-net"
 )
 
 var enabledCategories = make(map[Category]bool)

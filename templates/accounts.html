@@ -70,7 +70,7 @@
                             </div>
                             <div>
                                 <p class="text-sm font-black text-gray-900 dark:text-white">{{ .Identifier }}</p>
-                                <p class="text-[10px] font-bold uppercase tracking-tighter status-badge {{ if eq .Status "active" }}text-green-600{{ else if eq .Status "awaiting_code" }}text-yellow-600{{ else if eq .Status "awaiting_password" }}text-yellow-600{{ else if eq .Status "pending_auth" }}text-orange-500{{ else }}text-gray-400{{ end }}">{{ Tr .Status }}</p>
+                                <p class="text-[10px] font-bold uppercase tracking-tighter status-badge {{ if eq .Status "active" }}text-green-600{{ else if eq .Status "awaiting_code" }}text-yellow-600{{ else if eq .Status "awaiting_password" }}text-yellow-600{{ else if eq .Status "pending_auth" }}text-orange-500{{ else }}text-gray-400{{ end }}" data-status="{{ .Status }}">{{ Tr .Status }}</p>
                             </div>
                         </div>
                         <div class="flex items-center space-x-2">
@@ -188,7 +188,7 @@
 <div id="new-int-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-[200]" onclick="if(event.target === this) this.classList.add('hidden')">
     <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 w-full max-w-sm relative" onclick="event.stopPropagation()">
         <h2 class="text-xl font-black text-gray-900 dark:text-white tracking-tight mb-6">{{ Tr "add_integration" }}</h2>
-        <form action="/integrations/create" method="POST" class="space-y-4">
+        <form hx-post="/integrations/create" hx-target="#accounts-page" hx-select="#accounts-page" class="space-y-4">
             {{ csrfField }}
             <input type="hidden" name="account_id" id="acc-id-input">
             <input type="hidden" name="platform" id="platform-input">
@@ -269,6 +269,7 @@
                         'pending_auth': '{{ Tr "pending_auth" }}'
                     };
                     badge.textContent = statusTranslations[data.status] || data.status;
+                    badge.dataset.status = data.status;
                     badge.className = 'text-[10px] font-bold uppercase tracking-tighter status-badge ' + 
                         (data.status === 'active' ? 'text-green-600' : 
                          data.status === 'awaiting_code' ? 'text-yellow-600' : 
@@ -423,10 +424,13 @@
         document.querySelectorAll('.integration-card').forEach(card => {
             const statusBadge = card.querySelector('.status-badge');
             if (statusBadge) {
-                const status = statusBadge.textContent.trim();
-                if ((status === 'pending_auth' || status === 'awaiting_code' || status === 'awaiting_password') && !authPollingInterval) {
-                    console.log('[Init] Auto-starting poll for:', card.dataset.integrationId);
-                    startPolling(card.dataset.integrationId);
+                const status = statusBadge.dataset.status;
+                // If it's a pending HH integration, we set pendingIntegrationId so showHHModal can trigger
+                if ((status === 'pending_auth' || status === 'awaiting_code' || status === 'awaiting_password')) {
+                    if (!authPollingInterval) {
+                        console.log('[Init] Auto-starting poll for:', card.dataset.integrationId);
+                        startPolling(card.dataset.integrationId);
+                    }
                 }
             }
         });

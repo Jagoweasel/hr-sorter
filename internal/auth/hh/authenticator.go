@@ -317,9 +317,26 @@ func (f *PlaywrightAuthFlow) run() {
 
 	// Request Interception for hhandroid://
 	f.context.OnRequest(func(request playwright.Request) {
-		logger.Trace(logger.HH, "[HHAuth][Network] Request: %s", request.URL())
-		if strings.HasPrefix(request.URL(), "hhandroid://") {
-			redactedURL := request.URL()
+		urlStr := request.URL()
+		// Filter noise to a separate category
+		isNoise := strings.Contains(urlStr, "yandex.com") ||
+			strings.Contains(urlStr, "mail.ru") ||
+			strings.Contains(urlStr, "hybrid.ai") ||
+			strings.Contains(urlStr, "favicons") ||
+			strings.Contains(urlStr, "anatskytics") ||
+			strings.Contains(urlStr, "google-analytics") ||
+			strings.Contains(urlStr, "yastatic.net") ||
+			strings.Contains(urlStr, "doubleclick.net") ||
+			strings.Contains(urlStr, "gstatic.com")
+
+		if isNoise {
+			logger.Trace(logger.HHNet, "[HHAuth][Network] Request: %s", urlStr)
+		} else {
+			logger.Trace(logger.HH, "[HHAuth][Network] Request: %s", urlStr)
+		}
+
+		if strings.HasPrefix(urlStr, "hhandroid://") {
+			redactedURL := urlStr
 			if u, err := url.Parse(redactedURL); err == nil {
 				q := u.Query()
 				if q.Get("code") != "" {
@@ -370,6 +387,12 @@ func (f *PlaywrightAuthFlow) run() {
 		case code := <-f.codeChan:
 			f.complete(code)
 			return
+		case code := <-f.otpChan:
+			logger.Info(logger.HH, "[HHAuth] User provided code/input, forcing input into browser...")
+			f.handleManualInput(code)
+		case solution := <-f.capChan:
+			logger.Info(logger.HH, "[HHAuth] User provided captcha solution, forcing input...")
+			f.handleManualInput(solution)
 		default:
 			state, err := f.detectState()
 			if err != nil {
@@ -380,68 +403,6 @@ func (f *PlaywrightAuthFlow) run() {
 			switch state {
 			case dto.AuthStateWaitOTP:
 				f.setStatus(dto.AuthStateWaitOTP, "")
-				select {
-				case code := <-f.otpChan:
-					logger.Info(logger.HH, "[HHAuth] Received OTP code from UI, attempting to type into page...")
-
-					// Wait a bit for the page to settle
-					time.Sleep(1 * time.Second)
-
-					// Try multiple selectors for OTP input
-					otpSelectors := []string{
-						"input[data-qa='magritte-pincode-input-field']",
-						"input[name='code']",
-						"input[name='otp']",
-						"input[data-qa='otp-code-input']",
-						"input[type='number']",
-						"input[type='tel']",
-					}
-
-					typed := false
-					for retry := 0; retry < 3; retry++ {
-						for _, sel := range otpSelectors {
-							if visible, _ := f.page.Locator(sel).IsVisible(); visible {
-								logger.Trace(logger.HH, "[HHAuth] Found OTP field: %s, typing...", sel)
-								_ = f.page.Focus(sel)
-								// Clear field first
-								_ = f.page.Keyboard().Press("Control+A")
-								_ = f.page.Keyboard().Press("Backspace")
-
-								if err := f.page.Keyboard().Type(code, playwright.KeyboardTypeOptions{
-									Delay: playwright.Float(100),
-								}); err == nil {
-									typed = true
-									logger.Debug(logger.HH, "[HHAuth] Successfully typed code into %s", sel)
-									break
-								}
-							}
-						}
-						if typed {
-							break
-						}
-						logger.Debug(logger.HH, "[HHAuth] OTP field not visible yet, retry %d...", retry+1)
-						time.Sleep(1 * time.Second)
-					}
-
-					if !typed {
-						logger.Error(logger.HH, "[HHAuth] Could not find or type into any OTP field after retries. URL: %s", f.page.URL())
-					}
-
-					// Final Enter
-					_ = f.page.Keyboard().Press("Enter")
-					// Also try to click submit button if enter didn't work
-					go func() {
-						time.Sleep(1 * time.Second)
-						_ = f.page.Click("button[type='submit'], button[data-qa='otp-code-submit']", playwright.PageClickOptions{
-							Timeout: playwright.Float(1000),
-						})
-					}()
-
-				case <-f.stopChan:
-					return
-				case <-ctx.Done():
-					return
-				}
 			case dto.AuthStateWaitCaptcha:
 				imgElement := f.page.Locator("img[data-qa='account-captcha-picture']")
 				if visible, _ := imgElement.IsVisible(); !visible {
@@ -452,26 +413,68 @@ func (f *PlaywrightAuthFlow) run() {
 				f.status.State = dto.AuthStateWaitCaptcha
 				f.status.CaptchaImg = screenshot
 				f.mu.Unlock()
-
-				select {
-				case solution := <-f.capChan:
-					if err := f.page.Fill("input[data-qa='account-captcha-input']", solution); err != nil {
-						_ = f.page.Fill("input[name='captcha']", solution)
-					}
-					_ = f.page.Keyboard().Press("Enter")
-				case <-f.stopChan:
-					return
-				case <-ctx.Done():
-					return
-				}
 			case dto.AuthStateFailed:
 				// Already handled in detectState
 				return
-			default:
-				time.Sleep(2 * time.Second)
+			}
+
+			// Periodic trace
+			if time.Now().Unix()%20 == 0 {
+				logger.Trace(logger.HH, "[HHAuth] Flow active. State: %v, URL: %s", state, f.page.URL())
+			}
+			time.Sleep(2 * time.Second)
+		}
+	}
+}
+
+func (f *PlaywrightAuthFlow) handleManualInput(input string) {
+	// 1. Try to find known OTP/Captcha/Password fields
+	selectors := []string{
+		"input[data-qa='magritte-pincode-input-field']",
+		"input[name='code']",
+		"input[name='otp']",
+		"input[data-qa='otp-code-input']",
+		"input[data-qa='account-captcha-input']",
+		"input[name='captcha']",
+		"input[type='password']",
+		"input[type='number']",
+		"input[type='tel']",
+	}
+
+	typed := false
+	for _, sel := range selectors {
+		if visible, _ := f.page.Locator(sel).IsVisible(); visible {
+			logger.Debug(logger.HH, "[HHAuth] Found input field %s, typing...", sel)
+			_ = f.page.Focus(sel)
+			_ = f.page.Keyboard().Press("Control+A")
+			_ = f.page.Keyboard().Press("Backspace")
+			if err := f.page.Keyboard().Type(input, playwright.KeyboardTypeOptions{Delay: playwright.Float(100)}); err == nil {
+				typed = true
+				break
 			}
 		}
 	}
+
+	// 2. Blind typing if no selector worked
+	if !typed {
+		logger.Info(logger.HH, "[HHAuth] No specific field visible, performing blind typing...")
+		// Click roughly in the middle to ensure focus
+		_ = f.page.Mouse().Click(200, 300)
+		time.Sleep(200 * time.Millisecond)
+		_ = f.page.Keyboard().Type(input, playwright.KeyboardTypeOptions{Delay: playwright.Float(100)})
+	}
+
+	// 3. Submit
+	time.Sleep(500 * time.Millisecond)
+	_ = f.page.Keyboard().Press("Enter")
+
+	// 4. Try clicking common submit buttons just in case
+	go func() {
+		time.Sleep(1 * time.Second)
+		_ = f.page.Click("button[type='submit'], button[data-qa='otp-code-submit'], button[data-qa='account-captcha-submit']", playwright.PageClickOptions{
+			Timeout: playwright.Float(1000),
+		})
+	}()
 }
 
 func (f *PlaywrightAuthFlow) handleIdentify() error {
@@ -497,21 +500,48 @@ func (f *PlaywrightAuthFlow) handleIdentify() error {
 }
 
 func (f *PlaywrightAuthFlow) detectState() (dto.HHAuthState, error) {
-	logger.Trace(logger.HH, "[HHAuth] Detecting state for page: %s", f.page.URL())
 	// Check for errors first
-	if visible, _ := f.page.Locator("div.bloko-notification--error, div[data-qa='login-error']").IsVisible(); visible {
-		msg, _ := f.page.Locator("div.bloko-notification--error, div[data-qa='login-error']").InnerText()
+	errorLocator := f.page.Locator("div.bloko-notification--error, div[data-qa='login-error'], div.error-item")
+	if visible, _ := errorLocator.IsVisible(); visible {
+		msg, _ := errorLocator.InnerText()
 		logger.Error(logger.HH, "[HHAuth] Detected HH error: %s", msg)
 		return dto.AuthStateFailed, fmt.Errorf("HH error: %s", msg)
 	}
 
-	if visible, _ := f.page.Locator("input[data-qa='magritte-pincode-input-field'], input[name='code']").IsVisible(); visible {
+	if visible, _ := f.page.Locator("input[data-qa='magritte-pincode-input-field'], input[name='code'], input[name='otp'], input[data-qa='otp-code-input']").IsVisible(); visible {
 		logger.Debug(logger.HH, "[HHAuth] Detected OTP state")
 		return dto.AuthStateWaitOTP, nil
 	}
 	if visible, _ := f.page.Locator("img[data-qa='account-captcha-picture'], img[src*='captcha']").IsVisible(); visible {
 		logger.Debug(logger.HH, "[HHAuth] Detected Captcha state")
 		return dto.AuthStateWaitCaptcha, nil
+	}
+
+	// If no state detected and TRACE enabled, log inputs for debugging
+	if logger.IsEnabled(logger.TraceCat) {
+		inputs, _ := f.page.Locator("input").All()
+		var inputList []string
+		for _, in := range inputs {
+			name, _ := in.GetAttribute("name")
+			qa, _ := in.GetAttribute("data-qa")
+			typ, _ := in.GetAttribute("type")
+			inputList = append(inputList, fmt.Sprintf("%s(name:%s, qa:%s)", typ, name, qa))
+		}
+
+		// Log headings to see what page we are on
+		headings, _ := f.page.Locator("h1, h2, h3").All()
+		var headList []string
+		for _, h := range headings {
+			text, _ := h.InnerText()
+			headList = append(headList, strings.TrimSpace(text))
+		}
+
+		if len(inputList) > 0 || len(headList) > 0 {
+			if time.Now().Unix()%10 == 0 {
+				logger.Trace(logger.HH, "[HHAuth] No state detected. Inputs: [%s] Headings: [%s] URL: %s",
+					strings.Join(inputList, ", "), strings.Join(headList, "|"), f.page.URL())
+			}
+		}
 	}
 
 	return dto.AuthStateNone, nil

@@ -1,60 +1,59 @@
-# HR Sorter
+# HR Sorter v2.0
 
-A simple Go application to monitor incoming Telegram messages from recruiters/HRs across multiple accounts and store them in a SQLite database with an HTMX-powered web UI.
+Приложение для мониторинга сообщений от рекрутеров в Telegram и HeadHunter с единым веб-интерфейсом.
 
-## Features
-- Multiple Telegram accounts support (MTProto Userbot).
-- Automatic contact and message capture.
-- Lightweight SQLite database.
-- Fast and reactive UI using HTMX and Tailwind CSS.
+## Возможности
+- Поддержка нескольких аккаунтов Telegram (через Userbot).
+- Поддержка нескольких аккаунтов HeadHunter (через эмуляцию Android приложения).
+- Автоматический сбор контактов и истории переписки.
+- Веб-интерфейс на HTMX и Tailwind CSS.
+- Генерация PDF отчетов и воронка найма.
 
-## Prerequisites
-- Go 1.21+
-- Telegram `API_ID` and `API_HASH` from [my.telegram.org](https://my.telegram.org).
+## Установка и запуск
 
-## Setup
-1. Clone the repository.
-2. Copy `.env.example` to `.env` and fill in your Telegram API credentials.
-3. Run `go mod tidy` to install dependencies.
-4. Run the application:
-   ```bash
-   go run cmd/hr-sorter/main.go
-   ```
+### 1. Системные требования
+- **Go 1.25.1+** (рекомендуется)
+- **Playwright** (требуется для работы с HeadHunter)
 
-## Adding Accounts
-Currently, adding accounts is planned via a CLI helper or an internal web form.
-(Implementation in progress).
-
-## Debugging & Logging
-The application uses a categorized logging system that is disabled by default. You can enable specific debug logs using command-line flags:
-
-```bash
-# Enable Telegram synchronization logs
-go run cmd/hr-sorter/main.go --debug-sync
-
-# Enable sequence creation logs
-go run cmd/hr-sorter/main.go --debug-add
-
-# Enable sequence history and movement logs
-go run cmd/hr-sorter/main.go --debug-history
-
-# Enable detailed Telegram API and connection logs
-go run cmd/hr-sorter/main.go --debug-tg
-
-# Enable everything
-go run cmd/hr-sorter/main.go --debug-all
+### 2. Настройка окружения
+Скопируйте `.env.example` в `.env` и заполните:
+```env
+API_ID=... # Получить на my.telegram.org
+API_HASH=...
+HH_CLIENT_ID=HIOMIAS39CA9DICTA7JIO64LQKQJF5AGIK74G9ITJKLNEDAOH5FHS5G1JI7FOEGD
+HH_CLIENT_SECRET=V9M870DE342BGHFRUJ5FTCGCUA1482AN0DI8C5TFI9ULMA89H10N60NOP8I4JMVS
+HEADLESS=false # Установите false, чтобы видеть браузер при авторизации HH
 ```
 
-When `--debug-history` is enabled, the application will output a visual representation of recruitment chains:
-`[HISTORY] Seq #13 (Google): Initial Contact -> HR Screening -> Tech Interview 1 -> [REJECTED]`
+### 3. Установка зависимостей
+```bash
+# 1. Установка браузеров Playwright (ОБЯЗАТЕЛЬНО)
+go run github.com/playwright-community/playwright-go/cmd/playwright install --with-deps
 
-When `--debug-tg` is enabled, you will see detailed initialization and verification steps for each Telegram account.
+# 2. Установка Go модулей
+go mod download
+```
 
-## Tech Stack
-- **Backend:** Go, `gotd/td` (MTProto), `sqlx`.
-- **Database:** SQLite (pure Go driver).
+### 4. Запуск
+```bash
+# Запуск сервера
+go run ./cmd/hrsorter/main.go
+
+# Запуск с расширенной отладкой HeadHunter
+go run ./cmd/hrsorter/main.go --debug-hh --debug-trace
+```
+
+## Отладка и логи
+Приложение поддерживает гибкую систему логов через флаги:
+- `--debug-hh`: Основные события HeadHunter (авторизация, синхронизация).
+- `--debug-trace`: Детальные действия бота и Playwright.
+- `--debug-hh-net`: Сетевой шум (метрики, статика). Полезно только при глубоком дебаге.
+- `--debug-tg`: Логи Telegram клиента.
+- `--debug-all`: Включить всё.
+
+В Web UI (раздел Logs) можно фильтровать логи по категориям, включая новый уровень **TRACE**.
+
+## Технологический стек
+- **Backend:** Go, `playwright-go`, `gotd/td`.
+- **Database:** SQLite.
 - **Frontend:** HTMX, Tailwind CSS, Go Templates.
-
-## Termination
-
-fuser -k 8080/tcp

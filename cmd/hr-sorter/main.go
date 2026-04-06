@@ -35,6 +35,7 @@ func main() {
 	debugMsg := flag.Bool("debug-msg", false, "Enable debug logs for messaging")
 	debugFilters := flag.Bool("debug-filters", false, "Enable debug logs for message filtering")
 	debugTrace := flag.Bool("debug-trace", false, "Enable extreme detailed trace logs (network, playwright internal)")
+	debugHHNet := flag.Bool("debug-hh-net", false, "Enable noisy network logs for HH (yandex, mail.ru, etc)")
 	debugAll := flag.Bool("debug-all", false, "Enable all debug logs")
 	flag.Parse()
 
@@ -64,6 +65,9 @@ func main() {
 	}
 	if *debugAll || *debugTrace {
 		logger.Enable(logger.TraceCat)
+	}
+	if *debugAll || *debugHHNet {
+		logger.Enable(logger.HHNet)
 	}
 
 	log.Println("[Main] Starting application...")

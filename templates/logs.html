@@ -15,6 +15,7 @@
                  <button onclick="setLogCategory('MSG')" id="btn-msg" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-purple-500">MSG</button>
                 <button onclick="setLogCategory('FILTERS')" id="btn-filters" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-slate-500">FILTERS</button>
                 <button onclick="setLogCategory('TRACE')" id="btn-trace" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-pink-500">TRACE</button>
+                <button onclick="setLogCategory('HH-NET')" id="btn-hh-net" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-stone-500">HH-NET</button>
             </div>
 
 
@@ -48,7 +49,7 @@
         currentCategory = cat;
         
         // Update button styles
-        ['all', 'sync', 'hh', 'tg', 'add-sequence', 'history', 'reports', 'msg', 'filters', 'trace'].forEach(c => {
+        ['all', 'sync', 'hh', 'tg', 'add-sequence', 'history', 'reports', 'msg', 'filters', 'trace', 'hh-net'].forEach(c => {
             const btn = document.getElementById(`btn-${c}`);
             if (!btn) return;
             if (c === cat.toLowerCase()) {
