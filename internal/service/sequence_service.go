@@ -39,19 +39,28 @@ func (s *SequenceService) BulkCreateSequences(ctx context.Context, accountID, pl
 			continue
 		}
 
-		company := ""
-		vacancy := "Senior Go Dev"
-		if c.Platform == "hh" {
-			if c.FirstName != nil {
-				company = *c.FirstName
-			}
-			if c.LastName != nil {
-				vacancy = *c.LastName
+		company := "Unknown"
+		vacancy := "Direct Lead"
+
+		if c.FirstName != nil && *c.FirstName != "" {
+			company = *c.FirstName
+		}
+
+		if c.LastName != nil && *c.LastName != "" {
+			vacancy = *c.LastName
+		}
+
+		if c.Platform == "tg" {
+			// For TG, if we only have one name, use it as company and set a placeholder vacancy
+			if company != "Unknown" && vacancy == "Direct Lead" {
+				// keep as is
 			}
 		}
 
 		_, err := s.CreateSequence(ctx, company, vacancy, fmt.Sprintf("%d", c.ID), now)
-		if err == nil {
+		if err != nil {
+			logger.Error(logger.AddSequence, "Bulk add failed for contact %d: %v", c.ID, err)
+		} else {
 			count++
 		}
 	}
@@ -99,7 +108,14 @@ func (s *SequenceService) CreateSequence(ctx context.Context, company, vacancy, 
 		}
 	}
 
-	initialDate, _ := time.Parse("2006-01-02T15:04", initialDateStr)
+	initialDate := time.Now()
+	if initialDateStr != "" {
+		if d, err := time.Parse("2006-01-02T15:04", initialDateStr); err == nil {
+			initialDate = d
+		} else if d, err := time.Parse(time.RFC3339, initialDateStr); err == nil {
+			initialDate = d
+		}
+	}
 	s.seqRepo.CreateStage(ctx, tx, seqID, "Initial Contact", initialDate, true, 0)
 	s.seqRepo.CreateStage(ctx, tx, seqID, "HR Screening", nil, false, 1)
 	s.seqRepo.CreateStage(ctx, tx, seqID, "Technical Interview", nil, false, 2)

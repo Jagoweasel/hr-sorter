@@ -1,6 +1,7 @@
 package web
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ func (h *Handler) handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	initialDateStr := r.FormValue("initial_date")
 
 	if _, err := h.seqService.CreateSequence(r.Context(), company, vacancy, contactID, initialDateStr); err != nil {
+		log.Printf("[Web] Error creating sequence: %v", err)
 		http.Error(w, err.Error(), 500)
 		return
 	}

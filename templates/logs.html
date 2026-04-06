@@ -4,21 +4,43 @@
         <h2 class="text-2xl font-bold text-gray-800 dark:text-white">{{ Tr "system_logs" }}</h2>
         <div class="flex flex-wrap items-center gap-3">
             <!-- Filter Controls -->
-            <div class="flex flex-wrap bg-gray-100 dark:bg-gray-700 p-1 rounded-lg border dark:border-gray-600 gap-1">
-                <button onclick="setLogCategory('ALL')" id="btn-all" class="px-3 py-1 rounded-md text-xs font-bold transition-colors bg-white dark:bg-gray-600 shadow-sm">{{ Tr "all" }}</button>
-                {{ range $cat, $enabled := .Categories }}
-                <div class="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
-                    <button onclick="setLogCategory('{{ $cat }}')" id="btn-{{ $cat | lower }}" class="text-gray-600 dark:text-gray-300">{{ $cat }}</button>
-                    <input type="checkbox" {{ if $enabled }}checked{{ end }} 
-                           onchange="toggleCategory('{{ $cat }}', this.checked)"
-                           class="w-3 h-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+            <div class="flex flex-wrap bg-gray-100 dark:bg-gray-700 p-1.5 rounded-xl border dark:border-gray-600 gap-1">
+                <button onclick="setLogCategory('ALL')" id="btn-all" class="px-3 py-1 rounded-lg text-[10px] font-black uppercase transition-colors bg-white dark:bg-gray-600 shadow-sm">{{ Tr "all" }}</button>
+                
+                <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                    <button onclick="setLogCategory('TG')" id="btn-tg" class="text-gray-500 dark:text-gray-400 hover:text-blue-400">TG</button>
+                    <input type="checkbox" checked onchange="toggleCategory('tg', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer">
                 </div>
-                {{ end }}
+
+                <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                    <button onclick="setLogCategory('HH')" id="btn-hh" class="text-gray-500 dark:text-gray-400 hover:text-red-400">HH</button>
+                    <input type="checkbox" checked onchange="toggleCategory('hh', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer">
+                </div>
+
+                <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                    <button onclick="setLogCategory('SYNC')" id="btn-sync" class="text-gray-500 dark:text-gray-400 hover:text-green-400">Sync</button>
+                    <input type="checkbox" checked onchange="toggleCategory('sync', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer">
+                </div>
+
+                <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                    <button onclick="setLogCategory('ADD-SEQUENCE')" id="btn-add-sequence" class="text-gray-500 dark:text-gray-400 hover:text-orange-400">Sequences</button>
+                    <input type="checkbox" checked onchange="toggleCategory('add-sequence', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-orange-600 focus:ring-orange-500 cursor-pointer">
+                </div>
+
+                <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                    <button onclick="setLogCategory('HH-NET')" id="btn-hh-net" class="text-gray-500 dark:text-gray-400 hover:text-indigo-400">HH-Net</button>
+                    <input type="checkbox" checked onchange="toggleCategory('hh-net', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+                </div>
+
+                <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                    <button onclick="setLogCategory('MSG')" id="btn-msg" class="text-gray-500 dark:text-gray-400 hover:text-purple-400">Msg</button>
+                    <input type="checkbox" checked onchange="toggleCategory('msg', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer">
+                </div>
             </div>
 
-            <div class="flex items-center bg-gray-100 dark:bg-gray-700 p-1 rounded-lg border dark:border-gray-600 gap-2">
-                <span class="text-[10px] font-black uppercase text-gray-500 px-2">Level</span>
-                <select onchange="updateLogLevel(this.value)" class="bg-transparent text-xs font-bold outline-none dark:text-white">
+            <div class="flex items-center bg-gray-100 dark:bg-gray-700 p-1.5 rounded-xl border dark:border-gray-600 gap-2">
+                <span class="text-[10px] font-black uppercase text-gray-400 px-2 tracking-widest">Level</span>
+                <select onchange="updateLogLevel(this.value)" class="bg-transparent text-[10px] font-black outline-none dark:text-white uppercase cursor-pointer">
                     <option value="0" {{ if eq .Level 0 }}selected{{ end }}>TRACE</option>
                     <option value="1" {{ if eq .Level 1 }}selected{{ end }}>DEBUG</option>
                     <option value="2" {{ if eq .Level 2 }}selected{{ end }}>INFO</option>
@@ -28,10 +50,10 @@
             </div>
 
 
-            <button onclick="clearLogs()" class="px-4 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg text-xs font-bold transition-colors border dark:border-gray-600">
+            <button onclick="clearLogs()" class="px-4 py-2 bg-gray-900 dark:bg-gray-700 hover:bg-black dark:hover:bg-gray-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95">
                 {{ Tr "clear" }}
             </button>
-            <div id="connection-status" class="flex items-center px-3 py-1.5 rounded-lg text-xs font-bold bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200 border border-yellow-200 dark:border-yellow-800">
+            <div id="connection-status" class="flex items-center px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200 border border-yellow-200 dark:border-yellow-800">
                 <span class="w-2 h-2 rounded-full bg-yellow-500 mr-2"></span>
                 {{ Tr "connecting" }}
             </div>
@@ -54,12 +76,26 @@
     let eventSource;
     let currentCategory = 'ALL';
 
+    function getCsrfToken() {
+        return '{{ csrfToken }}';
+    }
+
     function toggleCategory(cat, enabled) {
-        fetch(`/logs/update?category=${cat}&enabled=${enabled}`, { method: 'POST' });
+        fetch(`/logs/update?category=${cat}&enabled=${enabled}`, { 
+            method: 'POST',
+            headers: {
+                'X-CSRF-Token': getCsrfToken()
+            }
+        });
     }
 
     function updateLogLevel(lvl) {
-        fetch(`/logs/update?level=${lvl}`, { method: 'POST' });
+        fetch(`/logs/update?level=${lvl}`, { 
+            method: 'POST',
+            headers: {
+                'X-CSRF-Token': getCsrfToken()
+            }
+        });
     }
 
     function setLogCategory(cat) {

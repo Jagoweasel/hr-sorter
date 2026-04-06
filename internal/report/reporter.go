@@ -8,6 +8,7 @@ import (
 	"hr-sorter/internal/models"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/johnfercher/maroto/v2"
 	"github.com/johnfercher/maroto/v2/pkg/components/col"
@@ -16,6 +17,7 @@ import (
 	"github.com/johnfercher/maroto/v2/pkg/components/text"
 	"github.com/johnfercher/maroto/v2/pkg/config"
 	"github.com/johnfercher/maroto/v2/pkg/consts/align"
+	"github.com/johnfercher/maroto/v2/pkg/consts/border"
 	"github.com/johnfercher/maroto/v2/pkg/consts/fontstyle"
 	"github.com/johnfercher/maroto/v2/pkg/core"
 	"github.com/johnfercher/maroto/v2/pkg/core/entity"
@@ -70,7 +72,8 @@ func (r *reporter) GeneratePDF(ctx context.Context, data *models.ReportData) ([]
 
 	// Additional Sections per Account
 	for _, section := range data.Sections {
-		m.AddRow(20, col.New(12).Add(line.New(props.Line{Thickness: 2, Color: &props.Color{Red: 200, Green: 200, Blue: 200}})))
+		m.AddRow(10) // Spacer
+		m.AddRow(5, col.New(12).Add(line.New(props.Line{Thickness: 1, Color: &props.Color{Red: 200, Green: 200, Blue: 200}})))
 		r.buildSection(m, section.AccountName, section.KPI, section.Funnel, section.Sequences, false)
 	}
 
@@ -92,6 +95,25 @@ func (r *reporter) GeneratePDF(ctx context.Context, data *models.ReportData) ([]
 	}
 
 	return doc.GetBytes(), nil
+}
+
+func (r *reporter) getStatusColor(status string) *props.Color {
+	switch strings.ToLower(status) {
+	case "accepted":
+		return &props.Color{Red: 187, Green: 247, Blue: 208} // bg-green-100
+	case "rejected":
+		return &props.Color{Red: 254, Green: 202, Blue: 202} // bg-red-100
+	case "offer":
+		return &props.Color{Red: 254, Green: 249, Blue: 195} // bg-yellow-100
+	case "final":
+		return &props.Color{Red: 252, Green: 231, Blue: 243} // bg-pink-100
+	case "tech":
+		return &props.Color{Red: 243, Green: 232, Blue: 255} // bg-purple-100
+	case "screening":
+		return &props.Color{Red: 224, Green: 231, Blue: 255} // bg-indigo-100
+	default:
+		return &props.Color{Red: 219, Green: 234, Blue: 254} // bg-blue-100
+	}
 }
 
 func (r *reporter) buildSection(m core.Maroto, title string, kpi models.ReportKPI, funnel models.Funnel, sequences []models.Sequence, isGlobal bool) {
@@ -117,54 +139,97 @@ func (r *reporter) buildSection(m core.Maroto, title string, kpi models.ReportKP
 			}),
 		),
 	)
-	m.AddRow(5, col.New(12).Add(line.New(props.Line{Thickness: 0.5})))
 
 	// KPI Summary
-	m.AddRow(10)
-	m.AddRow(10, col.New(12).Add(text.New("KPI Summary", props.Text{Size: 12, Style: fontstyle.Bold})))
+	m.AddRow(10, col.New(12).Add(text.New("KPI SUMMARY", props.Text{Size: 10, Style: fontstyle.Bold, Color: &props.Color{Red: 100, Green: 100, Blue: 100}})))
+
 	m.AddRow(15,
-		col.New(3).Add(text.New(fmt.Sprintf("Applied: %d", kpi.TotalApplied), props.Text{Size: 9})),
-		col.New(3).Add(text.New(fmt.Sprintf("Sequences: %d", kpi.TotalSequences), props.Text{Size: 9})),
-		col.New(3).Add(text.New(fmt.Sprintf("Response Rate: %.1f%%", kpi.ResponseRate), props.Text{Size: 9})),
-		col.New(3).Add(text.New(fmt.Sprintf("Hire Rate: %.1f%%", kpi.HireRate), props.Text{Size: 9})),
+		col.New(3).Add(
+			text.New("Applied", props.Text{Size: 8}),
+			text.New(fmt.Sprintf("%d", kpi.TotalApplied), props.Text{Size: 12, Style: fontstyle.Bold, Top: 4}),
+		),
+		col.New(3).Add(
+			text.New("Sequences", props.Text{Size: 8}),
+			text.New(fmt.Sprintf("%d", kpi.TotalSequences), props.Text{Size: 12, Style: fontstyle.Bold, Top: 4}),
+		),
+		col.New(3).Add(
+			text.New("Conv. Rate", props.Text{Size: 8}),
+			text.New(fmt.Sprintf("%.1f%%", kpi.ResponseRate), props.Text{Size: 12, Style: fontstyle.Bold, Top: 4}),
+		),
+		col.New(3).Add(
+			text.New("Hire Rate", props.Text{Size: 8}),
+			text.New(fmt.Sprintf("%.1f%%", kpi.HireRate), props.Text{Size: 12, Style: fontstyle.Bold, Top: 4}),
+		),
 	)
 
-	// Funnel
-	m.AddRow(10, col.New(12).Add(text.New("Recruitment Funnel", props.Text{Size: 12, Style: fontstyle.Bold})))
-	m.AddRow(15,
-		col.New(2).Add(text.New(fmt.Sprintf("App: %d", funnel.Applied), props.Text{Size: 8, Align: align.Center})),
-		col.New(1).Add(text.New("->", props.Text{Size: 8, Align: align.Center})),
-		col.New(2).Add(text.New(fmt.Sprintf("Init: %d", funnel.Initial), props.Text{Size: 8, Align: align.Center})),
-		col.New(2).Add(text.New(fmt.Sprintf("Scr: %d", funnel.Screening), props.Text{Size: 8, Align: align.Center})),
-		col.New(2).Add(text.New(fmt.Sprintf("Tech: %d", funnel.Tech), props.Text{Size: 8, Align: align.Center})),
-		col.New(1).Add(text.New("->", props.Text{Size: 8, Align: align.Center})),
-		col.New(2).Add(text.New(fmt.Sprintf("Off: %d (Acc: %d)", funnel.Offer, funnel.Accepted), props.Text{Size: 8, Align: align.Center})),
-	)
+	// Recruitment Funnel
+	m.AddRow(10, col.New(12).Add(text.New("RECRUITMENT FUNNEL", props.Text{Size: 10, Style: fontstyle.Bold, Color: &props.Color{Red: 100, Green: 100, Blue: 100}})))
+	m.AddRow(5)
 
-	// Sequences Table
-	m.AddRow(10, col.New(12).Add(text.New("Details", props.Text{Size: 12, Style: fontstyle.Bold})))
+	maxVal := funnel.Applied
+	if maxVal == 0 {
+		maxVal = 1
+	}
 
-	// Table Header - BOLD
+	steps := []struct {
+		label string
+		count int
+		color *props.Color
+	}{
+		{"Applied", funnel.Applied, &props.Color{Red: 249, Green: 115, Blue: 22}},     // Orange
+		{"Initial", funnel.Initial, &props.Color{Red: 59, Green: 130, Blue: 246}},     // Blue
+		{"Interviews", funnel.Screening, &props.Color{Red: 79, Green: 70, Blue: 229}}, // Indigo
+		{"Technical", funnel.Tech, &props.Color{Red: 147, Green: 51, Blue: 234}},      // Purple
+		{"Offers", funnel.Offer, &props.Color{Red: 234, Green: 179, Blue: 8}},         // Yellow
+		{"Hired", funnel.Accepted, &props.Color{Red: 34, Green: 197, Blue: 94}},       // Green
+	}
+
+	for _, step := range steps {
+		perc := float64(step.count) / float64(maxVal) * 100
+		if perc > 100 {
+			perc = 100
+		}
+
+		coloredCols := int(perc * 8 / 100)
+		if coloredCols == 0 && step.count > 0 {
+			coloredCols = 1
+		}
+
+		m.AddRow(8,
+			col.New(2).Add(text.New(step.label, props.Text{Size: 8, Style: fontstyle.Bold})),
+			col.New(coloredCols).WithStyle(&props.Cell{BackgroundColor: step.color}),
+			col.New(8-coloredCols).WithStyle(&props.Cell{BackgroundColor: &props.Color{Red: 243, Green: 244, Blue: 246}}),
+			col.New(2).Add(text.New(fmt.Sprintf("%d", step.count), props.Text{Size: 8, Align: align.Right})),
+		)
+		m.AddRow(2)
+	}
+
+	// Details Table
+	m.AddRow(10, col.New(12).Add(text.New("DETAILED LIST", props.Text{Size: 10, Style: fontstyle.Bold, Color: &props.Color{Red: 100, Green: 100, Blue: 100}})))
+
+	headerColor := &props.Color{Red: 240, Green: 240, Blue: 240}
 	m.AddRow(10,
-		col.New(3).Add(text.New("Company", props.Text{Style: fontstyle.Bold, Size: 9})),
-		col.New(4).Add(text.New("Vacancy", props.Text{Style: fontstyle.Bold, Size: 9})),
-		col.New(2).Add(text.New("Category", props.Text{Style: fontstyle.Bold, Size: 9})),
-		col.New(3).Add(text.New("Status", props.Text{Style: fontstyle.Bold, Size: 9})),
+		col.New(3).Add(text.New("Company", props.Text{Size: 8, Style: fontstyle.Bold})).WithStyle(&props.Cell{BackgroundColor: headerColor, BorderType: border.Full, BorderThickness: 0.1}),
+		col.New(4).Add(text.New("Vacancy", props.Text{Size: 8, Style: fontstyle.Bold})).WithStyle(&props.Cell{BackgroundColor: headerColor, BorderType: border.Full, BorderThickness: 0.1}),
+		col.New(2).Add(text.New("Category", props.Text{Size: 8, Style: fontstyle.Bold})).WithStyle(&props.Cell{BackgroundColor: headerColor, BorderType: border.Full, BorderThickness: 0.1}),
+		col.New(3).Add(text.New("Status", props.Text{Size: 8, Style: fontstyle.Bold})).WithStyle(&props.Cell{BackgroundColor: headerColor, BorderType: border.Full, BorderThickness: 0.1}),
 	)
-	m.AddRow(1, col.New(12).Add(line.New(props.Line{Thickness: 0.5}))) // Table line
 
 	for _, seq := range sequences {
-		category := "N/A"
+		cat := "N/A"
 		if seq.Category != nil {
-			category = *seq.Category
+			cat = *seq.Category
 		}
-		// Company name BOLD
-		m.AddRow(8,
-			col.New(3).Add(text.New(seq.CompanyName, props.Text{Size: 8, Style: fontstyle.Bold})),
-			col.New(4).Add(text.New(seq.VacancyName, props.Text{Size: 8})),
-			col.New(2).Add(text.New(category, props.Text{Size: 8})),
-			col.New(3).Add(text.New(seq.Status, props.Text{Size: 8})),
+
+		m.AddRow(18,
+			col.New(3).Add(text.New(seq.CompanyName, props.Text{Size: 8, Style: fontstyle.Bold})).WithStyle(&props.Cell{BorderType: border.Full, BorderThickness: 0.1}),
+			col.New(4).Add(text.New(seq.VacancyName, props.Text{Size: 7})).WithStyle(&props.Cell{BorderType: border.Full, BorderThickness: 0.1}),
+			col.New(2).Add(text.New(cat, props.Text{Size: 7, Align: align.Center})).WithStyle(&props.Cell{BorderType: border.Full, BorderThickness: 0.1}),
+			col.New(3).Add(text.New(strings.ToUpper(seq.Status), props.Text{Size: 7, Style: fontstyle.Bold, Align: align.Center})).WithStyle(&props.Cell{
+				BackgroundColor: r.getStatusColor(seq.Status),
+				BorderType:      border.Full,
+				BorderThickness: 0.1,
+			}),
 		)
-		m.AddRow(1, col.New(12).Add(line.New(props.Line{Thickness: 0.1}))) // Row divider
 	}
 }

@@ -357,13 +357,36 @@ func (r *SequenceRepository) GetPlatformStats(ctx context.Context, accountID str
 }
 
 func (r *SequenceRepository) GetTotalApplications(ctx context.Context, accountID string) (int, error) {
-	query := "SELECT COALESCE(SUM(ns.applications_count), 0) FROM negotiations_stats ns"
-	var args []interface{}
-	if accountID != "" {
-		query += " JOIN integrations i ON ns.integration_id = i.id WHERE i.account_id = ?"
-		args = append(args, accountID)
-	}
+	// Fallback count: unique contacts from HH plus negotiations_stats
+	query := `
+		SELECT (
+			SELECT COALESCE(SUM(applications_count), 0) FROM negotiations_stats ns
+			JOIN integrations i ON ns.integration_id = i.id
+			WHERE (i.account_id = ? OR ? = '')
+		) + (
+			SELECT COUNT(*) FROM contacts c
+			JOIN integrations i ON c.integration_id = i.id
+			WHERE c.platform = 'hh' 
+			AND (i.account_id = ? OR ? = '')
+			AND c.external_id NOT IN (SELECT 'hh_neg_' || CAST(integration_id AS TEXT) FROM negotiations_stats) -- avoid double counting if possible, though logic varies
+		)`
+
+	// Actually, a simpler and more reliable fallback:
+	// Use the MAX of negotiations_stats OR the actual count of HH contacts in our DB
+	query = `
+		SELECT MAX(apps.val) FROM (
+			SELECT COALESCE(SUM(ns.applications_count), 0) as val
+			FROM negotiations_stats ns
+			JOIN integrations i ON ns.integration_id = i.id
+			WHERE (i.account_id = ? OR ? = '')
+			UNION ALL
+			SELECT COUNT(*) as val
+			FROM contacts c
+			JOIN integrations i ON c.integration_id = i.id
+			WHERE c.platform = 'hh' AND (i.account_id = ? OR ? = '')
+		) as apps`
+
 	var count int
-	err := r.db.GetContext(ctx, &count, query, args...)
+	err := r.db.GetContext(ctx, &count, query, accountID, accountID, accountID, accountID)
 	return count, err
 }
