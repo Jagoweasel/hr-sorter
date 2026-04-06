@@ -354,12 +354,18 @@ func (m *Manager) SendMessage(ctx context.Context, integrationID int64, contactI
 
 func (m *Manager) StopIntegration(id int64) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	defer m.mu.RUnlock()
 	if cancel, ok := m.cancels[id]; ok {
 		logger.Debug(logger.Telegram, "Stopping integration ID %d", id)
 		cancel()
 		delete(m.cancels, id)
 	}
+}
+
+func (m *Manager) GetActiveCount() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.cancels)
 }
 
 func (m *Manager) getOrCreateContact(ctx context.Context, user *tg.User, integrationID int64) (int64, error) {

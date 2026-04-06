@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,6 +21,7 @@ import (
 
 type Manager struct {
 	cancels map[int64]context.CancelFunc
+	mu      sync.RWMutex
 
 	db      *sqlx.DB
 	conRepo *repository.ContactRepository
@@ -38,13 +40,25 @@ func NewManager(db *sqlx.DB, conRepo *repository.ContactRepository, msgRepo *rep
 }
 
 func (m *Manager) StartIntegration(ctx context.Context, integration models.Integration) error {
+	m.mu.Lock()
+	if _, running := m.cancels[integration.ID]; running {
+		m.mu.Unlock()
+		return nil
+	}
 	intCtx, cancel := context.WithCancel(ctx)
 	m.cancels[integration.ID] = cancel
+	m.mu.Unlock()
 
 	log.Printf("[HH] Initializing background sync for %s (ID: %d)", integration.Identifier, integration.ID)
 	logger.Debug(logger.HH, "[HH] Starting sync loop for integration %s", integration.Identifier)
 
 	go func() {
+		defer func() {
+			m.mu.Lock()
+			delete(m.cancels, integration.ID)
+			m.mu.Unlock()
+		}()
+
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 
@@ -72,11 +86,19 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 }
 
 func (m *Manager) StopIntegration(id int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if cancel, ok := m.cancels[id]; ok {
 		cancel()
 		delete(m.cancels, id)
 		logger.Debug(logger.HH, "[HH] Stopped background manager for integration %d", id)
 	}
+}
+
+func (m *Manager) GetActiveCount() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.cancels)
 }
 
 func (m *Manager) SendMessage(ctx context.Context, integrationID int64, negID string, text string) error {

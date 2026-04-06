@@ -80,7 +80,7 @@
             </div>
         </div>
 
-        <div class="flex items-center space-x-4 ml-auto">
+        <div class="flex items-end space-x-4 ml-auto pb-0.5">
             <button class="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-colors shadow-lg shadow-blue-100 dark:shadow-none flex items-center space-x-2"
                     hx-post="/sequences/bulk-add"
                     hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened'], [name='hide_unanswered'], [name='sequence_filter']"
@@ -89,9 +89,9 @@
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
                 <span>{{ Tr "bulk_add" }}</span>
             </button>
-            <div class="flex items-center space-x-2 shrink-0">
-                <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                <span class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">{{ Tr "sync_active" }}</span>
+            <div class="flex items-center space-x-2 shrink-0 mb-2">
+                <span id="sync-indicator-dot" class="w-2 h-2 rounded-full bg-gray-400"></span>
+                <span id="sync-indicator-text" class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">{{ Tr "sync_idle" }}</span>
             </div>
         </div>
     </div>
@@ -206,11 +206,11 @@
     function setPlatformFilter(val, btn) {
         document.getElementById('platform-filter-input').value = val;
         document.querySelectorAll('.plat-btn').forEach(b => {
-            b.classList.remove('border-blue-500', 'bg-blue-50');
-            b.classList.add('border-gray-100');
+            b.classList.remove('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/30');
+            b.classList.add('border-gray-100', 'dark:border-gray-700');
         });
-        btn.classList.add('border-blue-500', 'bg-blue-50');
-        btn.classList.remove('border-gray-100');
+        btn.classList.add('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/30');
+        btn.classList.remove('border-gray-100', 'dark:border-gray-700');
         // Trigger a refresh of the contact list
         document.body.dispatchEvent(new Event('refresh'));
     }
@@ -271,6 +271,34 @@
                 }
             });
         }
+
+        // Polling for sync status
+        function updateSyncStatus() {
+            fetch('/integrations/stats')
+                .then(response => response.json())
+                .then(data => {
+                    const dot = document.getElementById('sync-indicator-dot');
+                    const text = document.getElementById('sync-indicator-text');
+                    
+                    if (data.active_count > 0) {
+                        dot.classList.remove('bg-gray-400');
+                        dot.classList.add('bg-green-500', 'animate-pulse');
+                        text.innerText = '{{ Tr "sync_active" }}';
+                        text.classList.remove('text-gray-400');
+                        text.classList.add('text-green-600', 'dark:text-green-400');
+                    } else {
+                        dot.classList.add('bg-gray-400');
+                        dot.classList.remove('bg-green-500', 'animate-pulse');
+                        text.innerText = '{{ Tr "sync_idle" }}';
+                        text.classList.add('text-gray-400');
+                        text.classList.remove('text-green-600', 'dark:text-green-400');
+                    }
+                })
+                .catch(err => console.error('Error fetching sync stats:', err));
+        }
+        
+        setInterval(updateSyncStatus, 10000);
+        updateSyncStatus();
 
         document.body.addEventListener('refresh', () => {
             const list = document.getElementById('contact-list');

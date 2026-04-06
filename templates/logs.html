@@ -6,16 +6,25 @@
             <!-- Filter Controls -->
             <div class="flex flex-wrap bg-gray-100 dark:bg-gray-700 p-1 rounded-lg border dark:border-gray-600 gap-1">
                 <button onclick="setLogCategory('ALL')" id="btn-all" class="px-3 py-1 rounded-md text-xs font-bold transition-colors bg-white dark:bg-gray-600 shadow-sm">{{ Tr "all" }}</button>
-                <button onclick="setLogCategory('SYNC')" id="btn-sync" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-blue-500">SYNC</button>
-                <button onclick="setLogCategory('HH')" id="btn-hh" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-red-500">HH</button>
-                <button onclick="setLogCategory('TG')" id="btn-tg" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-sky-500">TG</button>
-                <button onclick="setLogCategory('ADD-SEQUENCE')" id="btn-add-sequence" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-orange-500">ADD-SEQ</button>
-                <button onclick="setLogCategory('HISTORY')" id="btn-history" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-yellow-500">HISTORY</button>
-                <button onclick="setLogCategory('REPORTS')" id="btn-reports" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-green-500">REPORTS</button>
-                 <button onclick="setLogCategory('MSG')" id="btn-msg" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-purple-500">MSG</button>
-                <button onclick="setLogCategory('FILTERS')" id="btn-filters" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-slate-500">FILTERS</button>
-                <button onclick="setLogCategory('TRACE')" id="btn-trace" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-pink-500">TRACE</button>
-                <button onclick="setLogCategory('HH-NET')" id="btn-hh-net" class="px-3 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-stone-500">HH-NET</button>
+                {{ range $cat, $enabled := .Categories }}
+                <div class="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                    <button onclick="setLogCategory('{{ $cat }}')" id="btn-{{ $cat | lower }}" class="text-gray-600 dark:text-gray-300">{{ $cat }}</button>
+                    <input type="checkbox" {{ if $enabled }}checked{{ end }} 
+                           onchange="toggleCategory('{{ $cat }}', this.checked)"
+                           class="w-3 h-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                </div>
+                {{ end }}
+            </div>
+
+            <div class="flex items-center bg-gray-100 dark:bg-gray-700 p-1 rounded-lg border dark:border-gray-600 gap-2">
+                <span class="text-[10px] font-black uppercase text-gray-500 px-2">Level</span>
+                <select onchange="updateLogLevel(this.value)" class="bg-transparent text-xs font-bold outline-none dark:text-white">
+                    <option value="0" {{ if eq .Level 0 }}selected{{ end }}>TRACE</option>
+                    <option value="1" {{ if eq .Level 1 }}selected{{ end }}>DEBUG</option>
+                    <option value="2" {{ if eq .Level 2 }}selected{{ end }}>INFO</option>
+                    <option value="3" {{ if eq .Level 3 }}selected{{ end }}>WARN</option>
+                    <option value="4" {{ if eq .Level 4 }}selected{{ end }}>ERROR</option>
+                </select>
             </div>
 
 
@@ -45,19 +54,25 @@
     let eventSource;
     let currentCategory = 'ALL';
 
+    function toggleCategory(cat, enabled) {
+        fetch(`/logs/update?category=${cat}&enabled=${enabled}`, { method: 'POST' });
+    }
+
+    function updateLogLevel(lvl) {
+        fetch(`/logs/update?level=${lvl}`, { method: 'POST' });
+    }
+
     function setLogCategory(cat) {
         currentCategory = cat;
         
         // Update button styles
-        ['all', 'sync', 'hh', 'tg', 'add-sequence', 'history', 'reports', 'msg', 'filters', 'trace', 'hh-net'].forEach(c => {
-            const btn = document.getElementById(`btn-${c}`);
-            if (!btn) return;
-            if (c === cat.toLowerCase()) {
-                btn.classList.add('bg-white', 'dark:bg-gray-600', 'shadow-sm');
-                btn.classList.remove('hover:bg-white/50', 'dark:hover:bg-gray-600/50');
+        document.querySelectorAll('[id^="btn-"]').forEach(btn => {
+            if (btn.id === `btn-${cat.toLowerCase()}`) {
+                btn.parentElement.classList.add('bg-white', 'dark:bg-gray-600', 'shadow-sm');
+                btn.parentElement.classList.remove('hover:bg-white/50', 'dark:hover:bg-gray-600/50');
             } else {
-                btn.classList.remove('bg-white', 'dark:bg-gray-600', 'shadow-sm');
-                btn.classList.add('hover:bg-white/50', 'dark:hover:bg-gray-600/50');
+                btn.parentElement.classList.remove('bg-white', 'dark:bg-gray-600', 'shadow-sm');
+                btn.parentElement.classList.add('hover:bg-white/50', 'dark:hover:bg-gray-600/50');
             }
         });
 

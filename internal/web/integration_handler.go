@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/json"
 	"fmt"
 	"hr-sorter/internal/domain/dto"
 	"hr-sorter/internal/hhclient"
@@ -9,6 +10,18 @@ import (
 	"strconv"
 	"time"
 )
+
+func (h *Handler) handleIntegrationStats(w http.ResponseWriter, r *http.Request) {
+	tgCount := h.tgManager.GetActiveCount()
+	hhCount := h.hhManager.GetActiveCount()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"active_count": tgCount + hhCount,
+		"tg_active":    tgCount > 0,
+		"hh_active":    hhCount > 0,
+	})
+}
 
 func (h *Handler) handleCreateIntegration(w http.ResponseWriter, r *http.Request) {
 	accID := r.FormValue("account_id")

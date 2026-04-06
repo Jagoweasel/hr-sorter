@@ -110,7 +110,7 @@ func main() {
 	if err != nil {
 		log.Printf("[Main] CRITICAL ERROR: Failed to initialize HH Auth Service: %v", err)
 		log.Printf("[Main] Hint: Ensure Playwright browsers are installed: 'go run github.com/playwright-community/playwright-go/cmd/playwright install --with-deps'")
-	} else {
+	} else if hhAuthService != nil {
 		log.Println("[Main] HH Auth Service (Playwright) initialized successfully.")
 		defer hhAuthService.Close()
 	}

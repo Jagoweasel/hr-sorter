@@ -49,6 +49,9 @@ func NewTemplateManager(ls *i18n.LocalizationService) (*TemplateManager, error) 
 		"sub": func(a, b int) int {
 			return a - b
 		},
+		"lower": func(s interface{}) string {
+			return strings.ToLower(fmt.Sprint(s))
+		},
 		"lastStage": func(history interface{}) string {
 			return "None"
 		},

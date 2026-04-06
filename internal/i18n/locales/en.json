@@ -26,6 +26,7 @@
   "not_in_pipeline": "Not in Pipeline",
   "all": "All",
   "sync_active": "Sync Active",
+  "sync_idle": "Sync Idle",
   "account_management": "Account Management",
   "manage_platform_integrations": "Manage platform integrations",
   "new_account": "New Account",
