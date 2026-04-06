@@ -102,7 +102,9 @@
             <div id="contact-list" 
                  hx-get="/contacts" 
                  hx-trigger="load, every 15s, refreshContacts from:body" 
-                 hx-swap="innerHTML" 
+                 hx-swap="morph"
+                 hx-ext="idiomorph"
+                 hx-on::before-request="if(window.getSelection().toString() !== '') event.preventDefault()"
                  hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened'], [name='hide_unanswered'], [name='show_ignored']"
                  class="flex-1 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700">
                 <div class="flex flex-col items-center justify-center h-full text-gray-400 p-8 space-y-4">

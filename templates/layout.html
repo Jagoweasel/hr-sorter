@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ Tr "hr_sorter" }}</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://unpkg.com/htmx-ext-idiomorph@0.1.0/dist/idiomorph-ext.js"></script>
     <script src="https://unpkg.com/htmx.org/dist/ext/preload.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -65,13 +66,18 @@
         });
 
         // Global SSE for control signals
-        const globalEventSource = new EventSource('/logs/stream');
+        let lastRefresh = 0;
         globalEventSource.onmessage = (e) => {
             if (e.data.startsWith('[CONTROL]')) {
                 const command = e.data.replace('[CONTROL]', '').trim();
                 if (command === 'refreshContacts') {
-                    document.body.dispatchEvent(new Event('refreshContacts'));
-                    document.body.dispatchEvent(new Event('refresh'));
+                    const now = Date.now();
+                    // Throttle refreshes and prevent if selecting text
+                    if (now - lastRefresh > 5000 && window.getSelection().toString() === "") {
+                        document.body.dispatchEvent(new Event('refreshContacts'));
+                        document.body.dispatchEvent(new Event('refresh'));
+                        lastRefresh = now;
+                    }
                 }
             }
         };
