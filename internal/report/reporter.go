@@ -215,20 +215,20 @@ func (r *reporter) buildSection(m core.Maroto, title string, kpi models.ReportKP
 	m.AddRow(10,
 		col.New(3).Add(text.New("Company", props.Text{Size: 8, Style: fontstyle.Bold})).WithStyle(&props.Cell{BackgroundColor: headerColor, BorderType: border.Full, BorderThickness: 0.1}),
 		col.New(4).Add(text.New("Vacancy", props.Text{Size: 8, Style: fontstyle.Bold})).WithStyle(&props.Cell{BackgroundColor: headerColor, BorderType: border.Full, BorderThickness: 0.1}),
-		col.New(2).Add(text.New("Category", props.Text{Size: 8, Style: fontstyle.Bold})).WithStyle(&props.Cell{BackgroundColor: headerColor, BorderType: border.Full, BorderThickness: 0.1}),
+		col.New(2).Add(text.New("Last Stage", props.Text{Size: 8, Style: fontstyle.Bold})).WithStyle(&props.Cell{BackgroundColor: headerColor, BorderType: border.Full, BorderThickness: 0.1}),
 		col.New(3).Add(text.New("Status", props.Text{Size: 8, Style: fontstyle.Bold})).WithStyle(&props.Cell{BackgroundColor: headerColor, BorderType: border.Full, BorderThickness: 0.1}),
 	)
 
 	for _, seq := range sequences {
-		cat := "N/A"
+		lastStage := "Initial"
 		if seq.Category != nil {
-			cat = *seq.Category
+			lastStage = *seq.Category
 		}
 
 		m.AddRow(18,
 			col.New(3).Add(text.New(seq.CompanyName, props.Text{Size: 8, Style: fontstyle.Bold})).WithStyle(&props.Cell{BorderType: border.Full, BorderThickness: 0.1}),
 			col.New(4).Add(text.New(seq.VacancyName, props.Text{Size: 7})).WithStyle(&props.Cell{BorderType: border.Full, BorderThickness: 0.1}),
-			col.New(2).Add(text.New(cat, props.Text{Size: 7, Align: align.Center})).WithStyle(&props.Cell{BorderType: border.Full, BorderThickness: 0.1}),
+			col.New(2).Add(text.New(lastStage, props.Text{Size: 7, Align: align.Center})).WithStyle(&props.Cell{BorderType: border.Full, BorderThickness: 0.1}),
 			col.New(3).Add(text.New(strings.ToUpper(seq.Status), props.Text{Size: 7, Style: fontstyle.Bold, Align: align.Center})).WithStyle(&props.Cell{
 				BackgroundColor: r.getStatusColor(seq.Status),
 				BorderType:      border.Full,

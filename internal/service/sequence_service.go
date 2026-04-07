@@ -278,13 +278,6 @@ func (s *SequenceService) MoveSequence(ctx context.Context, seqID int64, status 
 		}
 	}
 
-	if status == "rejected" {
-		incomplete, err := s.seqRepo.GetFirstIncompleteStage(ctx, seqID)
-		if err == nil && incomplete != nil {
-			s.seqRepo.UpdateStageStatus(ctx, incomplete.ID, true)
-		}
-	}
-
 	return nil
 }
 

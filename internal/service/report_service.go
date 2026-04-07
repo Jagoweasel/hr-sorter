@@ -468,11 +468,11 @@ func (s *ReportService) writeDetailedTable(f *excelize.File, sheet string, data 
 		}
 
 		lastStage := "Initial"
-		lastStageStyle := styles.StageInitial
 		if len(sd.History) > 0 {
 			lastStage = sd.History[len(sd.History)-1].Name
 		}
 
+		lastStageStyle := styles.StageInitial
 		lsLower := strings.ToLower(lastStage)
 		switch {
 		case strings.Contains(lsLower, "screening"):
@@ -483,6 +483,10 @@ func (s *ReportService) writeDetailedTable(f *excelize.File, sheet string, data 
 			lastStageStyle = styles.StageFinal
 		case strings.Contains(lsLower, "offer"):
 			lastStageStyle = styles.StageOffer
+		}
+
+		if sd.Sequence.Status == "rejected" {
+			lastStageStyle = styles.StatusDecline
 		}
 
 		status := "waiting"
