@@ -111,11 +111,13 @@ func NewTemplateManager(ls *i18n.LocalizationService) (*TemplateManager, error) 
 	if err != nil {
 		return nil, err
 	}
-	modalFragments, err := filepath.Glob("templates/fragments/modals/*.html")
-	if err != nil {
-		return nil, err
-	}
-	allFragments := append(fragments, modalFragments...)
+	modalFragments, _ := filepath.Glob("templates/fragments/modals/*.html")
+	pipelineFragments, _ := filepath.Glob("templates/fragments/pipeline/*.html")
+
+	var allFragments []string
+	allFragments = append(allFragments, fragments...)
+	allFragments = append(allFragments, modalFragments...)
+	allFragments = append(allFragments, pipelineFragments...)
 
 	err = filepath.Walk("templates", func(path string, info os.FileInfo, err error) error {
 		if err != nil {

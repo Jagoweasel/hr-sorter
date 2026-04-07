@@ -1,0 +1,96 @@
+{{ $seq := . }}
+{{ $historyLen := len .History }}
+<div id="seq-card-{{ .ID }}" class="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
+    <!-- Sequence Info Bar -->
+    <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center space-x-3 overflow-hidden">
+            <span class="px-2 py-0.5 bg-gray-900 dark:bg-blue-600 text-white rounded text-[9px] font-black uppercase tracking-widest shrink-0">{{ .CompanyName }}</span>
+            <div class="flex -space-x-1 shrink-0">
+                {{ range .Recruiters }}
+                <a href="/?contact_id={{ .ID }}" class="w-5 h-5 rounded-md bg-blue-100 dark:bg-blue-900/40 border-2 border-white dark:border-gray-800 flex items-center justify-center text-[8px] font-black text-blue-600 dark:text-blue-400 shadow-sm hover:scale-110 transition-transform" title="{{ Tr "go_to_chat" }} {{ .FirstName }}">
+                    {{ slice .FirstName 0 1 }}
+                </a>
+                {{ end }}
+            </div>
+            <span class="text-gray-400 dark:text-gray-500 font-bold text-[9px] uppercase tracking-widest truncate max-w-[200px]">{{ .VacancyName }}</span>
+        </div>
+        
+        <!-- Terminal Actions -->
+        <div class="flex items-center space-x-1.5 shrink-0">
+            <button hx-get="/sequences/edit-modal?id={{ .ID }}" hx-target="#modal-container" 
+                    class="p-1 text-gray-300 dark:text-gray-600 hover:text-blue-500 transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+            </button>
+            <button hx-delete="/sequences/delete?id={{ .ID }}" hx-confirm="{{ Tr "confirm_delete_sequence" }}" hx-target="#seq-card-{{ .ID }}" hx-swap="outerHTML"
+                    class="p-1 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </button>
+            <div class="flex bg-gray-100 dark:bg-gray-700 rounded-md p-0.5 border border-gray-200 dark:border-gray-700 space-x-0.5 mr-2 ml-2">
+                <button hx-post="/sequences/move?id={{ .ID }}&status=accepted&view=timeline" hx-target="#seq-card-{{ .ID }}" hx-swap="outerHTML" hx-confirm="{{ Tr "confirm_accept_candidate" }}"
+                        class="p-1 bg-green-500 text-white rounded hover:bg-green-600 transition-colors shadow-sm" title="{{ Tr "accepted" }}">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                </button>
+                <button hx-post="/sequences/move?id={{ .ID }}&status=rejected&view=timeline" hx-target="#seq-card-{{ .ID }}" hx-swap="outerHTML" hx-confirm="{{ Tr "confirm_reject_candidate" }}"
+                        class="p-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors shadow-sm" title="{{ Tr "rejected" }}">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            {{ if eq $historyLen 0 }}
+            <span class="text-[8px] font-black text-gray-300 dark:text-gray-600 uppercase italic">{{ Tr "idle" }}</span>
+            {{ end }}
+        </div>
+    </div>
+
+    <!-- The History Chain -->
+    <div class="overflow-x-auto pb-1 custom-scrollbar">
+        <div class="inline-flex items-center space-x-2">
+            {{ range $idx, $stage := .History }}
+            <div class="relative px-3 py-1.5 rounded-lg border-2 bg-white dark:bg-gray-800 shadow-sm min-w-[130px] group/node
+                {{ if and $seq.IsRejected (eq (add $idx 1) $historyLen) }}border-red-500 bg-red-50 dark:bg-red-900/20{{ else }}border-green-500{{ end }}">
+                <div class="flex justify-between items-start">
+                    <span class="text-[6px] font-black text-gray-400 dark:text-gray-500 uppercase leading-none">{{ Tr "step" }} {{ add $idx 1 }}</span>
+                    <button hx-post="/stages/update?id={{ .ID }}&completed=false&view=timeline" hx-target="#seq-card-{{ $seq.ID }}" hx-swap="outerHTML"
+                            class="opacity-0 group-hover/node:opacity-100 transition-opacity text-gray-300 dark:text-gray-600 hover:text-red-500 leading-none">
+                        <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <p class="text-[10px] font-black text-gray-900 dark:text-white leading-tight truncate mt-0.5">{{ .Name }}</p>
+            </div>
+            <div class="text-gray-200 dark:text-gray-700 flex items-center shrink-0">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
+            </div>
+            {{ end }}
+
+            {{ if not (or .IsAccepted .IsRejected) }}
+                {{ range .Stages }}
+                    {{ if not .IsCompleted }}
+                    <button hx-post="/stages/update?id={{ .ID }}&completed=true&view=timeline" hx-target="#seq-card-{{ $seq.ID }}" hx-swap="outerHTML"
+                            class="px-3 py-1.5 rounded-lg border border-dashed border-gray-300 dark:border-gray-700 text-left min-w-[130px] opacity-40 hover:opacity-100 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group/next">
+                        <p class="text-[10px] font-black text-gray-500 dark:text-gray-400 truncate leading-tight">{{ .Name }}</p>
+                    </button>
+                    <div class="text-gray-100 dark:text-gray-800 flex items-center shrink-0">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
+                    </div>
+                    {{ end }}
+                {{ end }}
+
+                <div class="shrink-0">
+                    <button hx-get="/sequences/add-stage-modal?sequence_id={{ .ID }}&view=timeline"
+                            hx-target="#modal-container"
+                            class="w-7 h-7 rounded border border-dashed border-gray-300 dark:border-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-600 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-white dark:hover:bg-gray-800 transition-all shadow-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"></path></svg>
+                    </button>
+                </div>
+            {{ end }}
+
+            {{ if .IsAccepted }}
+            <div class="flex-shrink-0">
+                <div class="px-4 py-1.5 rounded-lg border-2 border-double bg-green-50 dark:bg-green-900/20 border-green-600 dark:border-green-500 text-center shadow-sm">
+                    <p class="text-[9px] font-black text-green-800 dark:text-green-400 uppercase tracking-tighter">{{ Tr "accepted" }}</p>
+                </div>
+            </div>
+            {{ end }}
+        </div>
+    </div>
+</div>

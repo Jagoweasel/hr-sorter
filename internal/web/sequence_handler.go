@@ -89,10 +89,25 @@ func (h *Handler) handleUpdateStage(w http.ResponseWriter, r *http.Request) {
 	}
 	stageID := r.URL.Query().Get("id")
 	completed := r.URL.Query().Get("completed") == "true"
+	view := r.URL.Query().Get("view")
 
 	if err := h.seqService.UpdateStageCompletion(r.Context(), stageID, completed); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+
+	if view != "" {
+		// Partial update for a specific card
+		// We need sequence ID, but stage completion update might need us to fetch the sequence
+		stage, _ := h.seqRepo.GetStageByID(r.Context(), stageID)
+		if stage != nil {
+			details, _ := h.seqRepo.GetFullDetailsByID(r.Context(), stage.SequenceID)
+			if details != nil {
+				details.ColumnDefs = h.getColumnDefs(r)
+				h.templates.RenderWithStatus(w, r, "fragments/pipeline/card_"+view+".html", http.StatusOK, details, h.getLocale(r))
+				return
+			}
+		}
 	}
 
 	if r.Header.Get("HX-Request") != "" {
@@ -111,11 +126,22 @@ func (h *Handler) handleAddStage(w http.ResponseWriter, r *http.Request) {
 	seqIDStr := r.URL.Query().Get("sequence_id")
 	category := r.URL.Query().Get("category")
 	name := r.URL.Query().Get("name")
+	view := r.URL.Query().Get("view")
 	seqID, _ := strconv.ParseInt(seqIDStr, 10, 64)
 
 	if err := h.seqService.AddStage(r.Context(), seqID, category, name); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+
+	if view == "timeline" {
+		details, _ := h.seqRepo.GetFullDetailsByID(r.Context(), seqID)
+		if details != nil {
+			details.ColumnDefs = h.getColumnDefs(r)
+			w.Header().Set("HX-Trigger", "closeModal")
+			h.templates.RenderWithStatus(w, r, "fragments/pipeline/card_timeline.html", http.StatusOK, details, h.getLocale(r))
+			return
+		}
 	}
 
 	if r.Header.Get("HX-Request") != "" {
@@ -133,6 +159,7 @@ func (h *Handler) handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 	}
 	seqIDStr := r.URL.Query().Get("id")
 	status := r.URL.Query().Get("status")
+	view := r.URL.Query().Get("view")
 	if status == "" {
 		status = r.FormValue("status")
 	}
@@ -148,6 +175,15 @@ func (h *Handler) handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 	if err := h.seqService.MoveSequence(r.Context(), seqID, status); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+
+	if view != "" {
+		details, _ := h.seqRepo.GetFullDetailsByID(r.Context(), seqID)
+		if details != nil {
+			details.ColumnDefs = h.getColumnDefs(r)
+			h.templates.RenderWithStatus(w, r, "fragments/pipeline/card_"+view+".html", http.StatusOK, details, h.getLocale(r))
+			return
+		}
 	}
 
 	if r.Header.Get("HX-Request") != "" {
@@ -199,8 +235,12 @@ func (h *Handler) handleDeleteSequence(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+
 	if r.Header.Get("HX-Request") != "" {
-		h.setHXLocation(w, h.getRedirectURL(r))
+		// If it's an HTMX request, we can just return 200 and tell HTMX to delete the element
+		// if the target was 'closest .group/card' or similar.
+		// However, to be safe and support different targets, we can use HX-Reswap
+		w.Header().Set("HX-Reswap", "delete")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -231,7 +271,11 @@ func (h *Handler) handleBulkDeleteSequences(w http.ResponseWriter, r *http.Reque
 
 func (h *Handler) handleAddStageModal(w http.ResponseWriter, r *http.Request) {
 	seqID := r.URL.Query().Get("sequence_id")
-	h.templates.RenderWithStatus(w, r, "fragments/modals/add_stage.html", http.StatusOK, map[string]string{"SequenceID": seqID}, h.getLocale(r))
+	view := r.URL.Query().Get("view")
+	h.templates.RenderWithStatus(w, r, "fragments/modals/add_stage.html", http.StatusOK, map[string]string{
+		"SequenceID": seqID,
+		"View":       view,
+	}, h.getLocale(r))
 }
 
 func (h *Handler) getRedirectURL(r *http.Request) string {

@@ -14,6 +14,7 @@ type SequenceWithDetails struct {
 	Recruiters  []models.Contact
 	Stages      []models.InterviewStage
 	History     []models.InterviewStage
+	ColumnDefs  []models.ColumnDef
 	IsRejected  bool
 	IsAccepted  bool
 }
@@ -127,6 +128,47 @@ func (r *SequenceRepository) GetAllFullDetails(ctx context.Context, accountID st
 	}
 
 	return detailed, nil
+}
+
+func (r *SequenceRepository) GetFullDetailsByID(ctx context.Context, id int64) (*SequenceWithDetails, error) {
+	var s struct {
+		models.Sequence
+		AccountName string `db:"account_name"`
+		AccountSlug string `db:"account_slug"`
+	}
+	query := `
+		SELECT s.*, 
+		       COALESCE(a.name, 'Unknown') as account_name,
+		       COALESCE(a.slug, '') as account_slug
+		FROM sequences s 
+		LEFT JOIN accounts a ON s.account_id = a.id
+		WHERE s.id = ?`
+
+	err := r.db.GetContext(ctx, &s, query, id)
+	if err != nil {
+		return nil, err
+	}
+
+	recruiters, _ := r.GetRecruiters(ctx, s.ID)
+	stages, _ := r.GetStages(ctx, s.ID)
+
+	var history []models.InterviewStage
+	for _, st := range stages {
+		if st.IsCompleted {
+			history = append(history, st)
+		}
+	}
+
+	return &SequenceWithDetails{
+		Sequence:    s.Sequence,
+		AccountName: s.AccountName,
+		AccountSlug: s.AccountSlug,
+		Recruiters:  recruiters,
+		Stages:      stages,
+		History:     history,
+		IsRejected:  s.Status == "rejected",
+		IsAccepted:  s.Status == "accepted",
+	}, nil
 }
 
 func (r *SequenceRepository) Delete(ctx context.Context, id interface{}) error {

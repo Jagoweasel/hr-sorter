@@ -7,6 +7,7 @@ import (
 	"hr-sorter/internal/hhclient"
 	"hr-sorter/internal/i18n"
 	"hr-sorter/internal/logger"
+	"hr-sorter/internal/models"
 	"hr-sorter/internal/repository"
 	"hr-sorter/internal/service"
 	"hr-sorter/internal/streaming"
@@ -122,6 +123,19 @@ func (h *Handler) setHXLocation(w http.ResponseWriter, path string) {
 	w.Header().Set("HX-Location", "{\"path\":\""+path+"\", \"target\":\"#main-content\", \"swap\":\"morph\"}")
 	// Signal to close any open modal
 	w.Header().Set("HX-Trigger", "closeModal")
+}
+
+func (h *Handler) getColumnDefs(r *http.Request) []models.ColumnDef {
+	locale := h.getLocale(r)
+	return []models.ColumnDef{
+		{ID: "initial", Label: h.i18n.Tr("initial", locale), ColorClass: "bg-blue-50", BorderClass: "border-blue-200"},
+		{ID: "screening", Label: h.i18n.Tr("screening", locale), ColorClass: "bg-indigo-50", BorderClass: "border-indigo-200"},
+		{ID: "tech", Label: h.i18n.Tr("technical", locale), ColorClass: "bg-purple-50", BorderClass: "border-purple-200"},
+		{ID: "final", Label: h.i18n.Tr("final_interview", locale), ColorClass: "bg-pink-50", BorderClass: "border-pink-200"},
+		{ID: "offer", Label: h.i18n.Tr("offer", locale), ColorClass: "bg-yellow-50", BorderClass: "border-yellow-200"},
+		{ID: "accepted", Label: h.i18n.Tr("accepted", locale), ColorClass: "bg-green-50", BorderClass: "border-green-200"},
+		{ID: "rejected", Label: h.i18n.Tr("rejected", locale), ColorClass: "bg-red-50", BorderClass: "border-red-200"},
+	}
 }
 
 func (h *Handler) InitHandler() http.Handler {

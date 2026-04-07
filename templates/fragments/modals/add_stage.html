@@ -2,19 +2,19 @@
     <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 w-full max-w-xs relative" onclick="event.stopPropagation()">
         <h2 class="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-6 text-center">{{ Tr "new_workflow_step" }}</h2>
         <div class="grid grid-cols-1 gap-2">
-            <button hx-post="/stages/add?sequence_id={{ .SequenceID }}&category=screening" hx-target="#main-content" hx-swap="morph"
+            <button hx-post="/stages/add?sequence_id={{ .SequenceID }}&category=screening&view={{ .View }}" hx-target="#seq-card-{{ .SequenceID }}" hx-swap="outerHTML"
                     class="px-4 py-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-xl text-xs font-black uppercase tracking-widest transition-colors">
                 {{ Tr "screening_plus" }}
             </button>
-            <button hx-post="/stages/add?sequence_id={{ .SequenceID }}&category=tech" hx-target="#main-content" hx-swap="morph"
+            <button hx-post="/stages/add?sequence_id={{ .SequenceID }}&category=tech&view={{ .View }}" hx-target="#seq-card-{{ .SequenceID }}" hx-swap="outerHTML"
                     class="px-4 py-3 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 rounded-xl text-xs font-black uppercase tracking-widest transition-colors">
                 {{ Tr "technical_plus" }}
             </button>
-            <button hx-post="/stages/add?sequence_id={{ .SequenceID }}&category=final" hx-target="#main-content" hx-swap="morph"
+            <button hx-post="/stages/add?sequence_id={{ .SequenceID }}&category=final&view={{ .View }}" hx-target="#seq-card-{{ .SequenceID }}" hx-swap="outerHTML"
                     class="px-4 py-3 bg-pink-50 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400 hover:bg-pink-100 dark:hover:bg-pink-900/50 rounded-xl text-xs font-black uppercase tracking-widest transition-colors">
                 {{ Tr "final_interview_plus" }}
             </button>
-            <button hx-post="/stages/add?sequence_id={{ .SequenceID }}&category=offer" hx-target="#main-content" hx-swap="morph"
+            <button hx-post="/stages/add?sequence_id={{ .SequenceID }}&category=offer&view={{ .View }}" hx-target="#seq-card-{{ .SequenceID }}" hx-swap="outerHTML"
                     class="px-4 py-3 bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-900/50 rounded-xl text-xs font-black uppercase tracking-widest transition-colors">
                 {{ Tr "offer_plus" }}
             </button>

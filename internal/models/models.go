@@ -97,6 +97,13 @@ type Funnel struct {
 	Accepted  int `json:"accepted"`
 }
 
+type ColumnDef struct {
+	ID          string
+	Label       string
+	ColorClass  string
+	BorderClass string
+}
+
 type MappingRule struct {
 	ID       int64  `db:"id" json:"id"`
 	Pattern  string `db:"pattern" json:"pattern"`

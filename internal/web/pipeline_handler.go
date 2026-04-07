@@ -8,13 +8,6 @@ import (
 	"net/http"
 )
 
-type ColumnDef struct {
-	ID          string
-	Label       string
-	ColorClass  string
-	BorderClass string
-}
-
 type AccountGroup struct {
 	Account   *models.Account
 	Columns   []PipelineColumn
@@ -22,7 +15,7 @@ type AccountGroup struct {
 }
 
 type PipelineColumn struct {
-	ColumnDef
+	models.ColumnDef
 	Sequences []repository.SequenceWithDetails
 }
 
@@ -71,6 +64,8 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 	recruitersMap, _ := h.seqRepo.GetRecruitersBatch(r.Context(), seqIDs)
 	stagesMap, _ := h.seqRepo.GetStagesBatch(r.Context(), seqIDs)
 
+	columnDefs := h.getColumnDefs(r)
+
 	var detailedSeqs []repository.SequenceWithDetails
 	for _, s := range sequences {
 		if hideRejected && s.Status == "rejected" {
@@ -97,20 +92,11 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 			Recruiters: recruiters,
 			Stages:     stages,
 			History:    history,
+			ColumnDefs: columnDefs, // Set it here!
 			IsRejected: s.Status == "rejected",
 			IsAccepted: s.Status == "accepted",
 		})
 		logger.LogChain(s.ID, s.CompanyName, historyNames, s.Status)
-	}
-
-	columnDefs := []ColumnDef{
-		{ID: "initial", Label: h.i18n.Tr("initial", h.getLocale(r)), ColorClass: "bg-blue-50", BorderClass: "border-blue-200"},
-		{ID: "screening", Label: h.i18n.Tr("screening", h.getLocale(r)), ColorClass: "bg-indigo-50", BorderClass: "border-indigo-200"},
-		{ID: "tech", Label: h.i18n.Tr("technical", h.getLocale(r)), ColorClass: "bg-purple-50", BorderClass: "border-purple-200"},
-		{ID: "final", Label: h.i18n.Tr("final_interview", h.getLocale(r)), ColorClass: "bg-pink-50", BorderClass: "border-pink-200"},
-		{ID: "offer", Label: h.i18n.Tr("offer", h.getLocale(r)), ColorClass: "bg-yellow-50", BorderClass: "border-yellow-200"},
-		{ID: "accepted", Label: h.i18n.Tr("accepted", h.getLocale(r)), ColorClass: "bg-green-50", BorderClass: "border-green-200"},
-		{ID: "rejected", Label: h.i18n.Tr("rejected", h.getLocale(r)), ColorClass: "bg-red-50", BorderClass: "border-red-200"},
 	}
 
 	var groups []*AccountGroup
@@ -130,7 +116,8 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 		accountMap[acc.ID] = group
 	}
 
-	for _, s := range detailedSeqs {
+	for i := range detailedSeqs {
+		s := &detailedSeqs[i]
 		var targetGroup *AccountGroup
 		if s.AccountID != nil {
 			targetGroup = accountMap[*s.AccountID]
@@ -139,10 +126,10 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 			targetGroup = orphanGroup
 		}
 
-		targetGroup.Sequences = append(targetGroup.Sequences, s)
-		for i := range targetGroup.Columns {
-			if s.Status == targetGroup.Columns[i].ID {
-				targetGroup.Columns[i].Sequences = append(targetGroup.Columns[i].Sequences, s)
+		targetGroup.Sequences = append(targetGroup.Sequences, *s)
+		for j := range targetGroup.Columns {
+			if s.Status == targetGroup.Columns[j].ID {
+				targetGroup.Columns[j].Sequences = append(targetGroup.Columns[j].Sequences, *s)
 			}
 		}
 	}
@@ -154,7 +141,7 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		View         string
 		Groups       []*AccountGroup
-		ColumnDefs   []ColumnDef
+		ColumnDefs   []models.ColumnDef
 		HideRejected bool
 		HideAccepted bool
 	}{
