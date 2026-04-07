@@ -40,7 +40,7 @@ func (h *Handler) handleSaveMapping(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Location", "/mapping")
+		h.setHXLocation(w, "/mapping")
 		w.WriteHeader(http.StatusOK)
 	} else {
 		http.Redirect(w, r, "/mapping", http.StatusSeeOther)
@@ -60,7 +60,7 @@ func (h *Handler) handleDeleteMapping(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Location", "/mapping")
+		h.setHXLocation(w, "/mapping")
 		w.WriteHeader(http.StatusOK)
 	} else {
 		http.Redirect(w, r, "/mapping", http.StatusSeeOther)

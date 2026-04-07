@@ -31,7 +31,7 @@ func (h *Handler) handleCreateSequence(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Location", h.getRedirectURL(r))
+		h.setHXLocation(w, h.getRedirectURL(r))
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -75,7 +75,7 @@ func (h *Handler) handleAddToSequence(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Location", h.getRedirectURL(r))
+		h.setHXLocation(w, h.getRedirectURL(r))
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -96,7 +96,7 @@ func (h *Handler) handleUpdateStage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Location", h.getRedirectURL(r))
+		h.setHXLocation(w, h.getRedirectURL(r))
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -119,7 +119,7 @@ func (h *Handler) handleAddStage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Location", h.getRedirectURL(r))
+		h.setHXLocation(w, h.getRedirectURL(r))
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -140,7 +140,7 @@ func (h *Handler) handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 
 	if status == "" {
 		log.Printf("[Web] Warning: handleMoveSequence called with empty status for seq %s", seqIDStr)
-		w.Header().Set("HX-Location", h.getRedirectURL(r))
+		h.setHXLocation(w, h.getRedirectURL(r))
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -151,7 +151,7 @@ func (h *Handler) handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Location", h.getRedirectURL(r))
+		h.setHXLocation(w, h.getRedirectURL(r))
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -182,7 +182,7 @@ func (h *Handler) handleUpdateSequence(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Location", h.getRedirectURL(r))
+		h.setHXLocation(w, h.getRedirectURL(r))
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -200,7 +200,7 @@ func (h *Handler) handleDeleteSequence(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Location", h.getRedirectURL(r))
+		h.setHXLocation(w, h.getRedirectURL(r))
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -222,7 +222,7 @@ func (h *Handler) handleBulkDeleteSequences(w http.ResponseWriter, r *http.Reque
 	}
 
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Location", h.getRedirectURL(r))
+		h.setHXLocation(w, h.getRedirectURL(r))
 		w.WriteHeader(http.StatusOK)
 		return
 	}

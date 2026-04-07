@@ -115,6 +115,12 @@ func (h *Handler) getCookie(r *http.Request, name, defaultValue string) string {
 	return defaultValue
 }
 
+func (h *Handler) setHXLocation(w http.ResponseWriter, path string) {
+	// We use JSON format for HX-Location to specify the target container.
+	// This prevents HTMX from replacing the whole body and losing the navigation header.
+	w.Header().Set("HX-Location", "{\"path\":\""+path+"\", \"target\":\"#main-content\"}")
+}
+
 func (h *Handler) InitHandler() http.Handler {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)

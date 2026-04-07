@@ -30,7 +30,7 @@ func (h *Handler) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Location", "/accounts")
+		h.setHXLocation(w, "/accounts")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -65,7 +65,7 @@ func (h *Handler) handleUpdateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Location", "/accounts")
+		h.setHXLocation(w, "/accounts")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -84,7 +84,7 @@ func (h *Handler) handleToggleAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Location", "/accounts")
+		h.setHXLocation(w, "/accounts")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -103,7 +103,7 @@ func (h *Handler) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Location", "/accounts")
+		h.setHXLocation(w, "/accounts")
 		w.WriteHeader(http.StatusOK)
 		return
 	}

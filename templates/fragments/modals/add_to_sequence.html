@@ -3,7 +3,7 @@
         <div class="flex justify-between items-center mb-6">
             <h2 class="text-xl font-black text-gray-900 dark:text-white tracking-tight">{{ Tr "link_recruiter" }}</h2>
         </div>
-        <form hx-post="/sequences/add-contact" hx-target="body">
+        <form hx-post="/sequences/add-contact" hx-target="#main-content" hx-swap="morph">
             {{ csrfField }}
             <input type="hidden" name="contact_id" value="{{ .ContactID }}">
             <div class="space-y-4">

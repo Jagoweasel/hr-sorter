@@ -41,7 +41,7 @@ func (h *Handler) handleCreateIntegration(w http.ResponseWriter, r *http.Request
 	}
 
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Location", "/accounts")
+		h.setHXLocation(w, "/accounts")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -59,7 +59,7 @@ func (h *Handler) handleToggleIntegration(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Location", "/accounts")
+		h.setHXLocation(w, "/accounts")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -77,7 +77,7 @@ func (h *Handler) handleDeleteIntegration(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Location", "/accounts")
+		h.setHXLocation(w, "/accounts")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
