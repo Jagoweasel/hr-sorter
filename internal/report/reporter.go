@@ -196,8 +196,8 @@ func (r *reporter) buildSection(m core.Maroto, title string, kpi models.ReportKP
 			perc = 100
 		}
 
-		// Use 10 columns for the bar instead of 8 for better precision
-		coloredCols := int(perc * 10 / 100)
+		// Use 8 columns for the bar instead of 10 to fit in 12-column grid (2 label + 8 bar + 2 count)
+		coloredCols := int(perc * 8 / 100)
 		if coloredCols == 0 && step.count > 0 {
 			coloredCols = 1
 		}
@@ -206,14 +206,16 @@ func (r *reporter) buildSection(m core.Maroto, title string, kpi models.ReportKP
 		if coloredCols > 0 {
 			m.AddRow(8,
 				col.New(2).Add(text.New(step.label, props.Text{Size: 8, Style: fontstyle.Bold})),
-				col.New(coloredCols).WithStyle(&props.Cell{BackgroundColor: step.color}),
-				col.New(10-coloredCols).WithStyle(&props.Cell{BackgroundColor: &props.Color{Red: 243, Green: 244, Blue: 246}}),
+				col.New(coloredCols).WithStyle(&props.Cell{BackgroundColor: step.color}).Add(
+					text.New(fmt.Sprintf("%d", step.count), props.Text{Size: 7, Align: align.Center, Color: &props.Color{Red: 255, Green: 255, Blue: 255}}),
+				),
+				col.New(8-coloredCols).WithStyle(&props.Cell{BackgroundColor: &props.Color{Red: 243, Green: 244, Blue: 246}}),
 				col.New(2).Add(text.New(fmt.Sprintf("%d", step.count), props.Text{Size: 8, Align: align.Right})),
 			)
 		} else {
 			m.AddRow(8,
 				col.New(2).Add(text.New(step.label, props.Text{Size: 8, Style: fontstyle.Bold})),
-				col.New(10).WithStyle(&props.Cell{BackgroundColor: &props.Color{Red: 243, Green: 244, Blue: 246}}),
+				col.New(8).WithStyle(&props.Cell{BackgroundColor: &props.Color{Red: 243, Green: 244, Blue: 246}}),
 				col.New(2).Add(text.New(fmt.Sprintf("%d", step.count), props.Text{Size: 8, Align: align.Right})),
 			)
 		}
