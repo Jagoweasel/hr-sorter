@@ -228,11 +228,13 @@ func (s *ReportService) ExportPDF(ctx context.Context, accountID string, opts PD
 
 	for _, sd := range mainData.Detailed {
 		seq := sd.Sequence
-		lastStage := "Initial"
+		lastStageName := "Initial"
 		if len(sd.History) > 0 {
-			lastStage = sd.History[len(sd.History)-1].Name
+			lastStageName = sd.History[len(sd.History)-1].Name
 		}
-		seq.Category = &lastStage
+		// Create a local variable and take its address to avoid pointer aliasing in loop
+		ls := lastStageName
+		seq.Category = &ls
 		mrd.Sequences = append(mrd.Sequences, seq)
 	}
 
@@ -271,11 +273,12 @@ func (s *ReportService) ExportPDF(ctx context.Context, accountID string, opts PD
 			}
 			for _, sd := range accData.Detailed {
 				seq := sd.Sequence
-				lastStage := "Initial"
+				lastStageName := "Initial"
 				if len(sd.History) > 0 {
-					lastStage = sd.History[len(sd.History)-1].Name
+					lastStageName = sd.History[len(sd.History)-1].Name
 				}
-				seq.Category = &lastStage
+				ls := lastStageName
+				seq.Category = &ls
 				section.Sequences = append(section.Sequences, seq)
 			}
 			mrd.Sections = append(mrd.Sections, section)

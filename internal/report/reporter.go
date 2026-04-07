@@ -181,17 +181,23 @@ func (r *reporter) buildSection(m core.Maroto, title string, kpi models.ReportKP
 	}
 
 	for _, step := range steps {
-		// Use quadratic scale to make small numbers more visible relative to large ones
+		// Use logarithmic scale to make small numbers more visible relative to large ones
 		// but still maintain the "funnel" feeling
-		perc := math.Sqrt(float64(step.count)) / math.Sqrt(float64(maxVal)) * 100
-		if step.count > 0 && perc < 5 {
-			perc = 5 // Minimum visibility
+		// Log(count+1) / Log(maxVal+1) gives a nice distribution
+		perc := 0.0
+		if step.count > 0 {
+			perc = (math.Log10(float64(step.count) + 1)) / (math.Log10(float64(maxVal) + 1)) * 100
+		}
+
+		if step.count > 0 && perc < 10 {
+			perc = 10 // Minimum visibility for any data point
 		}
 		if perc > 100 {
 			perc = 100
 		}
 
-		coloredCols := int(perc * 8 / 100)
+		// Use 10 columns for the bar instead of 8 for better precision
+		coloredCols := int(perc * 10 / 100)
 		if coloredCols == 0 && step.count > 0 {
 			coloredCols = 1
 		}
@@ -201,13 +207,13 @@ func (r *reporter) buildSection(m core.Maroto, title string, kpi models.ReportKP
 			m.AddRow(8,
 				col.New(2).Add(text.New(step.label, props.Text{Size: 8, Style: fontstyle.Bold})),
 				col.New(coloredCols).WithStyle(&props.Cell{BackgroundColor: step.color}),
-				col.New(8-coloredCols).WithStyle(&props.Cell{BackgroundColor: &props.Color{Red: 243, Green: 244, Blue: 246}}),
+				col.New(10-coloredCols).WithStyle(&props.Cell{BackgroundColor: &props.Color{Red: 243, Green: 244, Blue: 246}}),
 				col.New(2).Add(text.New(fmt.Sprintf("%d", step.count), props.Text{Size: 8, Align: align.Right})),
 			)
 		} else {
 			m.AddRow(8,
 				col.New(2).Add(text.New(step.label, props.Text{Size: 8, Style: fontstyle.Bold})),
-				col.New(8).WithStyle(&props.Cell{BackgroundColor: &props.Color{Red: 243, Green: 244, Blue: 246}}),
+				col.New(10).WithStyle(&props.Cell{BackgroundColor: &props.Color{Red: 243, Green: 244, Blue: 246}}),
 				col.New(2).Add(text.New(fmt.Sprintf("%d", step.count), props.Text{Size: 8, Align: align.Right})),
 			)
 		}
