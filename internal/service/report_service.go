@@ -113,23 +113,51 @@ func (s *ReportService) GetReportData(ctx context.Context, accountID string) (*R
 }
 
 func (s *ReportService) GetReportDataFromSequences(detailed []repository.SequenceWithDetails, rules []mappedRule) *ReportData {
-	statusMap := make(map[string]int)
 	total := len(detailed)
 
-	for _, sd := range detailed {
-		statusMap[sd.Status]++
-	}
+	// Counters based on history
+	var screeningCount, techCount, offerCount, acceptedCount int
 
-	screeningPlus := statusMap["screening"] + statusMap["tech"] + statusMap["final"] + statusMap["offer"] + statusMap["accepted"]
-	offerPlus := statusMap["offer"] + statusMap["accepted"]
-	accepted := statusMap["accepted"]
+	for _, sd := range detailed {
+		hasScreening := false
+		hasTech := false
+		hasOffer := false
+
+		for _, st := range sd.Stages {
+			if !st.IsCompleted {
+				continue
+			}
+			lowerName := strings.ToLower(st.Name)
+			if strings.Contains(lowerName, "screen") {
+				hasScreening = true
+			}
+			if strings.Contains(lowerName, "tech") {
+				hasTech = true
+			}
+			if strings.Contains(lowerName, "offer") {
+				hasOffer = true
+			}
+		}
+
+		if hasScreening {
+			screeningCount++
+		}
+		if hasTech {
+			techCount++
+		}
+		if hasOffer {
+			offerCount++
+		}
+		if sd.Status == "accepted" {
+			acceptedCount++
+		}
+	}
 
 	funnel := []FunnelStep{
 		{Label: "Total Responses", Count: total, Percentage: 100},
-		{Label: "Interviews", Count: screeningPlus, Percentage: calculatePercent(screeningPlus, total)},
-		{Label: "Technical", Count: statusMap["tech"] + statusMap["final"] + statusMap["offer"] + statusMap["accepted"], Percentage: 0},
-		{Label: "Offers", Count: offerPlus, Percentage: calculatePercent(offerPlus, total)},
-		{Label: "Hires", Count: accepted, Percentage: calculatePercent(accepted, total)},
+		{Label: "Interviews", Count: screeningCount, Percentage: calculatePercent(screeningCount, total)},
+		{Label: "Technical", Count: techCount, Percentage: calculatePercent(techCount, total)},
+		{Label: "Offers", Count: offerCount, Percentage: calculatePercent(offerCount, total)},
 	}
 
 	vacancyMap := make(map[string]map[string]int)
@@ -159,8 +187,8 @@ func (s *ReportService) GetReportDataFromSequences(detailed []repository.Sequenc
 		Funnel:         funnel,
 		VacancyStats:   vacancyMap,
 		CompanyStats:   companyMap,
-		ConversionRate: calculatePercent(offerPlus, screeningPlus),
-		AcceptanceRate: calculatePercent(accepted, total),
+		ConversionRate: calculatePercent(offerCount, screeningCount),
+		AcceptanceRate: calculatePercent(acceptedCount, total),
 	}
 }
 
@@ -398,9 +426,6 @@ func (s *ReportService) writeOverviewSection(f *excelize.File, sheet, title stri
 	row++
 	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), "Interview-to-Offer Conversion")
 	f.SetCellValue(sheet, fmt.Sprintf("B%d", row), fmt.Sprintf("%.1f%%", rd.ConversionRate))
-	row++
-	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), "Hire Rate (Total)")
-	f.SetCellValue(sheet, fmt.Sprintf("B%d", row), fmt.Sprintf("%.1f%%", rd.AcceptanceRate))
 
 	row += 2
 	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), "Recruitment Funnel")

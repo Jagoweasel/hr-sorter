@@ -144,21 +144,17 @@ func (r *reporter) buildSection(m core.Maroto, title string, kpi models.ReportKP
 	m.AddRow(10, col.New(12).Add(text.New("KPI SUMMARY", props.Text{Size: 10, Style: fontstyle.Bold, Color: &props.Color{Red: 100, Green: 100, Blue: 100}})))
 
 	m.AddRow(15,
-		col.New(3).Add(
+		col.New(4).Add(
 			text.New("Applied", props.Text{Size: 8}),
 			text.New(fmt.Sprintf("%d", kpi.TotalApplied), props.Text{Size: 12, Style: fontstyle.Bold, Top: 4}),
 		),
-		col.New(3).Add(
+		col.New(4).Add(
 			text.New("Sequences", props.Text{Size: 8}),
 			text.New(fmt.Sprintf("%d", kpi.TotalSequences), props.Text{Size: 12, Style: fontstyle.Bold, Top: 4}),
 		),
-		col.New(3).Add(
+		col.New(4).Add(
 			text.New("Conv. Rate", props.Text{Size: 8}),
 			text.New(fmt.Sprintf("%.1f%%", kpi.ResponseRate), props.Text{Size: 12, Style: fontstyle.Bold, Top: 4}),
-		),
-		col.New(3).Add(
-			text.New("Hire Rate", props.Text{Size: 8}),
-			text.New(fmt.Sprintf("%.1f%%", kpi.HireRate), props.Text{Size: 12, Style: fontstyle.Bold, Top: 4}),
 		),
 	)
 
@@ -181,7 +177,6 @@ func (r *reporter) buildSection(m core.Maroto, title string, kpi models.ReportKP
 		{"Interviews", funnel.Screening, &props.Color{Red: 79, Green: 70, Blue: 229}}, // Indigo
 		{"Technical", funnel.Tech, &props.Color{Red: 147, Green: 51, Blue: 234}},      // Purple
 		{"Offers", funnel.Offer, &props.Color{Red: 234, Green: 179, Blue: 8}},         // Yellow
-		{"Hired", funnel.Accepted, &props.Color{Red: 34, Green: 197, Blue: 94}},       // Green
 	}
 
 	for _, step := range steps {
@@ -195,12 +190,21 @@ func (r *reporter) buildSection(m core.Maroto, title string, kpi models.ReportKP
 			coloredCols = 1
 		}
 
-		m.AddRow(8,
-			col.New(2).Add(text.New(step.label, props.Text{Size: 8, Style: fontstyle.Bold})),
-			col.New(coloredCols).WithStyle(&props.Cell{BackgroundColor: step.color}),
-			col.New(8-coloredCols).WithStyle(&props.Cell{BackgroundColor: &props.Color{Red: 243, Green: 244, Blue: 246}}),
-			col.New(2).Add(text.New(fmt.Sprintf("%d", step.count), props.Text{Size: 8, Align: align.Right})),
-		)
+		// If count is 0, we don't draw the colored part to avoid Maroto v2 layout weirdness
+		if coloredCols > 0 {
+			m.AddRow(8,
+				col.New(2).Add(text.New(step.label, props.Text{Size: 8, Style: fontstyle.Bold})),
+				col.New(coloredCols).WithStyle(&props.Cell{BackgroundColor: step.color}),
+				col.New(8-coloredCols).WithStyle(&props.Cell{BackgroundColor: &props.Color{Red: 243, Green: 244, Blue: 246}}),
+				col.New(2).Add(text.New(fmt.Sprintf("%d", step.count), props.Text{Size: 8, Align: align.Right})),
+			)
+		} else {
+			m.AddRow(8,
+				col.New(2).Add(text.New(step.label, props.Text{Size: 8, Style: fontstyle.Bold})),
+				col.New(8).WithStyle(&props.Cell{BackgroundColor: &props.Color{Red: 243, Green: 244, Blue: 246}}),
+				col.New(2).Add(text.New(fmt.Sprintf("%d", step.count), props.Text{Size: 8, Align: align.Right})),
+			)
+		}
 		m.AddRow(2)
 	}
 
