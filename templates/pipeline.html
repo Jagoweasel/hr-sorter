@@ -7,14 +7,26 @@
         </div>
 
         <div class="flex items-center space-x-4 ml-4 mr-auto">
-            <label class="flex items-center space-x-1 cursor-pointer">
-                <input type="checkbox" onchange="applyFilters()" id="hide-rejected" {{ if .HideRejected }}checked{{ end }} class="w-3 h-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
-                <span class="text-[9px] font-black text-gray-400 uppercase tracking-tight">{{ Tr "hide_rejected" }}</span>
-            </label>
-            <label class="flex items-center space-x-1 cursor-pointer">
-                <input type="checkbox" onchange="applyFilters()" id="hide-accepted" {{ if .HideAccepted }}checked{{ end }} class="w-3 h-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
-                <span class="text-[9px] font-black text-gray-400 uppercase tracking-tight">{{ Tr "hide_accepted" }}</span>
-            </label>
+            <div class="flex flex-col min-w-[120px]">
+                <label class="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">{{ Tr "active_account" }}</label>
+                <select id="account-filter" onchange="applyFilters()"
+                        class="bg-gray-50 border border-gray-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white rounded px-2 py-0.5 text-[10px] font-black focus:border-blue-500 outline-none appearance-none cursor-pointer">
+                    <option value="">{{ Tr "all_accounts" }}</option>
+                    {{ range .Accounts }}
+                    <option value="{{ .ID }}" {{ if eq (printf "%d" .ID) $.ActiveAccountID }}selected{{ end }}>{{ .Name }}</option>
+                    {{ end }}
+                </select>
+            </div>
+            <div class="flex items-center space-x-4">
+                <label class="flex items-center space-x-1 cursor-pointer">
+                    <input type="checkbox" onchange="applyFilters()" id="hide-rejected" {{ if .HideRejected }}checked{{ end }} class="w-3 h-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+                    <span class="text-[9px] font-black text-gray-400 uppercase tracking-tight">{{ Tr "hide_rejected" }}</span>
+                </label>
+                <label class="flex items-center space-x-1 cursor-pointer">
+                    <input type="checkbox" onchange="applyFilters()" id="hide-accepted" {{ if .HideAccepted }}checked{{ end }} class="w-3 h-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+                    <span class="text-[9px] font-black text-gray-400 uppercase tracking-tight">{{ Tr "hide_accepted" }}</span>
+                </label>
+            </div>
         </div>
         
         <div class="bg-gray-200 dark:bg-gray-700 p-1 rounded-lg flex space-x-1 border border-gray-300 dark:border-gray-600">
@@ -221,12 +233,16 @@
     function applyFilters() {
         const hideRejected = document.getElementById('hide-rejected').checked;
         const hideAccepted = document.getElementById('hide-accepted').checked;
+        const accountId = document.getElementById('account-filter').value;
+        
         setCookie('pipe_hide_rejected', hideRejected, 7);
         setCookie('pipe_hide_accepted', hideAccepted, 7);
+        setCookie('filter_account_id', accountId, 7);
         
         const url = new URL(window.location);
         url.searchParams.set('hide_rejected', hideRejected);
         url.searchParams.set('hide_accepted', hideAccepted);
+        url.searchParams.set('account_id', accountId);
         
         // Use HTMX to refresh the content without a full page reload
         htmx.ajax('GET', url.toString(), {
@@ -234,7 +250,8 @@
             swap: 'morph',
             values: {
                 hide_rejected: hideRejected,
-                hide_accepted: hideAccepted
+                hide_accepted: hideAccepted,
+                account_id: accountId
             }
         }).then(() => {
             // Update URL for bookmarking/refreshing

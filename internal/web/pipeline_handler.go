@@ -6,6 +6,7 @@ import (
 	"hr-sorter/internal/repository"
 	"log"
 	"net/http"
+	"strconv"
 )
 
 type AccountGroup struct {
@@ -108,6 +109,12 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 	accountMap := make(map[int64]*AccountGroup)
 	for i := range allAccounts {
 		acc := allAccounts[i]
+
+		// If filtering by account, skip others
+		if activeAccountID != "" && strconv.FormatInt(acc.ID, 10) != activeAccountID {
+			continue
+		}
+
 		group := &AccountGroup{Account: &acc}
 		for _, def := range columnDefs {
 			group.Columns = append(group.Columns, PipelineColumn{ColumnDef: def})
@@ -139,17 +146,21 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		View         string
-		Groups       []*AccountGroup
-		ColumnDefs   []models.ColumnDef
-		HideRejected bool
-		HideAccepted bool
+		View            string
+		Groups          []*AccountGroup
+		ColumnDefs      []models.ColumnDef
+		Accounts        []models.Account
+		ActiveAccountID string
+		HideRejected    bool
+		HideAccepted    bool
 	}{
-		View:         view,
-		Groups:       groups,
-		ColumnDefs:   columnDefs,
-		HideRejected: hideRejected,
-		HideAccepted: hideAccepted,
+		View:            view,
+		Groups:          groups,
+		ColumnDefs:      columnDefs,
+		Accounts:        allAccounts,
+		ActiveAccountID: activeAccountID,
+		HideRejected:    hideRejected,
+		HideAccepted:    hideAccepted,
 	}
 
 	h.templates.RenderWithStatus(w, r, "pipeline.html", http.StatusOK, data, h.getLocale(r))
