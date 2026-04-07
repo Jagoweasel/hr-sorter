@@ -90,12 +90,12 @@
         <div class="container mx-auto flex justify-between items-center">
             <div class="flex items-center">
                 <h1 class="text-xl font-bold mr-6">{{ Tr "hr_sorter" }}</h1>
-                <a hx-get="/" hx-target="main" hx-select="main" hx-push-url="true" class="px-3 cursor-pointer hover:underline">{{ Tr "dashboard" }}</a>
-                <a hx-get="/pipeline" hx-target="main" hx-select="main" hx-push-url="true" class="px-3 cursor-pointer hover:underline">{{ Tr "pipeline" }}</a>
-                <a hx-get="/reports" hx-target="main" hx-select="main" hx-push-url="true" class="px-3 cursor-pointer hover:underline">{{ Tr "reports" }}</a>
-                <a hx-get="/accounts" hx-target="main" hx-select="main" hx-push-url="true" class="px-3 cursor-pointer hover:underline">{{ Tr "accounts" }}</a>
-                <a hx-get="/mapping" hx-target="main" hx-select="main" hx-push-url="true" class="px-3 cursor-pointer hover:underline">{{ Tr "vacancy_mapping" }}</a>
-                <a hx-get="/logs" hx-target="main" hx-select="main" hx-push-url="true" class="px-3 cursor-pointer hover:underline">{{ Tr "system_logs" }}</a>
+                <a hx-get="/" hx-target="#main-content" hx-push-url="true" class="px-3 cursor-pointer hover:underline">{{ Tr "dashboard" }}</a>
+                <a hx-get="/pipeline" hx-target="#main-content" hx-push-url="true" class="px-3 cursor-pointer hover:underline">{{ Tr "pipeline" }}</a>
+                <a hx-get="/reports" hx-target="#main-content" hx-push-url="true" class="px-3 cursor-pointer hover:underline">{{ Tr "reports" }}</a>
+                <a hx-get="/accounts" hx-target="#main-content" hx-push-url="true" class="px-3 cursor-pointer hover:underline">{{ Tr "accounts" }}</a>
+                <a hx-get="/mapping" hx-target="#main-content" hx-push-url="true" class="px-3 cursor-pointer hover:underline">{{ Tr "vacancy_mapping" }}</a>
+                <a hx-get="/logs" hx-target="#main-content" hx-push-url="true" class="px-3 cursor-pointer hover:underline">{{ Tr "system_logs" }}</a>
             </div>
             <div class="flex items-center">
                 <button onclick="toggleTheme()" class="p-2 rounded-full hover:bg-blue-700 dark:hover:bg-blue-900 focus:outline-none transition-colors" title="{{ Tr "toggle_theme" }}">
@@ -109,13 +109,13 @@
                     </svg>
                 </button>
                 <div class="ml-4 border-l border-blue-500 pl-4 flex space-x-2">
-                    <button hx-get="/set-lang?lang=en" class="hover:text-blue-200 {{ if eq Locale "en" }}font-bold underline{{ end }}">EN</button>
-                    <button hx-get="/set-lang?lang=ru" class="hover:text-blue-200 {{ if eq Locale "ru" }}font-bold underline{{ end }}">RU</button>
+                    <button hx-get="/set-lang?lang=en" hx-target="#main-content" class="hover:text-blue-200 {{ if eq Locale "en" }}font-bold underline{{ end }}">EN</button>
+                    <button hx-get="/set-lang?lang=ru" hx-target="#main-content" class="hover:text-blue-200 {{ if eq Locale "ru" }}font-bold underline{{ end }}">RU</button>
                 </div>
             </div>
         </div>
     </nav>
-    <main class="container mx-auto mt-8 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+    <main id="main-content" class="container mx-auto mt-8 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
         {{ template "content" . }}
     </main>
     <div id="modal-container"></div>
