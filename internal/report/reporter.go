@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hr-sorter/internal/domain"
 	"hr-sorter/internal/models"
+	"math"
 	"os"
 	"runtime"
 	"strings"
@@ -180,7 +181,12 @@ func (r *reporter) buildSection(m core.Maroto, title string, kpi models.ReportKP
 	}
 
 	for _, step := range steps {
-		perc := float64(step.count) / float64(maxVal) * 100
+		// Use quadratic scale to make small numbers more visible relative to large ones
+		// but still maintain the "funnel" feeling
+		perc := math.Sqrt(float64(step.count)) / math.Sqrt(float64(maxVal)) * 100
+		if step.count > 0 && perc < 5 {
+			perc = 5 // Minimum visibility
+		}
 		if perc > 100 {
 			perc = 100
 		}

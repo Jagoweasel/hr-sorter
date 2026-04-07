@@ -227,7 +227,13 @@ func (s *ReportService) ExportPDF(ctx context.Context, accountID string, opts PD
 	}
 
 	for _, sd := range mainData.Detailed {
-		mrd.Sequences = append(mrd.Sequences, sd.Sequence)
+		seq := sd.Sequence
+		lastStage := "Initial"
+		if len(sd.History) > 0 {
+			lastStage = sd.History[len(sd.History)-1].Name
+		}
+		seq.Category = &lastStage
+		mrd.Sequences = append(mrd.Sequences, seq)
 	}
 
 	if accountID == "" {
@@ -264,7 +270,13 @@ func (s *ReportService) ExportPDF(ctx context.Context, accountID string, opts PD
 				}
 			}
 			for _, sd := range accData.Detailed {
-				section.Sequences = append(section.Sequences, sd.Sequence)
+				seq := sd.Sequence
+				lastStage := "Initial"
+				if len(sd.History) > 0 {
+					lastStage = sd.History[len(sd.History)-1].Name
+				}
+				seq.Category = &lastStage
+				section.Sequences = append(section.Sequences, seq)
 			}
 			mrd.Sections = append(mrd.Sections, section)
 		}
