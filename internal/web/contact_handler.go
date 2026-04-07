@@ -8,12 +8,43 @@ import (
 
 func (h *Handler) handleContacts(w http.ResponseWriter, r *http.Request) {
 	activeAccountID := r.URL.Query().Get("account_id")
+	if activeAccountID == "" {
+		activeAccountID = h.getCookie(r, "filter_account_id", "")
+	}
+
 	platformFilter := r.URL.Query().Get("platform")
-	showDeclines := r.URL.Query().Get("show_declines") == "true"
-	hideScreened := r.URL.Query().Get("hide_screened") == "true"
-	hideUnanswered := r.URL.Query().Get("hide_unanswered") == "true"
-	showIgnored := r.URL.Query().Get("show_ignored") == "true"
+	if platformFilter == "" {
+		platformFilter = h.getCookie(r, "filter_platform", "")
+	}
+
+	showDeclinesStr := r.URL.Query().Get("show_declines")
+	if showDeclinesStr == "" {
+		showDeclinesStr = h.getCookie(r, "filter_show_declines", "false")
+	}
+	showDeclines := showDeclinesStr == "true"
+
+	hideScreenedStr := r.URL.Query().Get("hide_screened")
+	if hideScreenedStr == "" {
+		hideScreenedStr = h.getCookie(r, "filter_hide_screened", "true")
+	}
+	hideScreened := hideScreenedStr == "true"
+
+	hideUnansweredStr := r.URL.Query().Get("hide_unanswered")
+	if hideUnansweredStr == "" {
+		hideUnansweredStr = h.getCookie(r, "filter_hide_unanswered", "false")
+	}
+	hideUnanswered := hideUnansweredStr == "true"
+
+	showIgnoredStr := r.URL.Query().Get("show_ignored")
+	if showIgnoredStr == "" {
+		showIgnoredStr = h.getCookie(r, "filter_show_ignored", "false")
+	}
+	showIgnored := showIgnoredStr == "true"
+
 	sequenceFilter := r.URL.Query().Get("sequence_filter")
+	if sequenceFilter == "" {
+		sequenceFilter = h.getCookie(r, "filter_sequence_filter", "all")
+	}
 
 	filteredContacts, err := h.conService.GetFilteredContacts(r.Context(), activeAccountID, platformFilter, showDeclines, hideScreened, hideUnanswered, showIgnored, sequenceFilter)
 	if err != nil {

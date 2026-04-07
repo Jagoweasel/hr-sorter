@@ -193,6 +193,9 @@ func (tm *TemplateManager) Render(w io.Writer, r *http.Request, name string, dat
 
 	// If it's a main page (no slash), use ExecuteTemplate with layout.html
 	if !strings.Contains(name, "/") {
+		if r.Header.Get("HX-Request") == "true" {
+			return t.ExecuteTemplate(w, "content", data)
+		}
 		return t.ExecuteTemplate(w, "layout.html", data)
 	}
 

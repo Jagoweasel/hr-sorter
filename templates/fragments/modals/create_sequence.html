@@ -7,6 +7,7 @@
             </button>
         </div>
         <form hx-post="/sequences/create" hx-target="body">
+            {{ csrfField }}
             <input type="hidden" name="contact_id" value="{{ .ContactID }}">
             <div class="space-y-6">
                 <div class="grid grid-cols-2 gap-6">

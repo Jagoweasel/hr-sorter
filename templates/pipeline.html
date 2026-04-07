@@ -31,18 +31,18 @@
                 {{ Tr "delete_selected" }}
             </button>
             <div class="w-px bg-gray-300 dark:bg-gray-600 mx-1 my-1"></div>
-            <a href="/pipeline?view=kanban" 
+            <button hx-get="/pipeline?view=kanban" hx-target="#pipeline-content" hx-swap="morph" hx-push-url="true"
                class="px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all {{ if eq .View "kanban" }}bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm{{ else }}text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200{{ end }}">
                 {{ Tr "kanban" }}
-            </a>
-            <a href="/pipeline?view=timeline" 
+            </button>
+            <button hx-get="/pipeline?view=timeline" hx-target="#pipeline-content" hx-swap="morph" hx-push-url="true"
                class="px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all {{ if eq .View "timeline" }}bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm{{ else }}text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200{{ end }}">
                 {{ Tr "timeline" }}
-            </a>
+            </button>
         </div>
     </div>
 
-    <div class="flex-1 overflow-hidden">
+    <div class="flex-1 overflow-hidden" id="pipeline-content" hx-ext="idiomorph">
         {{ if eq .View "kanban" }}
         <!-- Compact Kanban View -->
         <div class="h-full overflow-auto pb-8">
@@ -94,7 +94,7 @@
                                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                                     </button>
                                     <button class="p-0.5 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-colors"
-                                            hx-delete="/sequences/delete?id={{ .ID }}" hx-confirm="{{ Tr "confirm_delete_sequence" }}" hx-target="body">
+                                            hx-delete="/sequences/delete?id={{ .ID }}" hx-confirm="{{ Tr "confirm_delete_sequence" }}" hx-target="#pipeline-content" hx-swap="morph">
                                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                     </button>
                                 </div>
@@ -118,7 +118,7 @@
                                 <!-- Actions -->
                                 <div class="flex items-center justify-between space-x-1 pt-1">
                                     <select class="flex-1 text-[8px] bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-1 py-0.5 font-black text-gray-500 dark:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500/10 outline-none appearance-none hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer disabled:opacity-50"
-                                            hx-post="/sequences/move?id={{ .ID }}" hx-trigger="change" name="status" hx-target="body" hx-disabled-elt="this">
+                                            hx-post="/sequences/move?id={{ .ID }}" hx-trigger="change" name="status" hx-target="#pipeline-content" hx-swap="morph" hx-disabled-elt="this">
                                         <option value="">{{ Tr "status" }}...</option>
                                         {{ range $.ColumnDefs }}
                                         <option value="{{ .ID }}" {{ if eq .ID $colDef.ID }}selected{{ end }}>{{ .Label }}</option>
@@ -173,11 +173,11 @@
                                 <!-- Terminal Actions (Reject/Accept) -->
                                 <div class="flex items-center space-x-1.5 shrink-0">
                                     <div class="flex bg-gray-100 dark:bg-gray-700 rounded-md p-0.5 border border-gray-200 dark:border-gray-700 space-x-0.5 mr-2">
-                                        <button hx-post="/sequences/move?id={{ .ID }}&status=accepted" hx-target="body" hx-confirm="{{ Tr "confirm_accept_candidate" }}"
+                                        <button hx-post="/sequences/move?id={{ .ID }}&status=accepted" hx-target="#pipeline-content" hx-swap="morph" hx-confirm="{{ Tr "confirm_accept_candidate" }}"
                                                 class="p-1 bg-green-500 text-white rounded hover:bg-green-600 transition-colors shadow-sm" title="{{ Tr "accepted" }}">
                                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
                                         </button>
-                                        <button hx-post="/sequences/move?id={{ .ID }}&status=rejected" hx-target="body" hx-confirm="{{ Tr "confirm_reject_candidate" }}"
+                                        <button hx-post="/sequences/move?id={{ .ID }}&status=rejected" hx-target="#pipeline-content" hx-swap="morph" hx-confirm="{{ Tr "confirm_reject_candidate" }}"
                                                 class="p-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors shadow-sm" title="{{ Tr "rejected" }}">
                                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
                                         </button>
@@ -200,7 +200,7 @@
                                         {{ if and $seq.IsRejected (eq (add $idx 1) $historyLen) }}border-red-500 bg-red-50 dark:bg-red-900/20{{ else }}border-green-500{{ end }}">
                                         <div class="flex justify-between items-start">
                                             <span class="text-[6px] font-black text-gray-400 dark:text-gray-500 uppercase leading-none">{{ Tr "step" }} {{ add $idx 1 }}</span>
-                                            <button hx-post="/stages/update?id={{ .ID }}&completed=false" hx-target="body" 
+                                            <button hx-post="/stages/update?id={{ .ID }}&completed=false" hx-target="#pipeline-content" hx-swap="morph"
                                                     class="opacity-0 group-hover/node:opacity-100 transition-opacity text-gray-300 dark:text-gray-600 hover:text-red-500 leading-none">
                                                 <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
                                             </button>
@@ -218,7 +218,7 @@
                                     {{ if not (or .IsAccepted .IsRejected) }}
                                         {{ range .Stages }}
                                             {{ if not .IsCompleted }}
-                                            <button hx-post="/stages/update?id={{ .ID }}&completed=true" hx-target="body"
+                                            <button hx-post="/stages/update?id={{ .ID }}&completed=true" hx-target="#pipeline-content" hx-swap="morph"
                                                     class="px-3 py-1.5 rounded-lg border border-dashed border-gray-300 dark:border-gray-700 text-left min-w-[130px] opacity-40 hover:opacity-100 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group/next">
                                                 <p class="text-[10px] font-black text-gray-500 dark:text-gray-400 truncate leading-tight">{{ .Name }}</p>
                                             </button>
@@ -330,18 +330,62 @@
         });
     }
 
+    function setCookie(name, value, days) {
+        let expires = "";
+        if (days) {
+            let date = new Date();
+            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            expires = "; expires=" + date.toUTCString();
+        }
+        document.cookie = name + "=" + (value || "") + expires + "; path=/";
+    }
+
+    function getCookie(name) {
+        let nameEQ = name + "=";
+        let ca = document.cookie.split(';');
+        for (let i = 0; i < ca.length; i++) {
+            let c = ca[i];
+            while (c.charAt(0) == ' ') c = c.substring(1, c.length);
+            if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
+        }
+        return null;
+    }
+
     function applyFilters() {
         const hideRejected = document.getElementById('hide-rejected').checked;
         const hideAccepted = document.getElementById('hide-accepted').checked;
+        setCookie('pipe_hide_rejected', hideRejected, 7);
+        setCookie('pipe_hide_accepted', hideAccepted, 7);
+        
         const url = new URL(window.location);
         url.searchParams.set('hide_rejected', hideRejected);
         url.searchParams.set('hide_accepted', hideAccepted);
-        window.location.href = url.toString();
+        
+        // Use HTMX to refresh the content without a full page reload
+        htmx.ajax('GET', url.toString(), {
+            target: '#pipeline-content',
+            swap: 'morph',
+            values: {
+                hide_rejected: hideRejected,
+                hide_accepted: hideAccepted
+            }
+        }).then(() => {
+            // Update URL for bookmarking/refreshing
+            window.history.pushState({}, '', url.toString());
+        });
     }
 
     // Auto-scroll to sequence
     document.addEventListener('DOMContentLoaded', () => {
+        // Save view to cookie if present in URL
         const urlParams = new URLSearchParams(window.location.search);
+        const view = urlParams.get('view');
+        if (view) setCookie('pipe_view', view, 7);
+
+        window.addEventListener('popstate', () => {
+            window.location.reload(); // Simple sync for back button
+        });
+
         const seqId = urlParams.get('sequence_id');
         if (seqId) {
             const el = document.getElementById(`seq-card-${seqId}`);

@@ -2,6 +2,7 @@
     <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 w-full max-sm relative border dark:border-gray-700" onclick="event.stopPropagation()">
         <h2 class="text-xl font-black text-gray-900 dark:text-white tracking-tight mb-6">{{ Tr "edit_account" }}</h2>
         <form action="/accounts/update" method="POST" class="space-y-6">
+            {{ csrfField }}
             <input type="hidden" name="id" value="{{ .ID }}">
             <div>
                 <label class="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">{{ Tr "account_name" }}</label>

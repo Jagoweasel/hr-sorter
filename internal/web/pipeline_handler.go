@@ -29,12 +29,25 @@ type PipelineColumn struct {
 func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 	view := r.URL.Query().Get("view")
 	if view == "" {
-		view = "kanban"
+		view = h.getCookie(r, "pipe_view", "kanban")
 	}
 
 	activeAccountID := r.URL.Query().Get("account_id")
-	hideRejected := r.URL.Query().Get("hide_rejected") == "true"
-	hideAccepted := r.URL.Query().Get("hide_accepted") == "true"
+	if activeAccountID == "" {
+		activeAccountID = h.getCookie(r, "filter_account_id", "")
+	}
+
+	hideRejectedStr := r.URL.Query().Get("hide_rejected")
+	if hideRejectedStr == "" {
+		hideRejectedStr = h.getCookie(r, "pipe_hide_rejected", "false")
+	}
+	hideRejected := hideRejectedStr == "true"
+
+	hideAcceptedStr := r.URL.Query().Get("hide_accepted")
+	if hideAcceptedStr == "" {
+		hideAcceptedStr = h.getCookie(r, "pipe_hide_accepted", "false")
+	}
+	hideAccepted := hideAcceptedStr == "true"
 
 	allAccounts, _ := h.accRepo.GetAll(r.Context())
 	sequences, err := h.seqRepo.GetAll(r.Context(), activeAccountID)

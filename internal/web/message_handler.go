@@ -22,16 +22,15 @@ func (h *Handler) handleMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// On-demand sync for HH if no messages and not synced recently
-	if contact != nil && contact.Platform == "hh" && len(messages) == 0 {
+	// On-demand sync for HH if not synced recently
+	if contact != nil && contact.Platform == "hh" {
 		negID := strings.TrimPrefix(contact.ExternalID, "hh_neg_")
 		msgURL := "https://api.hh.ru/negotiations/" + negID + "/messages"
-		// Trigger sync
-		err = h.hhManager.SyncContactMessages(r.Context(), contact.IntegrationID, contact.ID, msgURL)
-		if err == nil {
-			// Fetch again after sync
-			messages, _ = h.msgRepo.GetByContactID(r.Context(), id)
-		}
+
+		// Run sync in background to keep UI responsive
+		go func() {
+			h.hhManager.SyncContactMessages(h.rootCtx, contact.IntegrationID, contact.ID, msgURL)
+		}()
 	}
 
 	// Merge with HH cache if applicable
@@ -80,6 +79,16 @@ func (h *Handler) handleMessageList(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Web: Error fetching messages for contact %d: %v", id, err)
 		http.Error(w, err.Error(), 500)
 		return
+	}
+
+	// Trigger background sync for HH
+	contact, _ := h.conRepo.GetByID(r.Context(), id)
+	if contact != nil && contact.Platform == "hh" {
+		negID := strings.TrimPrefix(contact.ExternalID, "hh_neg_")
+		msgURL := "https://api.hh.ru/negotiations/" + negID + "/messages"
+		go func() {
+			h.hhManager.SyncContactMessages(h.rootCtx, contact.IntegrationID, contact.ID, msgURL)
+		}()
 	}
 
 	// Merge with HH cache

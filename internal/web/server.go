@@ -107,6 +107,14 @@ func (h *Handler) handleCSRFError(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Forbidden - "+reason.Error(), http.StatusForbidden)
 }
 
+func (h *Handler) getCookie(r *http.Request, name, defaultValue string) string {
+	cookie, err := r.Cookie(name)
+	if err == nil {
+		return cookie.Value
+	}
+	return defaultValue
+}
+
 func (h *Handler) InitHandler() http.Handler {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
