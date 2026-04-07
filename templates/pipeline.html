@@ -1,5 +1,5 @@
 {{ define "content" }}
-<div class="flex flex-col h-screen overflow-hidden bg-white dark:bg-gray-900">
+<div id="pipeline-wrapper" class="flex flex-col h-screen overflow-hidden bg-white dark:bg-gray-900">
     <!-- Header -->
     <div class="flex justify-between items-center px-4 py-2 shrink-0 border-b dark:border-gray-700 shadow-sm bg-gray-50 dark:bg-gray-800">
         <div>
@@ -39,22 +39,13 @@
                class="px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all {{ if eq .View "timeline" }}bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm{{ else }}text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200{{ end }}">
                 {{ Tr "timeline" }}
             </button>
-            <div class="w-px bg-gray-300 dark:bg-gray-600 mx-1 my-1"></div>
-            <button hx-get="/pipeline?view=kanban" hx-target="#main-content" hx-swap="morph" hx-push-url="true"
-               class="px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all {{ if eq .View "kanban" }}bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm{{ else }}text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200{{ end }}">
-                {{ Tr "kanban" }}
-            </button>
-            <button hx-get="/pipeline?view=timeline" hx-target="#main-content" hx-swap="morph" hx-push-url="true"
-               class="px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all {{ if eq .View "timeline" }}bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm{{ else }}text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200{{ end }}">
-                {{ Tr "timeline" }}
-            </button>
         </div>
     </div>
 
-    <div class="flex-1 overflow-hidden" id="pipeline-content" hx-ext="idiomorph">
+    <div class="flex-1 overflow-hidden" id="pipeline-content">
         {{ if eq .View "kanban" }}
         <!-- Compact Kanban View -->
-        <div class="h-full overflow-auto pb-8">
+        <div id="kanban-scroll-area" class="h-full overflow-auto pb-8" idm-preserve-scroll="true">
             <form id="bulk-form">
             {{ csrfField }}
             <div class="inline-flex flex-col min-w-full">
@@ -148,7 +139,7 @@
 
         {{ else }}
         <!-- Thinned Timeline History Chain View -->
-        <div class="h-full overflow-auto px-4 py-4 bg-gray-50 dark:bg-gray-900">
+        <div id="timeline-scroll-area" class="h-full overflow-auto px-4 py-4 bg-gray-50 dark:bg-gray-900" idm-preserve-scroll="true">
             <div class="max-w-5xl mx-auto space-y-8">
                 {{ range .Groups }}
                 <div class="space-y-3">
