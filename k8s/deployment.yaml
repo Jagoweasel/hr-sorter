@@ -46,6 +46,8 @@ spec:
               value: "3000"
             - name: HEADLESS
               value: "true"
+            - name: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD
+              value: "1"
           volumeMounts:
             - name: db-storage
               mountPath: /app/data

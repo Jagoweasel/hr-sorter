@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.25.1-bullseye AS builder
+FROM golang:1.23-bullseye AS builder
 
 WORKDIR /app
 
@@ -28,21 +28,9 @@ RUN mkdir -p /app/data
 # Install dependencies for Playwright and CA certificates
 RUN apt-get update && apt-get install -y \
     ca-certificates \
-    libnss3 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    librandr2 \
-    libgbm1 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libasound2 \
+    curl \
+    gnupg \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary and other files from the builder stage
@@ -50,8 +38,8 @@ COPY --from=builder /app/hr-sorter .
 COPY --from=builder /app/templates ./templates
 COPY --from=builder /go/bin/playwright /usr/local/bin/playwright
 
-# Install Playwright browsers (chromium)
-# We use the playwright CLI we just copied
+# Install Playwright browsers (chromium) and their system dependencies
+# This command installs both the browser and the required system libraries
 RUN playwright install chromium --with-deps
 
 # Expose port
