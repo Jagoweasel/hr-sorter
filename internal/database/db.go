@@ -199,6 +199,17 @@ func InitDB(path string) {
 	SeedFilters()
 }
 
+func CloseDB() {
+	if DB != nil {
+		log.Println("[DB] Closing database connection...")
+		if err := DB.Close(); err != nil {
+			log.Printf("[DB] Error closing database: %v", err)
+		} else {
+			log.Println("[DB] Database connection closed.")
+		}
+	}
+}
+
 func SeedFilters() {
 	path := "filters.json"
 	if _, err := os.Stat(path); os.IsNotExist(err) {

@@ -21,7 +21,7 @@ To run the entire stack in a container:
 ```bash
 docker compose up -d
 ```
-The application will be available at `http://localhost:8080`.
+The application will be available at `http://localhost:3000`.
 The database file `hr-sorter.db` will be persisted in the `./data` directory.
 
 ## Local Development (without Docker)
@@ -35,7 +35,7 @@ The database file `hr-sorter.db` will be persisted in the `./data` directory.
    ```
 3. Run the application:
    ```bash
-   go run ./cmd/hr-sorter/main.go
+   go run ./cmd/hrsorter/main.go
    ```
 
 ## Running Tests

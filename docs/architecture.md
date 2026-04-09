@@ -1,52 +1,50 @@
-# HR-SORTER v2.0 Architecture
+# Архитектура HR-SORTER v2.0
 
-## Overview
-HR-SORTER v2.0 is designed using a Clean Architecture approach, following the Standard Go Project Layout. The system is split into independent layers to ensure testability and maintainability.
+## Обзор
+HR-SORTER v2.0 спроектирован с использованием подхода Clean Architecture и следует стандарту Standard Go Project Layout. Система разделена на независимые слои для обеспечения тестируемости и удобства поддержки.
 
-## Package Structure
+## Структура пакетов
 
 ### `internal/domain`
-Contains core business entities, DTOs, and interface definitions (contracts). This layer has no dependencies on other internal packages.
+Содержит основные бизнес-сущности, DTO и определения интерфейсов (контракты). Этот слой не имеет зависимостей от других внутренних пакетов.
 
 ### `internal/auth/hh`
 Модуль для автоматизированной авторизации в HeadHunter (Android Spoofing).
 - **Authenticator**: Управляет жизненным циклом сессий Playwright, поддерживая мультиаккаунтинг.
-- **AuthFlow**: Инкапсулирует процесс логина, ожидание OTP/Captcha и перехват OAuth кода через Request Interception.
-- **HHClient**: Высокоуровневая обертка для API HH с автоматическим обновлением токенов (Refresh Token) при 403 Forbidden.
+- **AuthFlow**: Инкапсулирует процесс логина, ожидание OTP/Captcha и перехват OAuth кода.
+- **HHClient**: Высокоуровневая обертка для API HH с автоматическим обновлением токенов.
 - **SessionStorage**: Интерфейс для сохранения токенов и User-Agent в БД.
 
 ### `internal/hhclient`
 Низкоуровневые HTTP-клиенты и утилиты для взаимодействия с API HH.
 
 ### `internal/report`
-Generates PDF reports using `maroto/v2`.
-- Uses `go:embed` for font assets (Inter/DejaVuSans).
-- Implements a grid-based layout for professional KPI reporting.
+Генерация PDF-отчетов с использованием `maroto/v2`.
+- Использует `go:embed` для шрифтов (Inter/DejaVuSans).
 
 ### `internal/i18n`
-Localization support for English and Russian.
-- Uses `go:embed` to load JSON translation files.
-- Provides a translation service for both backend logs and frontend templates.
+Поддержка локализации (английский и русский).
+- Использует `go:embed` для загрузки JSON-файлов переводов.
 
 ### `internal/mapping`
-Vacancy categorization engine.
-- Uses regex-based rules to classify vacancies (e.g., "Developer", "Lead").
-- Manageable via persistence layer.
+Движок категоризации вакансий на основе регулярных выражений.
 
 ### `internal/streaming`
-Real-time system log streaming.
-- Integrates with `zap` logger.
-- Broadcasts logs via WebSocket or SSE to the web UI.
+Потоковая передача системных логов в реальном времени (WebSocket/SSE).
 
-### `internal/storage`
-Persistence layer using SQLite.
-- Implements WAL mode and performance tuning.
-- Includes an LRU cache layer for frequent lookups.
+### `internal/repository`
+Слой персистентности (SQLite).
+- Реализует интерфейсы из `internal/domain`.
+- Поддержка режима WAL для производительности.
 
-## Design Patterns
-- **Repository Pattern**: Abstracting data access in `internal/domain`.
-- **Strategy Pattern**: For different reporting types or notification channels.
-- **State Pattern**: To manage the complex HH authentication flow.
-- **Request Interception Pattern**: For capturing non-HTTP protocol (`hhandroid://`) redirects in Playwright.
-- **Proxy Pattern**: HHClient wraps basic HTTP requests with token refresh logic and Android-specific headers.
-- **Dependency Injection**: All dependencies are injected via interfaces to allow for easy mocking.
+## Дизайн-паттерны
+- **Repository Pattern**: Абстракция доступа к данным, контракты определены в `internal/domain/interfaces.go`.
+- **Strategy Pattern**: Для различных типов отчетов и каналов уведомлений.
+- **State Pattern**: Для управления сложным процессом авторизации в HH.
+- **Dependency Injection**: Все зависимости внедряются через интерфейсы для упрощения тестирования.
+
+## Alpha-версия: Docker-сборка
+Для Alpha-версии реализована полная контейнеризация:
+- **Базовый образ**: `debian:bullseye-slim` для поддержки Playwright.
+- **Persistence**: Использование volume для сохранения SQLite базы данных и сессий в `./data`.
+- **Port**: По умолчанию используется порт `3000`.

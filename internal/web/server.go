@@ -151,7 +151,7 @@ func (h *Handler) InitHandler() http.Handler {
 		[]byte(secret),
 		csrf.Secure(false), // Change to true in production with HTTPS
 		csrf.Path("/"),
-		csrf.TrustedOrigins([]string{"localhost:8080", "127.0.0.1:8080"}),
+		csrf.TrustedOrigins([]string{"localhost:3000", "127.0.0.1:3000"}),
 		csrf.ErrorHandler(http.HandlerFunc(h.handleCSRFError)),
 	)
 

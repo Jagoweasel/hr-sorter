@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -81,8 +82,17 @@ func main() {
 	if dbPath == "" {
 		dbPath = "hr-sorter.db"
 	}
+
+	// Ensure directory for database exists
+	if dir := filepath.Dir(dbPath); dir != "." && dir != "/" {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			log.Fatalf("[Main] Failed to create database directory %s: %v", dir, err)
+		}
+	}
+
 	log.Printf("[Main] Initializing database at %s...", dbPath)
 	database.InitDB(dbPath)
+	defer database.CloseDB()
 	log.Println("[Main] Database initialized successfully.")
 
 	// Initialize repositories
@@ -167,7 +177,7 @@ func main() {
 
 	port := os.Getenv("HTTP_PORT")
 	if port == "" {
-		port = "8080"
+		port = "3000"
 	}
 
 	srv := &http.Server{

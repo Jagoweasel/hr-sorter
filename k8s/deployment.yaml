@@ -18,7 +18,7 @@ spec:
         - name: hr-sorter
           image: your-registry/hr-sorter:latest # Replace with your image
           ports:
-            - containerPort: 8080
+            - containerPort: 3000
           env:
             - name: API_ID
               valueFrom:
@@ -43,7 +43,7 @@ spec:
             - name: DB_PATH
               value: "/app/data/hr-sorter.db"
             - name: HTTP_PORT
-              value: "8080"
+              value: "3000"
             - name: HEADLESS
               value: "true"
           volumeMounts:

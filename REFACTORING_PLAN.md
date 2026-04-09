@@ -1,48 +1,158 @@
-# Refactoring Plan - HR Sorter
+# Спецификация локального запуска HH Sorter
 
-This plan outlines the steps to improve the architecture, maintainability, and reliability of the HR Sorter project.
+Для удобного запуска и тестирования приложения без необходимости локальной установки Go и настройки драйверов SQLite, используется Docker и Docker Compose.
 
-## 1. High Severity: Architectural & Reliability (Status: COMPLETED)
-*Goal: Decouple business logic from HTTP handlers and eliminate global state.*
+## 1. Структура проекта
+Убедитесь, что в корне проекта созданы необходимые файлы и папки:
 
-### A. Repository Layer
-- Created `internal/repository` package.
-- Moved all raw SQL queries from web handlers to repository structs.
-- Fixed N+1 query issues (e.g., fetching integrations for each account).
-- Implemented `AccountRepository`, `IntegrationRepository`, `ContactRepository`, `SequenceRepository`, `MessageRepository`, and `FilterRepository`.
+```text
+.
+├── cmd/
+│   └── app/
+│       └── main.go
+├── data/   # Директория для хранения файла sqlite.db
+├── .env.example    # Пример переменных окружения
+├── docker-compose.yml
+├── Dockerfile
+└── README.md       # Инструкция для пользователей
+```
 
-### B. Service Layer
-- Created `internal/service` package.
-- Moved complex logic (e.g., starting/stopping workers, auth flow coordination, sequence creation) from handlers to services.
-- Ensured atomicity by wrapping multi-step database operations in transactions.
+## 2. Dockerfile
 
-### C. Dependency Injection
-- Replaced global `database.DB`, `tgManager`, and `hhManager` with struct fields.
-- Refactored `web.Handler` struct to receive all dependencies (Repositories, Services, Templates) at initialization.
+Создайте файл Dockerfile в корне проекта. Здесь используется многоэтапная сборка (multi-stage build) с включенным CGO для корректной работы драйвера SQLite.
 
-## 2. Medium Severity: Maintenance & Scalability (Status: COMPLETED)
-*Goal: Improve code organization and UI performance.*
+### Этап 1: Сборка
 
-### A. Monolithic Handler Splitting
-- Split the 1400-line `handlers.go` into functional files:
-    - `account_handler.go`
-    - `integration_handler.go`
-    - `pipeline_handler.go`
-    - `contact_handler.go`
-    - `message_handler.go`
-    - `filter_handler.go`
+```
+FROM golang:1.22-alpine AS builder
+```
 
-### B. Template Optimization
-- Implemented `TemplateManager` to parse and cache all HTML files on startup.
-- Moved all inline HTML generation (`fmt.Fprintf`) into `.html` templates using HTMX partials/fragments.
-- Standardized HTMX communication patterns using `HX-Trigger` and `HX-Location`.
+#### Устанавливаем зависимости для CGO (необходимо для SQLite)
 
-## 3. Low Severity: Cleanliness & Standards (Status: COMPLETED)
-*Goal: Idiomatic Go and configuration management.*
+```
+RUN apk add --no-cache gcc musl-dev
+WORKDIR /app
+```
 
-### A. Schema Management
-- Moved the SQL schema from `internal/database/db.go` to `internal/database/schema.sql`.
-- Used `//go:embed` to include the schema in the binary.
+#### Копируем модули для кэширования
 
-### B. Constants & Configuration
-- Extracted hardcoded values and improved logic for stage hierarchies and status synchronization.
+```
+COPY go.mod go.sum ./
+RUN go mod download
+```
+
+#### Копируем исходный код
+
+```
+COPY . .
+```
+
+#### Собираем бинарник с включенным CGO
+
+```
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o /app/hh-aggregator ./cmd/app
+```
+
+### Этап 2: Финальный образ
+
+```
+FROM alpine:latest
+```
+
+#### tzdata для корректной работы со временем
+
+```
+RUN apk --no-cache add tzdata
+WORKDIR /app
+```
+
+#### Копируем бинарник из билдера
+
+```
+COPY --from=builder /app/hh-aggregator .
+```
+
+#### Создаем папку для базы данных
+
+```
+RUN mkdir -p /app/data
+```
+
+#### Точка входа
+
+```
+CMD ["./hhsorter"]
+```
+
+## 3. docker-compose.yml
+
+Создайте файл docker-compose.yml в корне проекта. Этот конфиг описывает сборку образа, проброс портов и монтирование volume для сохранения данных SQLite при перезапусках.
+
+```
+version: '3.8'
+
+services:
+  app:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: hh-aggregator-alpha
+    restart: unless-stopped
+    ports:
+      - "8080:8080" # Измените порт, если необходимо
+    volumes:
+      - ./data:/app/data # Сохранение БД на хосте
+    env_file:
+      - .env
+    environment:
+      - DB_PATH=/app/data/sqlite.db
+```
+
+## 4. Инструкция для README.md
+
+Скопируйте этот блок в ваш README.md, чтобы пользователи знали, как запустить проект.
+HH Aggregator (Alpha)
+
+Утилита для агрегации откликов и сообщений от HR на hh.ru.
+
+### Требования
+
+```
+    Docker
+    Docker Compose
+```
+
+### Быстрый старт
+
+#### Склонируйте репозиторий:
+
+    ```Bash
+    git clone [https://github.com/yourusername/hh-aggregator.git](https://github.com/yourusername/hh-aggregator.git)
+    cd hh-aggregator
+    ```
+
+#### Настройте переменные окружения:
+
+    ```Bash
+    cp .env.example .env
+    ```
+
+    Откройте файл .env и впишите ваш токен от HH и другие требуемые параметры.
+
+#### Запустите приложение:
+    
+    ```Bash
+    docker-compose up --build -d
+    ```
+
+#### Использование:
+
+    Перейдите в браузере по адресу http://localhost:8080.
+
+### Логи и остановка
+
+    Посмотреть логи: docker-compose logs -f
+
+    Остановить приложение: docker-compose down
+
+    Важно: Файл базы данных (sqlite.db) сохраняется локально в директории ./data. При пересоздании контейнеров ваши данные не будут потеряны.
