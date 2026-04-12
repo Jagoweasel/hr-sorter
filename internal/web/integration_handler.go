@@ -117,7 +117,8 @@ func (h *Handler) handleStartAuth(w http.ResponseWriter, r *http.Request) {
 			// Wait for completion to trigger immediate sync
 			<-flow.Done()
 			if sess, _ := flow.Result(); sess != nil {
-				logger.Info(logger.HH, "[Web] Manual HH Auth Flow completed for %s, triggering sync", integration.Identifier)
+				logger.Info(logger.HH, "[Web] Manual HH Auth Flow completed for %s, triggering sync in 2s", integration.Identifier)
+				time.Sleep(2 * time.Second) // Wait for DB commit to be visible
 				updatedInt, err := h.intRepo.GetByID(h.rootCtx, idStr)
 				if err == nil {
 					// Stop the "waiting" manager if it exists and start a fresh one for immediate sync

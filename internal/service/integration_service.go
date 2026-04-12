@@ -65,10 +65,11 @@ func (s *IntegrationService) CreateIntegration(ctx context.Context, accID, platf
 			// Wait for completion to trigger immediate sync
 			<-flow.Done()
 			if sess, _ := flow.Result(); sess != nil {
-				logger.Info(logger.HH, "[Service] HH Auth Flow completed successfully for %s, triggering sync", identifier)
+				logger.Info(logger.HH, "[Service] HH Auth Flow completed successfully for %s, triggering sync in 2s", identifier)
+				time.Sleep(2 * time.Second) // Wait for DB commit to be visible
 				updatedInt, err := s.intRepo.GetByID(rootCtx, intID)
 				if err == nil {
-					// Stop the "waiting" manager if it exists and start a fresh one for immediate sync
+					// Stop any previous instance and start fresh sync
 					s.hhManager.StopIntegration(intID)
 					s.hhManager.StartIntegration(rootCtx, *updatedInt)
 				}

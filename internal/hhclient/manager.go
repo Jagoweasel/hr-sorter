@@ -64,7 +64,7 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 	m.mu.Unlock()
 
 	log.Printf("[HH] Initializing background sync for %s (ID: %d)", integration.Identifier, integration.ID)
-	logger.Debug(logger.HH, "[HH] Starting sync loop for integration %s", integration.Identifier)
+	logger.Info(logger.HH, "[HH] Starting sync loop for integration %s", integration.Identifier)
 
 	go func() {
 		defer func() {
@@ -77,9 +77,11 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 		defer ticker.Stop()
 
 		// Initial sync
-		logger.Debug(logger.HH, "[HH] Triggering initial sync for %s", integration.Identifier)
+		logger.Info(logger.HH, "[HH] Triggering initial sync for %s...", integration.Identifier)
 		if err := m.Sync(intCtx, integration.ID); err != nil {
-			logger.Debug(logger.HH, "[HH] Initial sync failed for %s: %v", integration.Identifier, err)
+			logger.Error(logger.HH, "[HH] Initial sync failed for %s: %v", integration.Identifier, err)
+		} else {
+			logger.Info(logger.HH, "[HH] Initial sync completed successfully for %s", integration.Identifier)
 		}
 
 		for {

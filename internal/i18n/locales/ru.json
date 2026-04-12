@@ -217,5 +217,11 @@
   "go_to_chat": "Перейти в чат с",
   "off": "Выкл",
   "delete_pattern_confirm": "Удалить паттерн?",
-  "no_filters_defined": "Фильтры еще не определены"
+  "no_filters_defined": "Фильтры еще не определены",
+  "phone_hint": "Номер телефона",
+  "without_plus": "без",
+  "checking_code": "Проверка кода...",
+  "starting_sync": "Запуск синхронизации...",
+  "success_reloading": "Успешно! Обновляю страницу...",
+  "resetting": "Сброс"
 }

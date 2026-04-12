@@ -217,5 +217,11 @@
   "go_to_chat": "Go to chat with",
   "off": "Off",
   "delete_pattern_confirm": "Delete pattern?",
-  "no_filters_defined": "No filters defined yet"
+  "no_filters_defined": "No filters defined yet",
+  "phone_hint": "Phone number",
+  "without_plus": "without",
+  "checking_code": "Checking code...",
+  "starting_sync": "Starting sync...",
+  "success_reloading": "Success! Reloading...",
+  "resetting": "Resetting"
 }

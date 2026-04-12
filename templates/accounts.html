@@ -136,6 +136,12 @@
                 <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{{ Tr "verification_code" }}</label>
                 <input type="text" name="code" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors text-center tracking-widest text-lg" placeholder="{{ Tr "verification_code_placeholder" }}" autofocus>
             </div>
+            <div class="auth-status-container hidden">
+                <div class="flex items-center justify-center space-x-2 py-2">
+                    <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                    <span class="text-[10px] font-black text-blue-600 uppercase tracking-widest auth-status-text"></span>
+                </div>
+            </div>
             <div class="flex justify-between space-x-3 pt-2">
                 <button type="button" onclick="closeAllModals()" class="px-4 py-2 text-[10px] font-black text-gray-400 uppercase">{{ Tr "cancel" }}</button>
                 <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-blue-700">{{ Tr "verify" }}</button>
@@ -156,6 +162,12 @@
             <div>
                 <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{{ Tr "password" }}</label>
                 <input type="password" name="password" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors" placeholder="{{ Tr "telegram_password_placeholder" }}" autofocus>
+            </div>
+            <div class="auth-status-container hidden">
+                <div class="flex items-center justify-center space-x-2 py-2">
+                    <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                    <span class="text-[10px] font-black text-blue-600 uppercase tracking-widest auth-status-text"></span>
+                </div>
             </div>
             <div class="flex justify-between space-x-3 pt-2">
                 <button type="button" onclick="closeAllModals()" class="px-4 py-2 text-[10px] font-black text-gray-400 uppercase">{{ Tr "cancel" }}</button>
@@ -195,6 +207,7 @@
             <div>
                 <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{{ Tr "identifier_phone" }}</label>
                 <input type="text" name="identifier" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors" placeholder="{{ Tr "phone_placeholder" }}">
+                <p class="mt-2 text-[10px] text-gray-400 font-bold italic">{{ Tr "phone_hint" }}: 9991234567 ({{ Tr "without_plus" }} +7)</p>
             </div>
             <div id="tg-creds" class="space-y-4 hidden">
                 <div>
@@ -227,6 +240,12 @@
                 <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{{ Tr "verification_code" }}</label>
                 <input type="text" name="code" required class="block w-full border-2 border-gray-100 dark:border-gray-700 rounded-xl p-3 text-sm font-bold bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-red-500 outline-none transition-colors text-center tracking-widest text-lg" placeholder="{{ Tr "hh_code_placeholder" }}" autofocus>
             </div>
+            <div class="auth-status-container hidden">
+                <div class="flex items-center justify-center space-x-2 py-2">
+                    <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                    <span class="text-[10px] font-black text-red-600 uppercase tracking-widest auth-status-text"></span>
+                </div>
+            </div>
             <div class="flex justify-between space-x-3 pt-2">
                 <button type="button" onclick="closeAllModals()" class="px-4 py-2 text-[10px] font-black text-gray-400 uppercase">{{ Tr "cancel" }}</button>
                 <button type="submit" class="px-6 py-2 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-red-700">{{ Tr "link_hh_account" }}</button>
@@ -257,6 +276,20 @@
             
             console.log(`[AuthPoll] ID: ${id}, Status: ${data.status}, Platform: ${data.platform}`);
 
+            // Update status text in visible modal
+            document.querySelectorAll('.auth-status-text').forEach(el => {
+                if (!el.closest('.fixed').classList.contains('hidden')) {
+                    const statusMap = {
+                        'pending_auth': '{{ Tr "connecting" }}',
+                        'awaiting_code': '{{ Tr "awaiting_code" }}',
+                        'awaiting_password': '{{ Tr "awaiting_password" }}',
+                        'active': '{{ Tr "success_reloading" }}'
+                    };
+                    el.textContent = statusMap[data.status] || data.status;
+                    el.closest('.auth-status-container').classList.remove('hidden');
+                }
+            });
+
             // Update UI badge
             const card = document.querySelector(`.integration-card[data-integration-id="${id}"]`);
             if (card) {
@@ -281,21 +314,20 @@
             // State machine for modals
             if (data.status === 'awaiting_code' && data.platform === 'tg') {
                 showCodeModal(id, data.identifier);
-                stopPolling();
             } else if (data.status === 'awaiting_password' && data.platform === 'tg') {
                 showPasswordModal(id, data.identifier);
-                stopPolling();
             } else if ((data.status === 'pending_auth' || data.status === 'awaiting_code') && data.platform === 'hh') {
                 // Only auto-show if we haven't shown it yet or manually requested
                 if (pendingIntegrationId === String(id) && isModalHidden('auth-hh-modal')) {
                     showHHModal(id, data.auth_url);
-                    stopPolling();
                 }
             } else if (data.status === 'active') {
                 console.log('[AuthPoll] Success! Reloading...');
                 stopPolling();
-                closeAllModals();
-                setTimeout(() => window.location.reload(), 1000);
+                setTimeout(() => window.location.reload(), 1500);
+            } else if (data.status === 'failed') {
+                stopPolling();
+                document.querySelectorAll('.auth-status-text').forEach(el => el.textContent = '{{ Tr "failed" }}');
             }
         } catch (e) {
             console.error('[AuthPoll] Error:', e);
@@ -307,7 +339,7 @@
         pendingIntegrationId = String(id);
         console.log('[AuthPoll] Started for:', id);
         pollAuthStatus(id);
-        authPollingInterval = setInterval(() => pollAuthStatus(id), 2500);
+        authPollingInterval = setInterval(() => pollAuthStatus(id), 2000);
     }
 
     function stopPolling() {
@@ -413,6 +445,14 @@
             submitBtn.disabled = true;
             submitBtn.textContent = '...';
             errorEl.classList.add('hidden');
+            
+            // Show status in modal
+            const statusContainer = form.querySelector('.auth-status-container');
+            const statusText = form.querySelector('.auth-status-text');
+            if (statusContainer && statusText) {
+                statusText.textContent = '{{ Tr "checking_code" }}';
+                statusContainer.classList.remove('hidden');
+            }
 
             const resp = await fetch(endpoint, { 
                 method: 'POST', 
