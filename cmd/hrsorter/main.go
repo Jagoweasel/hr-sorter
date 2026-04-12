@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -80,14 +81,17 @@ func main() {
 
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
-		dbPath = "hr-sorter.db"
+		dbPath = "data/hr-sorter.db"
 	}
 
-	// Ensure directory for database exists
+	// Ensure directory for database and sessions exists
 	if dir := filepath.Dir(dbPath); dir != "." && dir != "/" {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			log.Fatalf("[Main] Failed to create database directory %s: %v", dir, err)
 		}
+	}
+	if err := os.MkdirAll("data/sessions", 0755); err != nil {
+		log.Fatalf("[Main] Failed to create sessions directory: %v", err)
 	}
 
 	log.Printf("[Main] Initializing database at %s...", dbPath)
@@ -156,15 +160,21 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	var wg sync.WaitGroup
+
 	for _, integration := range integrations {
 		if integration.Platform == "tg" {
+			wg.Add(1)
 			go func(i models.Integration) {
+				defer wg.Done()
 				if err := manager.StartIntegration(ctx, i); err != nil {
 					log.Printf("[Main] TG Integration %s failed: %v", i.Identifier, err)
 				}
 			}(integration)
 		} else if integration.Platform == "hh" {
+			wg.Add(1)
 			go func(i models.Integration) {
+				defer wg.Done()
 				if err := hhManager.StartIntegration(ctx, i); err != nil {
 					log.Printf("[Main] HH Integration %s failed: %v", i.Identifier, err)
 				}
@@ -186,7 +196,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("[Main] Web server starting on http://127.0.0.1:%s", port)
+		log.Printf("[Main] Web server starting on port %s (accessible at http://localhost:%s)", port, port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("[Main] Web server failed: %s\n", err)
 		}
@@ -196,8 +206,6 @@ func main() {
 
 	// Wait for interrupt signal
 	<-ctx.Done()
-	stop()
-
 	log.Println("[Main] Shutting down gracefully...")
 
 	// Shutdown HTTP server
@@ -207,6 +215,9 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("[Main] HTTP server Shutdown: %v", err)
 	}
+
+	log.Println("[Main] Waiting for background integrations to stop...")
+	wg.Wait()
 
 	log.Println("[Main] Shutdown complete.")
 }

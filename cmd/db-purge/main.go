@@ -11,7 +11,7 @@ import (
 func main() {
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
-		dbPath = "hr-sorter.db"
+		dbPath = "data/hr-sorter.db"
 	}
 	database.InitDB(dbPath)
 

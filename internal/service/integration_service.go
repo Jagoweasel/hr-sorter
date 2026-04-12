@@ -33,7 +33,7 @@ func (s *IntegrationService) CreateIntegration(ctx context.Context, accID, platf
 	sessionPath := ""
 	var userAgent *string
 	if platform == "tg" {
-		sessionPath = fmt.Sprintf("sessions/%s.json", identifier)
+		sessionPath = fmt.Sprintf("data/sessions/%s.json", identifier)
 	} else if platform == "hh" {
 		ua := hhclient.GenerateAndroidUserAgent()
 		userAgent = &ua

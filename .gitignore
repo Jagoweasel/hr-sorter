@@ -1,17 +1,14 @@
-hr-sorter.db
-sessions/**
+data/*
+!data/.gitkeep
 .env
 tmp
 .opencode
 add-account
 db-check
 hr-sorter
-hr-sorter copy.db
-hr-sorter.db-journal
+*.db*
 remove-integration
-add-account
 cmd/add-hh/add-hh
-add-account
 *.har
-hr-sorter.db-shm
-hr-sorter.db-wal
+sessions/
+

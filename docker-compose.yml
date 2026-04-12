@@ -1,8 +1,7 @@
-version: '3.8'
-
 services:
   hr-sorter:
     build: .
+    stop_grace_period: 30s
     ports:
       - "${HTTP_PORT:-3000}:3000"
     volumes:
