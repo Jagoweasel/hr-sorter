@@ -148,10 +148,11 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 
 	flow := auth.NewFlow(a, auth.SendCodeOptions{})
 
-	logger.Debug(logger.Telegram, "Client initialized, entering Run loop...")
+	logger.Debug(logger.Telegram, "[Int ID %d] Telegram client created, starting Run loop...", integration.ID)
 
 	// Wrap in a retry loop for automatic reconnection
 	for {
+		logger.Debug(logger.Telegram, "[Int ID %d] Attempting to connect to Telegram...", integration.ID)
 		err := client.Run(intCtx, func(ctx context.Context) error {
 			logger.Debug(logger.Telegram, "[Int ID %d] Calling client.Auth().IfNecessary (auth flow starts)", integration.ID)
 			if err := client.Auth().IfNecessary(ctx, flow); err != nil {
@@ -357,7 +358,7 @@ func (m *Manager) SendMessage(ctx context.Context, integrationID int64, contactI
 
 func (m *Manager) StopIntegration(id int64) {
 	m.mu.Lock()
-	defer m.mu.RUnlock()
+	defer m.mu.Unlock()
 	if cancel, ok := m.cancels[id]; ok {
 		logger.Debug(logger.Telegram, "Stopping integration ID %d", id)
 		cancel()
