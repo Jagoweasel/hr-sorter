@@ -362,8 +362,10 @@ func (f *PlaywrightAuthFlow) run() {
 	// Get authorize URL (adapted from ExchangeToken logic)
 	authURL := fmt.Sprintf("https://hh.ru/oauth/authorize?response_type=code&client_id=%s&state=skip", f.config.ClientID)
 
+	logger.Info(logger.HH, "[HHAuth] Navigating to auth URL: %s", authURL)
 	_, err = f.page.Goto(authURL, playwright.PageGotoOptions{
 		WaitUntil: playwright.WaitUntilStateLoad,
+		Timeout:   playwright.Float(30000),
 	})
 	if err != nil {
 		f.fail(fmt.Errorf("failed to navigate to auth URL: %w", err))
@@ -371,10 +373,12 @@ func (f *PlaywrightAuthFlow) run() {
 	}
 
 	// Identification
+	logger.Info(logger.HH, "[HHAuth] Starting identification for %s", f.identifier)
 	if err := f.handleIdentify(); err != nil {
 		f.fail(err)
 		return
 	}
+	logger.Info(logger.HH, "[HHAuth] Identification step submitted, entering monitoring loop...")
 
 	for {
 		select {
@@ -393,7 +397,7 @@ func (f *PlaywrightAuthFlow) run() {
 		case solution := <-f.capChan:
 			logger.Info(logger.HH, "[HHAuth] User provided captcha solution, forcing input...")
 			f.handleManualInput(solution)
-		default:
+		case <-time.After(2 * time.Second):
 			state, err := f.detectState()
 			if err != nil {
 				f.fail(err)
@@ -422,12 +426,12 @@ func (f *PlaywrightAuthFlow) run() {
 			if time.Now().Unix()%20 == 0 {
 				logger.Trace(logger.HH, "[HHAuth] Flow active. State: %v, URL: %s", state, f.page.URL())
 			}
-			time.Sleep(2 * time.Second)
 		}
 	}
 }
 
 func (f *PlaywrightAuthFlow) handleManualInput(input string) {
+	logger.Info(logger.HH, "[HHAuth] Processing user input (length: %d)...", len(input))
 	// 1. Try to find known OTP/Captcha/Password fields
 	selectors := []string{
 		"input[data-qa='magritte-pincode-input-field']",
@@ -444,7 +448,7 @@ func (f *PlaywrightAuthFlow) handleManualInput(input string) {
 	typed := false
 	for _, sel := range selectors {
 		if visible, _ := f.page.Locator(sel).IsVisible(); visible {
-			logger.Debug(logger.HH, "[HHAuth] Found input field %s, typing...", sel)
+			logger.Info(logger.HH, "[HHAuth] Found input field %s, typing...", sel)
 			_ = f.page.Focus(sel)
 			_ = f.page.Keyboard().Press("Control+A")
 			_ = f.page.Keyboard().Press("Backspace")
@@ -466,36 +470,55 @@ func (f *PlaywrightAuthFlow) handleManualInput(input string) {
 
 	// 3. Submit
 	time.Sleep(500 * time.Millisecond)
+	logger.Info(logger.HH, "[HHAuth] Pressing Enter to submit input...")
 	_ = f.page.Keyboard().Press("Enter")
 
 	// 4. Try clicking common submit buttons just in case
 	go func() {
 		time.Sleep(1 * time.Second)
-		_ = f.page.Click("button[type='submit'], button[data-qa='otp-code-submit'], button[data-qa='account-captcha-submit']", playwright.PageClickOptions{
-			Timeout: playwright.Float(1000),
-		})
+		logger.Debug(logger.HH, "[HHAuth] Looking for submit buttons to click...")
+		btn := f.page.Locator("button[type='submit'], button[data-qa='otp-code-submit'], button[data-qa='account-captcha-submit']")
+		if visible, _ := btn.IsVisible(); visible {
+			logger.Info(logger.HH, "[HHAuth] Found visible submit button, clicking...")
+			_ = btn.Click(playwright.LocatorClickOptions{
+				Timeout: playwright.Float(1000),
+			})
+		}
+	}()
+
+	// 5. Check for instant error message or state change
+	go func() {
+		time.Sleep(3 * time.Second)
+		logger.Info(logger.HH, "[HHAuth] Verifying page state after input (URL: %s)...", f.page.URL())
+		errLoc := f.page.Locator("div.bloko-notification--error, div[data-qa='login-error'], div.error-item")
+		if visible, _ := errLoc.IsVisible(); visible {
+			msg, _ := errLoc.InnerText()
+			logger.Error(logger.HH, "[HHAuth] ERROR detected on page after input: %s", msg)
+		} else {
+			logger.Info(logger.HH, "[HHAuth] No error visible on page after input. Waiting for redirect or next step...")
+		}
 	}()
 }
 
 func (f *PlaywrightAuthFlow) handleIdentify() error {
-	logger.Debug(logger.HH, "[HHAuth] Identifying user: %s", f.identifier)
+	logger.Info(logger.HH, "[HHAuth] Identifying user: %s", f.identifier)
 	f.setStatus(dto.AuthStateWaitIdentify, "")
 
 	// Wait for input
 	_, err := f.page.WaitForSelector("input[data-qa='login-input-username'], input[name='login']", playwright.PageWaitForSelectorOptions{
-		Timeout: playwright.Float(10000),
+		Timeout: playwright.Float(15000),
 	})
 	if err != nil {
 		logger.Error(logger.HH, "[HHAuth] Login input not found on page: %s", f.page.URL())
 		return fmt.Errorf("login input not found: %w", err)
 	}
 
-	logger.Trace(logger.HH, "[HHAuth] Filling login input...")
+	logger.Info(logger.HH, "[HHAuth] Filling login input with %s...", f.identifier)
 	err = f.page.Fill("input[data-qa='login-input-username']", f.identifier)
 	if err != nil {
 		_ = f.page.Fill("input[name='login']", f.identifier)
 	}
-	logger.Trace(logger.HH, "[HHAuth] Pressing Enter...")
+	logger.Info(logger.HH, "[HHAuth] Pressing Enter to continue identification...")
 	return f.page.Keyboard().Press("Enter")
 }
 
@@ -504,8 +527,11 @@ func (f *PlaywrightAuthFlow) detectState() (dto.HHAuthState, error) {
 	errorLocator := f.page.Locator("div.bloko-notification--error, div[data-qa='login-error'], div.error-item")
 	if visible, _ := errorLocator.IsVisible(); visible {
 		msg, _ := errorLocator.InnerText()
-		logger.Error(logger.HH, "[HHAuth] Detected HH error: %s", msg)
-		return dto.AuthStateFailed, fmt.Errorf("HH error: %s", msg)
+		msg = strings.TrimSpace(msg)
+		if msg != "" {
+			logger.Error(logger.HH, "[HHAuth] Detected HH error: %s", msg)
+			return dto.AuthStateFailed, fmt.Errorf("HH error: %s", msg)
+		}
 	}
 
 	if visible, _ := f.page.Locator("input[data-qa='magritte-pincode-input-field'], input[name='code'], input[name='otp'], input[data-qa='otp-code-input']").IsVisible(); visible {

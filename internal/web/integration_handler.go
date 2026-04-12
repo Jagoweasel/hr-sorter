@@ -94,18 +94,36 @@ func (h *Handler) handleStartAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Debug(logger.HH, "[Web] Integration details: ID=%s, Platform=%s, Identifier=%s, HHAuthServiceAvailable=%v",
-		idStr, integration.Platform, integration.Identifier, h.hhAuthService != nil)
+	logger.Debug(logger.HH, "[Web] Integration details: ID=%s, Platform=%s, Identifier=%s, Status=%s, HHAuthServiceAvailable=%v",
+		idStr, integration.Platform, integration.Identifier, integration.Status, h.hhAuthService != nil)
+
+	if integration.Status == "active" {
+		logger.Info(logger.HH, "[Web] Integration %s is already active, skipping StartAuth", integration.Identifier)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 
 	if integration.Platform == "hh" && h.hhAuthService != nil {
 		logger.Info(logger.HH, "[Web] Launching HH Auth Service for %s (Integration ID: %s, Account ID: %d)...",
 			integration.Identifier, idStr, integration.AccountID)
 		accID := integration.AccountID
 		go func() {
-			_, err := h.hhAuthService.StartFlow(h.rootCtx, accID, integration.Identifier)
+			flow, err := h.hhAuthService.StartFlow(h.rootCtx, accID, integration.Identifier)
 			if err != nil {
 				logger.Error(logger.HH, "[Web] Manual start HH auth failed for %s (ID: %s): %v",
 					integration.Identifier, idStr, err)
+				return
+			}
+			// Wait for completion to trigger immediate sync
+			<-flow.Done()
+			if sess, _ := flow.Result(); sess != nil {
+				logger.Info(logger.HH, "[Web] Manual HH Auth Flow completed for %s, triggering sync", integration.Identifier)
+				updatedInt, err := h.intRepo.GetByID(h.rootCtx, idStr)
+				if err == nil {
+					// Stop the "waiting" manager if it exists and start a fresh one for immediate sync
+					h.hhManager.StopIntegration(updatedInt.ID)
+					h.hhManager.StartIntegration(h.rootCtx, *updatedInt)
+				}
 			}
 		}()
 	} else {
@@ -153,6 +171,9 @@ func (h *Handler) handleIntegrationStatus(w http.ResponseWriter, r *http.Request
 					status = "failed"
 				}
 			}
+		} else if status == "awaiting_code" || status == "pending_auth" {
+			// If no flow exists but status is pending/awaiting, it might have crashed or been cancelled
+			status = "failed"
 		}
 	}
 
@@ -207,17 +228,28 @@ func (h *Handler) handleResetHHAuth(w http.ResponseWriter, r *http.Request) {
 	if integration.Platform == "hh" && h.hhAuthService != nil {
 		logger.Info(logger.HH, "[Web] Resetting HH Auth for %s...", integration.Identifier)
 		if flow, ok := h.hhAuthService.GetFlow(integration.AccountID); ok {
+			logger.Debug(logger.HH, "[Web] Found active flow for Account %d, cancelling and waiting...", integration.AccountID)
 			_ = flow.Cancel()
+			// Wait for the flow to actually close before starting a new one
+			// Use a select with a shorter timeout here to prevent web handler from hanging too long
+			select {
+			case <-flow.Done():
+				logger.Debug(logger.HH, "[Web] Old flow for Account %d closed.", integration.AccountID)
+			case <-time.After(3 * time.Second):
+				logger.Warn(logger.HH, "[Web] Shifting to background for old flow cleanup (Account %d)", integration.AccountID)
+			}
 		}
-		// Small delay to allow cleanup
+
+		// Small delay to ensure OS/Browser cleanup
 		time.Sleep(500 * time.Millisecond)
 
-		go func() {
-			_, err := h.hhAuthService.StartFlow(h.rootCtx, integration.AccountID, integration.Identifier)
-			if err != nil {
-				logger.Error(logger.HH, "[Web] Manual restart HH auth failed for %s: %v", integration.Identifier, err)
-			}
-		}()
+		logger.Info(logger.HH, "[Web] Starting fresh flow for Account %d...", integration.AccountID)
+		_, err := h.hhAuthService.StartFlow(h.rootCtx, integration.AccountID, integration.Identifier)
+		if err != nil {
+			logger.Error(logger.HH, "[Web] Manual restart HH auth failed for %s: %v", integration.Identifier, err)
+			http.Error(w, "Failed to start fresh flow: "+err.Error(), 500)
+			return
+		}
 	}
 
 	w.WriteHeader(http.StatusOK)

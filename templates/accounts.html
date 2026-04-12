@@ -367,11 +367,33 @@
 
     async function resetHHAuth() {
         const id = document.getElementById('auth-hh-integration-id').value;
+        const btn = document.querySelector('button[onclick="resetHHAuth()"]');
+        const originalText = btn.textContent;
+        const errorEl = document.getElementById('hh-auth-error');
+        const codeInput = document.querySelector('#auth-hh-form input[name="code"]');
+
         try {
-            await fetch(`/integrations/reset-auth?id=${id}`);
-            startPolling(id);
+            btn.disabled = true;
+            btn.textContent = '{{ Tr "resetting" }}...';
+            errorEl.classList.add('hidden');
+            if (codeInput) codeInput.value = '';
+
+            const resp = await fetch(`/integrations/reset-auth?id=${id}`);
+            if (resp.ok) {
+                console.log('[Auth] Flow reset successfully');
+                startPolling(id);
+            } else {
+                const text = await resp.text();
+                errorEl.textContent = text || '{{ Tr "failed" }}';
+                errorEl.classList.remove('hidden');
+            }
         } catch (e) {
             console.error('Reset failed:', e);
+            errorEl.textContent = '{{ Tr "network_error" }}';
+            errorEl.classList.remove('hidden');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
         }
     }
 
@@ -380,11 +402,18 @@
     async function handleAuthForm(e, endpoint, errorId) {
         e.preventDefault();
         const form = e.target;
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalBtnText = submitBtn.textContent;
+        
         const errorEl = document.getElementById(errorId);
         const formData = new FormData(form);
         const intId = formData.get('integration_id');
 
         try {
+            submitBtn.disabled = true;
+            submitBtn.textContent = '...';
+            errorEl.classList.add('hidden');
+
             const resp = await fetch(endpoint, { 
                 method: 'POST', 
                 body: formData,
@@ -394,8 +423,14 @@
             });
             const res = await resp.json();
             if (res.ok) {
-                errorEl.classList.add('hidden');
-                form.closest('.fixed').classList.add('hidden');
+                // If this is HH, we don't necessarily close the modal until polling says it's active,
+                // but we might want to clear the code field to show we're processing it.
+                if (endpoint.includes('submit-hh-code')) {
+                    const codeInp = form.querySelector('input[name="code"]');
+                    if (codeInp) codeInp.value = '';
+                } else {
+                    form.closest('.fixed').classList.add('hidden');
+                }
                 startPolling(intId);
             } else {
                 errorEl.textContent = res.error || '{{ Tr "failed" }}';
@@ -404,6 +439,9 @@
         } catch (e) {
             errorEl.textContent = '{{ Tr "network_error" }}';
             errorEl.classList.remove('hidden');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
         }
     }
 
