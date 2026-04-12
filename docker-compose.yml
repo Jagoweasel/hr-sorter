@@ -8,8 +8,6 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      - API_ID=${API_ID}
-      - API_HASH=${API_HASH}
       - DB_PATH=/app/data/hr-sorter.db
       - HTTP_PORT=3000
       - HH_CLIENT_ID=${HH_CLIENT_ID}

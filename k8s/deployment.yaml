@@ -20,16 +20,6 @@ spec:
           ports:
             - containerPort: 3000
           env:
-            - name: API_ID
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: API_ID
-            - name: API_HASH
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: API_HASH
             - name: HH_CLIENT_ID
               valueFrom:
                 secretKeyRef:

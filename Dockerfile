@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.23-bullseye AS builder
+FROM golang:1.25 AS builder
 
 WORKDIR /app
 
@@ -18,7 +18,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o hr-sorter ./cmd/hrsorter/main.go
 
 # Runtime stage
 # We use a Debian-based image that is compatible with Playwright dependencies
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 
 WORKDIR /app
 
