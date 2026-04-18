@@ -468,8 +468,14 @@ func (f *PlaywrightAuthFlow) handleManualInput(input string) {
 		_ = f.page.Keyboard().Type(input, playwright.KeyboardTypeOptions{Delay: playwright.Float(100)})
 	}
 
+	// Wait a bit to see if auto-redirect happens (HH often auto-submits on last digit)
+	time.Sleep(800 * time.Millisecond)
+	if len(f.codeChan) > 0 {
+		logger.Info(logger.HH, "[HHAuth] Auto-submission detected via redirect, skipping manual Enter/Click")
+		return
+	}
+
 	// 3. Submit
-	time.Sleep(500 * time.Millisecond)
 	logger.Info(logger.HH, "[HHAuth] Pressing Enter to submit input...")
 	_ = f.page.Keyboard().Press("Enter")
 
@@ -479,6 +485,10 @@ func (f *PlaywrightAuthFlow) handleManualInput(input string) {
 		logger.Debug(logger.HH, "[HHAuth] Looking for submit buttons to click...")
 		btn := f.page.Locator("button[type='submit'], button[data-qa='otp-code-submit'], button[data-qa='account-captcha-submit']")
 		if visible, _ := btn.IsVisible(); visible {
+			// Double check if we already got the code in the meantime
+			if len(f.codeChan) > 0 {
+				return
+			}
 			logger.Info(logger.HH, "[HHAuth] Found visible submit button, clicking...")
 			_ = btn.Click(playwright.LocatorClickOptions{
 				Timeout: playwright.Float(1000),

@@ -278,13 +278,26 @@
 
             // Update status text in visible modal
             document.querySelectorAll('.auth-status-text').forEach(el => {
-                if (!el.closest('.fixed').classList.contains('hidden')) {
+                const modal = el.closest('.fixed');
+                if (modal && !modal.classList.contains('hidden')) {
                     const statusMap = {
                         'pending_auth': '{{ Tr "connecting" }}',
+                        'opening_hh': '{{ Tr "opening_hh" }}',
                         'awaiting_code': '{{ Tr "awaiting_code" }}',
                         'awaiting_password': '{{ Tr "awaiting_password" }}',
+                        'exchanging_tokens': '{{ Tr "exchanging_tokens" }}',
                         'active': '{{ Tr "success_reloading" }}'
                     };
+                    
+                    if (data.status === 'active') {
+                        el.classList.remove('text-blue-600', 'text-red-600');
+                        el.classList.add('text-green-600', 'text-lg', 'font-black');
+                        el.closest('.auth-status-container').classList.remove('hidden');
+                        // Hide the form if active
+                        const form = modal.querySelector('form');
+                        if (form) form.classList.add('opacity-20', 'pointer-events-none');
+                    }
+                    
                     el.textContent = statusMap[data.status] || data.status;
                     el.closest('.auth-status-container').classList.remove('hidden');
                 }
@@ -297,17 +310,18 @@
                 if (badge) {
                     const statusTranslations = {
                         'active': '{{ Tr "active" }}',
+                        'opening_hh': '{{ Tr "opening_hh" }}',
                         'awaiting_code': '{{ Tr "awaiting_code" }}',
                         'awaiting_password': '{{ Tr "awaiting_password" }}',
-                        'pending_auth': '{{ Tr "pending_auth" }}'
+                        'pending_auth': '{{ Tr "pending_auth" }}',
+                        'exchanging_tokens': '{{ Tr "exchanging_tokens" }}'
                     };
                     badge.textContent = statusTranslations[data.status] || data.status;
                     badge.dataset.status = data.status;
                     badge.className = 'text-[10px] font-bold uppercase tracking-tighter status-badge ' + 
                         (data.status === 'active' ? 'text-green-600' : 
-                         data.status === 'awaiting_code' ? 'text-yellow-600' : 
-                         data.status === 'awaiting_password' ? 'text-yellow-600' : 
-                         data.status === 'pending_auth' ? 'text-orange-500' : 'text-gray-400');
+                         (data.status === 'awaiting_code' || data.status === 'awaiting_password') ? 'text-yellow-600' : 
+                         (data.status === 'pending_auth' || data.status === 'opening_hh') ? 'text-orange-500' : 'text-gray-400');
                 }
             }
 
@@ -316,7 +330,7 @@
                 showCodeModal(id, data.identifier);
             } else if (data.status === 'awaiting_password' && data.platform === 'tg') {
                 showPasswordModal(id, data.identifier);
-            } else if ((data.status === 'pending_auth' || data.status === 'awaiting_code') && data.platform === 'hh') {
+            } else if ((data.status === 'pending_auth' || data.status === 'opening_hh' || data.status === 'awaiting_code') && data.platform === 'hh') {
                 // Only auto-show if we haven't shown it yet or manually requested
                 if (pendingIntegrationId === String(id) && isModalHidden('auth-hh-modal')) {
                     showHHModal(id, data.auth_url);
@@ -327,7 +341,10 @@
                 setTimeout(() => window.location.reload(), 1500);
             } else if (data.status === 'failed') {
                 stopPolling();
-                document.querySelectorAll('.auth-status-text').forEach(el => el.textContent = '{{ Tr "failed" }}');
+                document.querySelectorAll('.auth-status-text').forEach(el => {
+                    el.textContent = '{{ Tr "failed" }}';
+                    el.classList.add('text-red-600');
+                });
             }
         } catch (e) {
             console.error('[AuthPoll] Error:', e);

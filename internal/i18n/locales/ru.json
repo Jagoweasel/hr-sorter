@@ -223,5 +223,9 @@
   "checking_code": "Проверка кода...",
   "starting_sync": "Запуск синхронизации...",
   "success_reloading": "Успешно! Обновляю страницу...",
-  "resetting": "Сброс"
+  "resetting": "Сброс",
+  "opening_hh": "Загрузка HeadHunter...",
+  "identifying": "Идентификация...",
+  "exchanging_tokens": "Обмен токенов...",
+  "finishing_auth": "Завершение..."
 }

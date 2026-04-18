@@ -223,5 +223,9 @@
   "checking_code": "Checking code...",
   "starting_sync": "Starting sync...",
   "success_reloading": "Success! Reloading...",
-  "resetting": "Resetting"
+  "resetting": "Resetting",
+  "opening_hh": "Opening HeadHunter...",
+  "identifying": "Identifying...",
+  "exchanging_tokens": "Exchanging tokens...",
+  "finishing_auth": "Finishing..."
 }

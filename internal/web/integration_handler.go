@@ -162,18 +162,22 @@ func (h *Handler) handleIntegrationStatus(w http.ResponseWriter, r *http.Request
 			liveStatus := flow.GetStatus()
 			if liveStatus != nil {
 				switch liveStatus.State {
+				case dto.AuthStateWaitIdentify:
+					status = "opening_hh"
 				case dto.AuthStateWaitOTP:
 					status = "awaiting_code"
 				case dto.AuthStateWaitCaptcha:
 					status = "awaiting_captcha"
+				case dto.AuthStateWaitRedirect:
+					status = "exchanging_tokens"
 				case dto.AuthStateCompleted:
 					status = "active"
 				case dto.AuthStateFailed:
 					status = "failed"
 				}
 			}
-		} else if status == "awaiting_code" || status == "pending_auth" {
-			// If no flow exists but status is pending/awaiting, it might have crashed or been cancelled
+		} else if status == "awaiting_code" || (status == "pending_auth" && time.Since(integration.CreatedAt) > 2*time.Minute) {
+			// If no flow exists but status is pending/awaiting and it's been a while, it might have crashed or been cancelled
 			status = "failed"
 		}
 	}
