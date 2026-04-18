@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"hr-sorter/internal/hhclient"
+	"hr-sorter/internal/logger"
 	"hr-sorter/internal/repository"
 	"hr-sorter/internal/tgclient"
 	"strings"
@@ -66,7 +67,7 @@ func (s *ContactService) SendChatMessage(ctx context.Context, contactID string, 
 	err = s.msgRepo.Create(ctx, contact.IntegrationID, contact.ID, externalID, text, false, timestamp)
 	if err != nil {
 		// Don't fail the whole operation if DB save fails, but log it
-		fmt.Printf("DB error saving sent message: %v\n", err)
+		logger.Error(logger.HH, "DB error saving sent message: %v", err)
 	}
 
 	return nil

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
+	"time"
 )
 
 // LogBroadcaster captures zap logger output and sends to subscribers
@@ -38,12 +40,45 @@ func (b *LogBroadcaster) Stream(ctx context.Context, writer io.Writer) error {
 		close(ch)
 	}()
 
+	// Send initial comment to establish connection immediately in browser
+	_, _ = fmt.Fprintf(writer, ": connected\n\n")
+	flusher.Flush()
+
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
+		case <-ticker.C:
+			// Keep-alive ping
+			_, err := fmt.Fprintf(writer, ": ping\n\n")
+			if err != nil {
+				return err
+			}
+			flusher.Flush()
 		case entry := <-ch:
-			_, err := fmt.Fprintf(writer, "data: %s\n\n", entry)
+			// Clean up entry
+			entry = strings.TrimSpace(entry)
+			if entry == "" {
+				continue
+			}
+
+			// Split multiline logs and remove carriage returns
+			entry = strings.ReplaceAll(entry, "\r", "")
+			lines := strings.Split(entry, "\n")
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if line == "" {
+					continue
+				}
+				_, err := fmt.Fprintf(writer, "data: %s\n", line)
+				if err != nil {
+					return err
+				}
+			}
+			_, err := fmt.Fprintf(writer, "\n")
 			if err != nil {
 				return err
 			}

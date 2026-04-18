@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -63,7 +62,7 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 	m.cancels[integration.ID] = cancel
 	m.mu.Unlock()
 
-	log.Printf("[HH] Initializing background sync for %s (ID: %d)", integration.Identifier, integration.ID)
+	logger.Info(logger.HH, "[HH] Initializing background sync for %s (ID: %d)", integration.Identifier, integration.ID)
 	logger.Info(logger.HH, "[HH] Starting sync loop for integration %s", integration.Identifier)
 
 	go func() {

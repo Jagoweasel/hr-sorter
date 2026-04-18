@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -164,8 +163,8 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 			logger.Debug(logger.Telegram, "[Int ID %d] Auth succeeded! Updating status to active.", integration.ID)
 			m.intRepo.UpdateStatus(ctx, integration.ID, "active")
 
-			logger.Debug(logger.Telegram, "Client loop running for %s", integration.Identifier)
-			log.Printf("[Integration %s] [RUNNING] Logged in successfully.", integration.Identifier)
+			logger.Info(logger.Telegram, "Client loop running for %s", integration.Identifier)
+			logger.Info(logger.Telegram, "[Integration %s] [RUNNING] Logged in successfully.", integration.Identifier)
 
 			// Start update manager syncing
 			go func() {
@@ -174,7 +173,7 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 						logger.Debug(logger.Sync, "[Integration %s] Update manager started syncing.", integration.Identifier)
 					},
 				}); err != nil && ctx.Err() == nil {
-					log.Printf("[Integration %s] [ERROR] Update manager failed: %v", integration.Identifier, err)
+					logger.Error(logger.Telegram, "[Integration %s] [ERROR] Update manager failed: %v", integration.Identifier, err)
 				}
 			}()
 
@@ -183,12 +182,12 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 				logger.Debug(logger.Sync, "[Integration %s] Triggering background initial sync in 2 seconds...", integration.Identifier)
 				time.Sleep(2 * time.Second) // Small delay to ensure client is fully ready
 				if err := m.InitialSync(ctx, api, integration.ID); err != nil {
-					log.Printf("[Integration %s] [ERROR] Initial sync failed: %v", integration.Identifier, err)
+					logger.Error(logger.Telegram, "[Integration %s] [ERROR] Initial sync failed: %v", integration.Identifier, err)
 				}
 			}()
 
 			<-ctx.Done()
-			log.Printf("[Integration %s] [STOP] Shutdown signal received.", integration.Identifier)
+			logger.Info(logger.Telegram, "[Integration %s] [STOP] Shutdown signal received.", integration.Identifier)
 			return ctx.Err()
 		})
 
@@ -196,7 +195,7 @@ func (m *Manager) StartIntegration(ctx context.Context, integration models.Integ
 			break
 		}
 
-		log.Printf("[Integration %s] [RETRY] Client exited with error: %v. Retrying in 5s...", integration.Identifier, err)
+		logger.Warn(logger.Telegram, "[Integration %s] [RETRY] Client exited with error: %v. Retrying in 5s...", integration.Identifier, err)
 		select {
 		case <-intCtx.Done():
 			return intCtx.Err()

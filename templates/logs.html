@@ -9,58 +9,60 @@
                 <button onclick="applyPreset('logic')" class="px-3 py-1 text-[10px] font-black uppercase rounded-lg hover:bg-white dark:hover:bg-gray-600 transition-all">{{ Tr "preset_logic" }}</button>
             </div>
         </div>
-        <div class="flex flex-wrap items-center gap-3">
-            <!-- Filter Controls -->
-            <div class="flex flex-wrap bg-gray-100 dark:bg-gray-700 p-1.5 rounded-xl border dark:border-gray-600 gap-1">
-                <button onclick="setLogCategory('ALL')" id="btn-all" class="px-3 py-1 rounded-lg text-[10px] font-black uppercase transition-colors bg-white dark:bg-gray-600 shadow-sm">{{ Tr "all" }}</button>
-                
-                <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
-                    <button onclick="setLogCategory('TG')" id="btn-tg" class="text-gray-500 dark:text-gray-400 hover:text-blue-400">TG</button>
-                    <input type="checkbox" checked onchange="toggleCategory('tg', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer">
+        <div class="flex flex-wrap items-center justify-between flex-1 ml-4">
+            <div class="flex flex-wrap items-center gap-3">
+                <!-- Filter Controls -->
+                <div class="flex flex-wrap bg-gray-100 dark:bg-gray-700 p-1.5 rounded-xl border dark:border-gray-600 gap-1">
+                    <button onclick="setLogCategory('ALL')" id="btn-all" class="px-3 py-1 rounded-lg text-[10px] font-black uppercase transition-colors bg-white dark:bg-gray-600 shadow-sm">{{ Tr "all" }}</button>
+                    
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                        <button onclick="setLogCategory('TG')" id="btn-tg" class="text-gray-500 dark:text-gray-400 hover:text-blue-400">TG</button>
+                        <input type="checkbox" checked onchange="toggleCategory('tg', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer">
+                    </div>
+
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                        <button onclick="setLogCategory('HH')" id="btn-hh" class="text-gray-500 dark:text-gray-400 hover:text-red-400">HH</button>
+                        <input type="checkbox" checked onchange="toggleCategory('hh', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer">
+                    </div>
+
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                        <button onclick="setLogCategory('SYNC')" id="btn-sync" class="text-gray-500 dark:text-gray-400 hover:text-green-400">Sync</button>
+                        <input type="checkbox" checked onchange="toggleCategory('sync', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer">
+                    </div>
+
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                        <button onclick="setLogCategory('ADD-SEQUENCE')" id="btn-add-sequence" class="text-gray-500 dark:text-gray-400 hover:text-orange-400">Sequences</button>
+                        <input type="checkbox" checked onchange="toggleCategory('add-sequence', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-orange-600 focus:ring-orange-500 cursor-pointer">
+                    </div>
+
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                        <button onclick="setLogCategory('HH-NET')" id="btn-hh-net" class="text-gray-500 dark:text-gray-400 hover:text-indigo-400">HH-Net</button>
+                        <input type="checkbox" checked onchange="toggleCategory('hh-net', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+                    </div>
+
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                        <button onclick="setLogCategory('MSG')" id="btn-msg" class="text-gray-500 dark:text-gray-400 hover:text-purple-400">Msg</button>
+                        <input type="checkbox" checked onchange="toggleCategory('msg', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer">
+                    </div>
                 </div>
 
-                <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
-                    <button onclick="setLogCategory('HH')" id="btn-hh" class="text-gray-500 dark:text-gray-400 hover:text-red-400">HH</button>
-                    <input type="checkbox" checked onchange="toggleCategory('hh', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer">
+                <div class="flex items-center bg-gray-100 dark:bg-gray-700 p-1.5 rounded-xl border dark:border-gray-600 gap-2">
+                    <span class="text-[10px] font-black uppercase text-gray-400 px-2 tracking-widest">Level</span>
+                    <select onchange="updateLogLevel(this.value)" class="bg-transparent text-[10px] font-black outline-none dark:text-white uppercase cursor-pointer">
+                        <option value="0" {{ if eq .Level 0 }}selected{{ end }}>TRACE</option>
+                        <option value="1" {{ if eq .Level 1 }}selected{{ end }}>DEBUG</option>
+                        <option value="2" {{ if eq .Level 2 }}selected{{ end }}>INFO</option>
+                        <option value="3" {{ if eq .Level 3 }}selected{{ end }}>WARN</option>
+                        <option value="4" {{ if eq .Level 4 }}selected{{ end }}>ERROR</option>
+                    </select>
                 </div>
 
-                <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
-                    <button onclick="setLogCategory('SYNC')" id="btn-sync" class="text-gray-500 dark:text-gray-400 hover:text-green-400">Sync</button>
-                    <input type="checkbox" checked onchange="toggleCategory('sync', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer">
-                </div>
-
-                <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
-                    <button onclick="setLogCategory('ADD-SEQUENCE')" id="btn-add-sequence" class="text-gray-500 dark:text-gray-400 hover:text-orange-400">Sequences</button>
-                    <input type="checkbox" checked onchange="toggleCategory('add-sequence', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-orange-600 focus:ring-orange-500 cursor-pointer">
-                </div>
-
-                <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
-                    <button onclick="setLogCategory('HH-NET')" id="btn-hh-net" class="text-gray-500 dark:text-gray-400 hover:text-indigo-400">HH-Net</button>
-                    <input type="checkbox" checked onchange="toggleCategory('hh-net', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
-                </div>
-
-                <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
-                    <button onclick="setLogCategory('MSG')" id="btn-msg" class="text-gray-500 dark:text-gray-400 hover:text-purple-400">Msg</button>
-                    <input type="checkbox" checked onchange="toggleCategory('msg', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer">
-                </div>
+                <button onclick="clearLogs()" class="px-4 py-2 bg-gray-900 dark:bg-gray-700 hover:bg-black dark:hover:bg-gray-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95">
+                    {{ Tr "clear" }}
+                </button>
             </div>
 
-            <div class="flex items-center bg-gray-100 dark:bg-gray-700 p-1.5 rounded-xl border dark:border-gray-600 gap-2">
-                <span class="text-[10px] font-black uppercase text-gray-400 px-2 tracking-widest">Level</span>
-                <select onchange="updateLogLevel(this.value)" class="bg-transparent text-[10px] font-black outline-none dark:text-white uppercase cursor-pointer">
-                    <option value="0" {{ if eq .Level 0 }}selected{{ end }}>TRACE</option>
-                    <option value="1" {{ if eq .Level 1 }}selected{{ end }}>DEBUG</option>
-                    <option value="2" {{ if eq .Level 2 }}selected{{ end }}>INFO</option>
-                    <option value="3" {{ if eq .Level 3 }}selected{{ end }}>WARN</option>
-                    <option value="4" {{ if eq .Level 4 }}selected{{ end }}>ERROR</option>
-                </select>
-            </div>
-
-
-            <button onclick="clearLogs()" class="px-4 py-2 bg-gray-900 dark:bg-gray-700 hover:bg-black dark:hover:bg-gray-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95">
-                {{ Tr "clear" }}
-            </button>
-            <div id="connection-status" class="flex items-center px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200 border border-yellow-200 dark:border-yellow-800">
+            <div id="connection-status" class="flex items-center px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200 border border-yellow-200 dark:border-yellow-800 whitespace-nowrap min-w-[140px] justify-center ml-4">
                 <span class="w-2 h-2 rounded-full bg-yellow-500 mr-2"></span>
                 {{ Tr "connecting" }}
             </div>
@@ -155,38 +157,70 @@
 
     function shouldShow(text, cat) {
         if (cat === 'ALL') return true;
+        
         const upperText = text.toUpperCase();
-        return upperText.includes(`[${cat}]`);
+        const tag = `[${cat}]`;
+        
+        // If the log contains the specific tag, show it
+        if (upperText.includes(tag)) return true;
+        
+        // Specific case for system logs like [Main], [DB] which don't have categories
+        // We show them in ALL, but we could also decide to show them if no specific category matches
+        // However, if the user clicked "HH", they probably only want "HH".
+        
+        return false;
     }
 
     function connect() {
         if (eventSource) eventSource.close();
         
-        eventSource = new EventSource('/logs/stream');
+        // Add a random param to bypass any cache
+        eventSource = new EventSource('/logs/stream?t=' + Date.now());
         
         eventSource.onopen = () => {
+            console.log('[SSE] Connection established');
             statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>${translations.live}`;
-            statusEl.className = 'flex items-center px-3 py-1.5 rounded-lg text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 border border-green-200 dark:border-yellow-800';
+            statusEl.className = 'flex items-center px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 border border-green-200 dark:border-green-800 whitespace-nowrap min-w-[100px] justify-center';
         };
 
         eventSource.onerror = (e) => {
-            console.error('SSE error:', e);
+            console.error('[SSE] Error:', e);
             statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 mr-2"></span>${translations.disconnected}`;
-            statusEl.className = 'flex items-center px-3 py-1.5 rounded-lg text-xs font-bold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200 border border-red-200 dark:border-red-800';
+            statusEl.className = 'flex items-center px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200 border border-red-200 dark:border-red-800 whitespace-nowrap min-w-[100px] justify-center';
+            
+            // Reconnect after delay
             setTimeout(connect, 3000);
         };
 
         eventSource.onmessage = (e) => {
+            if (!e.data) return;
+            
+            // Remove "Awaiting logs" on first message
+            const placeholder = logContainer.querySelector('.italic');
+            if (placeholder) {
+                logContainer.removeChild(placeholder);
+            }
+
             const div = document.createElement('div');
-            div.className = 'log-entry mb-1 border-l-2 border-transparent hover:border-gray-700 dark:hover:border-gray-500 pl-2 transition-colors';
+            div.className = 'log-entry mb-1 border-l-2 border-transparent hover:border-gray-700 dark:hover:border-gray-500 pl-2 transition-colors whitespace-pre-wrap break-all';
             
             let line = e.data;
+            
+            // Strip date/time prefix for UI (assuming 2026/04/18 18:40:19 format)
+            // But only if it looks like a date
+            const dateRegex = /^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} /;
+            line = line.replace(dateRegex, '');
+
             if (line.includes('[ERROR]')) {
                 div.classList.add('text-red-400');
             } else if (line.includes('[WARN]')) {
                 div.classList.add('text-yellow-400');
             } else if (line.includes('[DEBUG]')) {
                 div.classList.add('text-gray-500');
+            } else if (line.includes('[HISTORY]')) {
+                div.classList.add('text-blue-300', 'font-bold');
+            } else if (line.includes('[MAIN]') || line.includes('[DB]')) {
+                div.classList.add('text-blue-400', 'font-bold');
             }
 
             if (!shouldShow(line, currentCategory)) {
@@ -196,7 +230,8 @@
             div.textContent = line;
             logContainer.appendChild(div);
             
-            if (logContainer.scrollHeight - logContainer.scrollTop - logContainer.clientHeight < 100) {
+            // Auto-scroll
+            if (logContainer.scrollHeight - logContainer.scrollTop - logContainer.clientHeight < 150) {
                 logContainer.scrollTop = logContainer.scrollHeight;
             }
 
