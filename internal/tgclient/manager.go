@@ -15,10 +15,10 @@ import (
 	"github.com/gotd/td/telegram/updates"
 	"github.com/gotd/td/tg"
 	"github.com/jmoiron/sqlx"
-	"hr-sorter/internal/logger"
 	"hr-sorter/internal/models"
 	"hr-sorter/internal/repository"
 	"hr-sorter/internal/streaming"
+	"hr-sorter/pkg/logger"
 )
 
 type Manager struct {

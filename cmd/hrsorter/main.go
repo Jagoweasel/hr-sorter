@@ -18,13 +18,14 @@ import (
 	"hr-sorter/internal/database"
 	"hr-sorter/internal/hhclient"
 	"hr-sorter/internal/i18n"
-	"hr-sorter/internal/logger"
+	internalLogger "hr-sorter/internal/logger"
 	"hr-sorter/internal/models"
 	"hr-sorter/internal/repository"
 	"hr-sorter/internal/service"
 	"hr-sorter/internal/streaming"
 	"hr-sorter/internal/tgclient"
 	"hr-sorter/internal/web"
+	"hr-sorter/pkg/logger"
 )
 
 func main() {
@@ -41,43 +42,8 @@ func main() {
 	debugAll := flag.Bool("debug-all", false, "Enable all debug logs")
 	flag.Parse()
 
-	if *debugAll || *debugSync {
-		logger.Enable(logger.Sync)
-	}
-	if *debugAll || *debugAdd {
-		logger.Enable(logger.AddSequence)
-	}
-	if *debugAll || *debugHistory {
-		logger.Enable(logger.History)
-	}
-	if *debugAll || *debugTG {
-		logger.Enable(logger.Telegram)
-	}
-	if *debugAll || *debugHH {
-		logger.Enable(logger.HH)
-	}
-	if *debugAll || *debugReports {
-		logger.Enable(logger.Reports)
-	}
-	if *debugAll || *debugMsg {
-		logger.Enable(logger.Messaging)
-	}
-	if *debugAll || *debugFilters {
-		logger.Enable(logger.Filters)
-	}
-	if *debugAll || *debugTrace {
-		logger.Enable(logger.TraceCat)
-	}
-	if *debugAll || *debugHHNet {
-		logger.Enable(logger.HHNet)
-	}
-
 	log.Println("[Main] Starting application...")
 	_ = godotenv.Load()
-
-	// Initialize log streaming
-	logBroadcaster := streaming.NewLogBroadcaster()
-	log.SetOutput(io.MultiWriter(os.Stdout, logBroadcaster))
 
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
@@ -98,6 +64,44 @@ func main() {
 	database.InitDB(dbPath)
 	defer database.CloseDB()
 	log.Println("[Main] Database initialized successfully.")
+
+	// Initialize log streaming
+	logBroadcaster := streaming.NewLogBroadcaster()
+
+	// Initialize UNIFIED Zap Logger
+	logger.L = logger.NewLogger(logBroadcaster, database.DB)
+	log.SetOutput(io.MultiWriter(os.Stdout, logBroadcaster))
+
+	if *debugAll || *debugSync {
+		internalLogger.Enable(internalLogger.Sync)
+	}
+	if *debugAll || *debugAdd {
+		internalLogger.Enable(internalLogger.AddSequence)
+	}
+	if *debugAll || *debugHistory {
+		internalLogger.Enable(internalLogger.History)
+	}
+	if *debugAll || *debugTG {
+		internalLogger.Enable(internalLogger.Telegram)
+	}
+	if *debugAll || *debugHH {
+		internalLogger.Enable(internalLogger.HH)
+	}
+	if *debugAll || *debugReports {
+		internalLogger.Enable(internalLogger.Reports)
+	}
+	if *debugAll || *debugMsg {
+		internalLogger.Enable(internalLogger.Messaging)
+	}
+	if *debugAll || *debugFilters {
+		internalLogger.Enable(internalLogger.Filters)
+	}
+	if *debugAll || *debugTrace {
+		internalLogger.Enable(internalLogger.TraceCat)
+	}
+	if *debugAll || *debugHHNet {
+		internalLogger.Enable(internalLogger.HHNet)
+	}
 
 	// Initialize repositories
 	accRepo := repository.NewAccountRepository(database.DB)
@@ -182,7 +186,7 @@ func main() {
 		}
 	}
 
-	handler := web.NewHandler(ctx, manager, hhManager, hhAuthService, logBroadcaster, tm, ls, accRepo, intRepo, conRepo, msgRepo, seqRepo, fltRepo, mapRepo, accService, intService, seqService, conService, fltService, repService)
+	handler := web.NewHandler(ctx, manager, hhManager, hhAuthService, logBroadcaster, tm, ls, accRepo, intRepo, conRepo, msgRepo, seqRepo, fltRepo, mapRepo, accService, intService, seqService, conService, fltService, repService, database.DB)
 	wrappedHandler := handler.InitHandler()
 
 	port := os.Getenv("HTTP_PORT")

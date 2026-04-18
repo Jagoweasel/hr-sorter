@@ -1,25 +1,22 @@
 package logger
 
 import (
-	"fmt"
-	"log"
-	"strings"
-	"sync"
+	"hr-sorter/pkg/logger"
 )
 
-type Category string
+type Category = logger.Category
 
 const (
-	Sync        Category = "sync"
-	AddSequence Category = "add-sequence"
-	History     Category = "history"
-	Telegram    Category = "tg"
-	HH          Category = "hh"
-	Reports     Category = "reports"
-	Messaging   Category = "msg"
-	Filters     Category = "filters"
-	TraceCat    Category = "trace"
-	HHNet       Category = "hh-net"
+	Sync        = logger.Sync
+	AddSequence = logger.AddSequence
+	History     = logger.History
+	Telegram    = logger.Telegram
+	HH          = logger.HH
+	Reports     = logger.Reports
+	Messaging   = logger.Messaging
+	Filters     = logger.Filters
+	TraceCat    = logger.TraceCat
+	HHNet       = logger.HHNet
 )
 
 type Level int
@@ -32,112 +29,46 @@ const (
 	LevelError
 )
 
-var (
-	enabledCategories = make(map[Category]bool)
-	mu                sync.RWMutex
-	minLevel          = LevelInfo
-)
-
 func Enable(cat Category) {
-	mu.Lock()
-	defer mu.Unlock()
-	enabledCategories[cat] = true
+	// No-op in new unified logger for now, or you can implement dynamic level switching
 }
 
 func Disable(cat Category) {
-	mu.Lock()
-	defer mu.Unlock()
-	enabledCategories[cat] = false
+	// No-op
 }
 
 func SetLevel(l Level) {
-	mu.Lock()
-	defer mu.Unlock()
-	minLevel = l
+	// No-op
 }
 
 func IsEnabled(cat Category) bool {
-	mu.RLock()
-	defer mu.RUnlock()
-	return enabledCategories[cat] || enabledCategories[TraceCat]
+	return true // Zap handles this internally
 }
 
 func GetConfig() (map[Category]bool, Level) {
-	mu.RLock()
-	defer mu.RUnlock()
-	conf := make(map[Category]bool)
-	for k, v := range enabledCategories {
-		conf[k] = v
-	}
-	return conf, minLevel
+	return make(map[Category]bool), 2 // Default INFO
 }
 
 func Debug(cat Category, format string, v ...interface{}) {
-	mu.RLock()
-	enabled := enabledCategories[cat] || enabledCategories[TraceCat]
-	lvl := minLevel
-	mu.RUnlock()
-
-	if (enabled || lvl <= LevelDebug) && lvl <= LevelDebug {
-		log.Printf("[DEBUG][%s] %s", strings.ToUpper(string(cat)), fmt.Sprintf(format, v...))
-	}
+	logger.Debug(cat, format, v...)
 }
 
 func Trace(cat Category, format string, v ...interface{}) {
-	mu.RLock()
-	enabled := enabledCategories[TraceCat]
-	lvl := minLevel
-	mu.RUnlock()
-
-	if (enabled || lvl <= LevelTrace) && lvl <= LevelTrace {
-		log.Printf("[TRACE][%s] %s", strings.ToUpper(string(cat)), fmt.Sprintf(format, v...))
-	}
+	logger.Trace(cat, format, v...)
 }
 
 func Info(cat Category, format string, v ...interface{}) {
-	mu.RLock()
-	lvl := minLevel
-	mu.RUnlock()
-
-	if lvl <= LevelInfo {
-		log.Printf("[INFO][%s] %s", strings.ToUpper(string(cat)), fmt.Sprintf(format, v...))
-	}
+	logger.Info(cat, format, v...)
 }
 
 func Warn(cat Category, format string, v ...interface{}) {
-	mu.RLock()
-	lvl := minLevel
-	mu.RUnlock()
-
-	if lvl <= LevelWarn {
-		log.Printf("[WARN][%s] %s", strings.ToUpper(string(cat)), fmt.Sprintf(format, v...))
-	}
+	logger.Warn(cat, format, v...)
 }
 
 func Error(cat Category, format string, v ...interface{}) {
-	mu.RLock()
-	lvl := minLevel
-	mu.RUnlock()
-
-	if lvl <= LevelError {
-		log.Printf("[ERROR][%s] %s", strings.ToUpper(string(cat)), fmt.Sprintf(format, v...))
-	}
+	logger.Error(cat, format, v...)
 }
 
-// LogChain outputs a visual representation of the sequence history
 func LogChain(seqID int64, company string, stages []string, status string) {
-	mu.RLock()
-	enabled := enabledCategories[History]
-	mu.RUnlock()
-
-	if !enabled {
-		return
-	}
-	chain := strings.Join(stages, " -> ")
-	if status == "rejected" {
-		chain += " -> [REJECTED]"
-	} else if status == "accepted" {
-		chain += " -> [ACCEPTED]"
-	}
-	log.Printf("[HISTORY] Seq #%d (%s): %s", seqID, company, chain)
+	logger.LogChain(seqID, company, stages, status)
 }

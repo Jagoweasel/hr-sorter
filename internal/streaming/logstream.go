@@ -28,7 +28,7 @@ func (b *LogBroadcaster) Stream(ctx context.Context, writer io.Writer) error {
 		return fmt.Errorf("streaming not supported")
 	}
 
-	ch := make(chan string, 100)
+	ch := make(chan string, 500)
 	b.mu.Lock()
 	b.subscribers[ch] = struct{}{}
 	b.mu.Unlock()

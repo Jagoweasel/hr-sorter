@@ -155,20 +155,78 @@
         });
     }
 
-    function shouldShow(text, cat) {
-        if (cat === 'ALL') return true;
+    async function loadHistory() {
+        try {
+            const resp = await fetch(`/logs/history?category=${currentCategory}&limit=500`);
+            const logs = await resp.json();
+            
+            // Clear but keep placeholder if empty
+            logContainer.innerHTML = '';
+            if (logs.length === 0) {
+                const placeholder = document.createElement('div');
+                placeholder.className = 'text-gray-500 italic mb-4 opacity-50';
+                placeholder.textContent = '{{ Tr "awaiting_logs" }}...';
+                logContainer.appendChild(placeholder);
+                return;
+            }
+
+            logs.forEach(log => appendLog(log, false));
+            logContainer.scrollTop = logContainer.scrollHeight;
+        } catch (e) {
+            console.error('Failed to load history:', e);
+        }
+    }
+
+    function appendLog(logData, scroll = true) {
+        // Remove "Awaiting logs" on first message
+        const placeholder = logContainer.querySelector('.italic');
+        if (placeholder) {
+            logContainer.removeChild(placeholder);
+        }
+
+        const div = document.createElement('div');
+        div.className = 'log-entry mb-1 border-l-2 border-transparent hover:border-gray-700 dark:hover:border-gray-500 pl-2 transition-colors whitespace-pre-wrap break-all';
         
-        const upperText = text.toUpperCase();
-        const tag = `[${cat}]`;
+        const level = logData.level.toUpperCase();
+        const cat = (logData.category || 'system').toUpperCase();
+        const msg = logData.msg || logData.message || '';
+        const ts = logData.ts || logData.timestamp || '';
+
+        // Formatting: [TS] [LEVEL] [CAT] MSG
+        const formattedTs = ts.split(' ')[1] || ts; // Show only time if possible
+        div.textContent = `[${formattedTs}] [${level}] [${cat}] ${msg}`;
+
+        if (level === 'ERROR' || level === 'DPANIC' || level === 'PANIC' || level === 'FATAL') {
+            div.classList.add('text-red-400');
+        } else if (level === 'WARN') {
+            div.classList.add('text-yellow-400');
+        } else if (level === 'DEBUG') {
+            div.classList.add('text-gray-500');
+        } else if (cat === 'HISTORY') {
+            div.classList.add('text-blue-300', 'font-bold');
+        } else if (cat === 'SYSTEM' || cat === 'MAIN' || cat === 'DB') {
+            div.classList.add('text-blue-400', 'font-bold');
+        }
+
+        if (!shouldShow(cat, currentCategory)) {
+            div.classList.add('hidden');
+        }
+
+        logContainer.appendChild(div);
         
-        // If the log contains the specific tag, show it
-        if (upperText.includes(tag)) return true;
-        
-        // Specific case for system logs like [Main], [DB] which don't have categories
-        // We show them in ALL, but we could also decide to show them if no specific category matches
-        // However, if the user clicked "HH", they probably only want "HH".
-        
-        return false;
+        // Auto-scroll
+        if (scroll && logContainer.scrollHeight - logContainer.scrollTop - logContainer.clientHeight < 250) {
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        if (logContainer.children.length > 2000) {
+            logContainer.removeChild(logContainer.firstChild);
+        }
+    }
+
+    function shouldShow(logCat, filterCat) {
+        if (filterCat === 'ALL') return true;
+        return logCat.toUpperCase() === filterCat.toUpperCase();
     }
 
     function connect() {
@@ -195,48 +253,13 @@
         eventSource.onmessage = (e) => {
             if (!e.data) return;
             
-            // Remove "Awaiting logs" on first message
-            const placeholder = logContainer.querySelector('.italic');
-            if (placeholder) {
-                logContainer.removeChild(placeholder);
-            }
-
-            const div = document.createElement('div');
-            div.className = 'log-entry mb-1 border-l-2 border-transparent hover:border-gray-700 dark:hover:border-gray-500 pl-2 transition-colors whitespace-pre-wrap break-all';
-            
-            let line = e.data;
-            
-            // Strip date/time prefix for UI (assuming 2026/04/18 18:40:19 format)
-            // But only if it looks like a date
-            const dateRegex = /^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} /;
-            line = line.replace(dateRegex, '');
-
-            if (line.includes('[ERROR]')) {
-                div.classList.add('text-red-400');
-            } else if (line.includes('[WARN]')) {
-                div.classList.add('text-yellow-400');
-            } else if (line.includes('[DEBUG]')) {
-                div.classList.add('text-gray-500');
-            } else if (line.includes('[HISTORY]')) {
-                div.classList.add('text-blue-300', 'font-bold');
-            } else if (line.includes('[MAIN]') || line.includes('[DB]')) {
-                div.classList.add('text-blue-400', 'font-bold');
-            }
-
-            if (!shouldShow(line, currentCategory)) {
-                div.classList.add('hidden');
-            }
-
-            div.textContent = line;
-            logContainer.appendChild(div);
-            
-            // Auto-scroll
-            if (logContainer.scrollHeight - logContainer.scrollTop - logContainer.clientHeight < 150) {
-                logContainer.scrollTop = logContainer.scrollHeight;
-            }
-
-            if (logContainer.children.length > 2000) {
-                logContainer.removeChild(logContainer.firstChild);
+            try {
+                const logData = JSON.parse(e.data);
+                appendLog(logData);
+            } catch (err) {
+                // Fallback for non-JSON logs (like ping or old format)
+                if (e.data.startsWith(':')) return; // ignore comments/pings
+                appendLog({ level: 'INFO', category: 'system', msg: e.data, ts: new Date().toISOString() });
             }
         };
     }
@@ -245,6 +268,7 @@
         logContainer.innerHTML = '';
     }
 
+    loadHistory();
     connect();
 
     window.addEventListener('beforeunload', () => {

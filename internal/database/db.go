@@ -176,7 +176,7 @@ func InitDB(path string) {
 		log.Println("[DB] Migration finished.")
 	}
 
-	// Migration: Create mapping_rules and negotiations_stats tables if they don't exist
+	// Migration: Create mapping_rules, negotiations_stats and system_logs tables if they don't exist
 	DB.MustExec(`
 		CREATE TABLE IF NOT EXISTS mapping_rules (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -192,6 +192,17 @@ func InitDB(path string) {
 			FOREIGN KEY (integration_id) REFERENCES integrations(id) ON DELETE CASCADE
 		);
 	`)
+	DB.MustExec(`
+		CREATE TABLE IF NOT EXISTS system_logs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			level TEXT NOT NULL,
+			category TEXT NOT NULL,
+			message TEXT NOT NULL,
+			timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+	`)
+	DB.MustExec("CREATE INDEX IF NOT EXISTS idx_system_logs_timestamp ON system_logs(timestamp)")
+	DB.MustExec("CREATE INDEX IF NOT EXISTS idx_system_logs_category ON system_logs(category)")
 
 	// Migration: Add unique index to message_filters pattern
 	_, _ = DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_message_filters_pattern ON message_filters(pattern)")

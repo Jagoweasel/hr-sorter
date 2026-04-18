@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"github.com/gorilla/csrf"
+	"github.com/jmoiron/sqlx"
 	"hr-sorter/internal/auth/hh"
 	"hr-sorter/internal/hhclient"
 	"hr-sorter/internal/i18n"
@@ -29,6 +30,8 @@ type Handler struct {
 	// Templates
 	templates *TemplateManager
 	i18n      *i18n.LocalizationService
+
+	db *sqlx.DB
 
 	// Repositories
 	accRepo *repository.AccountRepository
@@ -69,6 +72,7 @@ func NewHandler(
 	conService *service.ContactService,
 	fltService *service.FilterService,
 	repService *service.ReportService,
+	db *sqlx.DB,
 ) *Handler {
 	return &Handler{
 		rootCtx:        ctx,
@@ -78,6 +82,7 @@ func NewHandler(
 		logBroadcaster: logBroadcaster,
 		templates:      templates,
 		i18n:           ls,
+		db:             db,
 		accRepo:        accRepo,
 		intRepo:        intRepo,
 		conRepo:        conRepo,
@@ -216,6 +221,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/set-lang", h.handleSetLang)
 	mux.HandleFunc("/logs", h.handleLogs)
 	mux.HandleFunc("/logs/update", h.handleUpdateLogConfig)
+	mux.HandleFunc("/logs/history", h.handleLogHistory)
 	mux.HandleFunc("/logs/stream", h.handleLogStream)
 	mux.HandleFunc("/mapping", h.handleMapping)
 	mux.HandleFunc("/mapping/save", h.handleSaveMapping)
