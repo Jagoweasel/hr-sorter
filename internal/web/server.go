@@ -123,9 +123,8 @@ func (h *Handler) getCookie(r *http.Request, name, defaultValue string) string {
 
 func (h *Handler) setHXLocation(w http.ResponseWriter, path string) {
 	// We use JSON format for HX-Location to specify the target container and morph swap.
-	// This prevents HTMX from replacing the whole body and losing the navigation header,
-	// while also preserving scroll position.
-	w.Header().Set("HX-Location", "{\"path\":\""+path+"\", \"target\":\"#main-content\", \"swap\":\"morph\"}")
+	// We use morph:innerHTML to keep the #main-content element alive.
+	w.Header().Set("HX-Location", "{\"path\":\""+path+"\", \"target\":\"#main-content\", \"swap\":\"morph:innerHTML\"}")
 	// Signal to close any open modal
 	w.Header().Set("HX-Trigger", "closeModal")
 }

@@ -113,7 +113,7 @@
              <div id="contact-list" 
                   hx-get="/contacts" 
                   hx-trigger="load, every 30s, refreshContacts from:body" 
-                  hx-swap="morph"
+                  hx-swap="morph:innerHTML"
                   hx-include="[name='account_id'], [name='platform'], [name='show_declines'], [name='hide_screened'], [name='hide_unanswered'], [name='show_ignored']"
                   class="flex-1 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700">
                 <div class="flex flex-col items-center justify-center h-full text-gray-400 p-8 space-y-4">
@@ -340,33 +340,7 @@
             });
         }
 
-        // Polling for sync status
-        function updateSyncStatus() {
-            fetch('/integrations/stats')
-                .then(response => response.json())
-                .then(data => {
-                    const dot = document.getElementById('sync-indicator-dot');
-                    const text = document.getElementById('sync-indicator-text');
-                    
-                    if (data.active_count > 0) {
-                        dot.classList.remove('bg-gray-400');
-                        dot.classList.add('bg-green-500', 'animate-pulse');
-                        text.innerText = '{{ Tr "sync_active" }}';
-                        text.classList.remove('text-gray-400');
-                        text.classList.add('text-green-600', 'dark:text-green-400');
-                    } else {
-                        dot.classList.add('bg-gray-400');
-                        dot.classList.remove('bg-green-500', 'animate-pulse');
-                        text.innerText = '{{ Tr "sync_idle" }}';
-                        text.classList.add('text-gray-400');
-                        text.classList.remove('text-green-600', 'dark:text-green-400');
-                    }
-                })
-                .catch(err => console.error('Error fetching sync stats:', err));
-        }
-        
-        setInterval(updateSyncStatus, 10000);
-        updateSyncStatus();
+        updateGlobalSyncStatus();
 
         document.body.addEventListener('refresh', () => {
             const list = document.getElementById('contact-list');

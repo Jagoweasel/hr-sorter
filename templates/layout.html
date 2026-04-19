@@ -25,7 +25,7 @@
         }
     </script>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans transition-colors duration-200" hx-headers='{"X-CSRF-Token": "{{ csrfToken }}"}' hx-ext="idiomorph">
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans transition-colors duration-200" hx-headers='{"X-CSRF-Token": "{{ csrfToken }}"}' hx-ext="morph">
     <script>
         // Check for saved theme preference or use system preference
         if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -99,6 +99,37 @@
                 }
             }
         };
+
+        // Polling for sync status (Global)
+        function updateGlobalSyncStatus() {
+            const dot = document.getElementById('sync-indicator-dot');
+            const text = document.getElementById('sync-indicator-text');
+            if (!dot || !text) return; // Not on dashboard
+
+            fetch('/integrations/stats')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.active_count > 0) {
+                        dot.classList.remove('bg-gray-400');
+                        dot.classList.add('bg-green-500', 'animate-pulse');
+                        text.innerText = '{{ Tr "sync_active" }}';
+                        text.classList.remove('text-gray-400');
+                        text.classList.add('text-green-600', 'dark:text-green-400');
+                    } else {
+                        dot.classList.add('bg-gray-400');
+                        dot.classList.remove('bg-green-500', 'animate-pulse');
+                        text.innerText = '{{ Tr "sync_idle" }}';
+                        text.classList.add('text-gray-400');
+                        text.classList.remove('text-green-600', 'dark:text-green-400');
+                    }
+                })
+                .catch(err => console.warn('Error fetching sync stats:', err));
+        }
+        
+        if (!window.syncIntervalSet) {
+            setInterval(updateGlobalSyncStatus, 10000);
+            window.syncIntervalSet = true;
+        }
 
         // Enable HTMX logging for debugging
         // htmx.logAll();

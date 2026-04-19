@@ -46,8 +46,8 @@
          class="flex-1 overflow-y-auto bg-slate-50 dark:bg-gray-900/50"
          hx-get="/messages/list/{{ .ContactID }}" 
          hx-trigger="every 10s, refreshMessages from:body"
-         hx-swap="morph"
-         hx-ext="idiomorph"
+         hx-swap="morph:innerHTML"
+         hx-ext="morph"
          hx-on::after-settle="if(this.scrollTop + this.clientHeight >= this.scrollHeight - 100) this.scrollTop = this.scrollHeight">
         {{ template "message_list.html" . }}
     </div>
