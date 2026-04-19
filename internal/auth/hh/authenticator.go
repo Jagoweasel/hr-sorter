@@ -364,8 +364,8 @@ func (f *PlaywrightAuthFlow) run() {
 
 	logger.Info(logger.HH, "[HHAuth] Navigating to auth URL: %s", authURL)
 	_, err = f.page.Goto(authURL, playwright.PageGotoOptions{
-		WaitUntil: playwright.WaitUntilStateLoad,
-		Timeout:   playwright.Float(30000),
+		WaitUntil: playwright.WaitUntilStateDomcontentloaded,
+		Timeout:   playwright.Float(60000),
 	})
 	if err != nil {
 		f.fail(fmt.Errorf("failed to navigate to auth URL: %w", err))
@@ -432,7 +432,8 @@ func (f *PlaywrightAuthFlow) run() {
 
 func (f *PlaywrightAuthFlow) handleManualInput(input string) {
 	logger.Info(logger.HH, "[HHAuth] Processing user input (length: %d)...", len(input))
-	// 1. Try to find known OTP/Captcha/Password fields
+
+	// 1. Убираем "костыли" с Ctrl+A, используем надежный Fill
 	selectors := []string{
 		"input[data-qa='magritte-pincode-input-field']",
 		"input[name='code']",
@@ -440,74 +441,43 @@ func (f *PlaywrightAuthFlow) handleManualInput(input string) {
 		"input[data-qa='otp-code-input']",
 		"input[data-qa='account-captcha-input']",
 		"input[name='captcha']",
-		"input[type='password']",
-		"input[type='number']",
-		"input[type='tel']",
 	}
 
 	typed := false
 	for _, sel := range selectors {
 		if visible, _ := f.page.Locator(sel).IsVisible(); visible {
-			logger.Info(logger.HH, "[HHAuth] Found input field %s, typing...", sel)
-			_ = f.page.Focus(sel)
-			_ = f.page.Keyboard().Press("Control+A")
-			_ = f.page.Keyboard().Press("Backspace")
-			if err := f.page.Keyboard().Type(input, playwright.KeyboardTypeOptions{Delay: playwright.Float(100)}); err == nil {
-				typed = true
-				break
-			}
+			logger.Info(logger.HH, "[HHAuth] Found input field %s, filling...", sel)
+			// Fill автоматически очищает поле и атомарно вводит текст
+			_ = f.page.Locator(sel).Fill(input)
+			typed = true
+			break
 		}
 	}
 
-	// 2. Blind typing if no selector worked
 	if !typed {
 		logger.Info(logger.HH, "[HHAuth] No specific field visible, performing blind typing...")
-		// Click roughly in the middle to ensure focus
-		_ = f.page.Mouse().Click(200, 300)
-		time.Sleep(200 * time.Millisecond)
-		_ = f.page.Keyboard().Type(input, playwright.KeyboardTypeOptions{Delay: playwright.Float(100)})
+		_ = f.page.Keyboard().Type(input, playwright.KeyboardTypeOptions{Delay: playwright.Float(50)})
 	}
 
-	// Wait a bit to see if auto-redirect happens (HH often auto-submits on last digit)
-	time.Sleep(800 * time.Millisecond)
+	// 2. Ждем немного. ХХ часто сам сабмитит форму после ввода последней цифры.
+	time.Sleep(500 * time.Millisecond)
+
+	// Если мы уже поймали редирект в перехватчике сети — ничего больше не жмем
 	if len(f.codeChan) > 0 {
-		logger.Info(logger.HH, "[HHAuth] Auto-submission detected via redirect, skipping manual Enter/Click")
+		logger.Info(logger.HH, "[HHAuth] Auto-submission detected via redirect")
 		return
 	}
 
-	// 3. Submit
+	// 3. Отправляем форму только ОДИН раз
 	logger.Info(logger.HH, "[HHAuth] Pressing Enter to submit input...")
 	_ = f.page.Keyboard().Press("Enter")
 
-	// 4. Try clicking common submit buttons just in case
-	go func() {
-		time.Sleep(1 * time.Second)
-		logger.Debug(logger.HH, "[HHAuth] Looking for submit buttons to click...")
-		btn := f.page.Locator("button[type='submit'], button[data-qa='otp-code-submit'], button[data-qa='account-captcha-submit']")
-		if visible, _ := btn.IsVisible(); visible {
-			// Double check if we already got the code in the meantime
-			if len(f.codeChan) > 0 {
-				return
-			}
-			logger.Info(logger.HH, "[HHAuth] Found visible submit button, clicking...")
-			_ = btn.Click(playwright.LocatorClickOptions{
-				Timeout: playwright.Float(1000),
-			})
-		}
-	}()
-
-	// 5. Check for instant error message or state change
-	go func() {
-		time.Sleep(3 * time.Second)
-		logger.Info(logger.HH, "[HHAuth] Verifying page state after input (URL: %s)...", f.page.URL())
-		errLoc := f.page.Locator("div.bloko-notification--error, div[data-qa='login-error'], div.error-item")
-		if visible, _ := errLoc.IsVisible(); visible {
-			msg, _ := errLoc.InnerText()
-			logger.Error(logger.HH, "[HHAuth] ERROR detected on page after input: %s", msg)
-		} else {
-			logger.Info(logger.HH, "[HHAuth] No error visible on page after input. Waiting for redirect or next step...")
-		}
-	}()
+	// 4. БЛОКИРУЕМ ПОТОК.
+	// Это критически важно! Мы убрали асинхронные клики. Теперь мы просто ждем 3 секунды.
+	// Это не даст циклу в run() мгновенно вызвать detectState() и снова запросить OTP,
+	// пока страница ХХ грузится и переходит к hhandroid://
+	logger.Info(logger.HH, "[HHAuth] Waiting for page transition to settle...")
+	time.Sleep(3 * time.Second)
 }
 
 func (f *PlaywrightAuthFlow) handleIdentify() error {

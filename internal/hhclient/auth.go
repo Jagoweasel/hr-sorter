@@ -243,13 +243,31 @@ func (s *HHAuthService) runFlow(identify string) {
 			select {
 			case code := <-s.otpChan:
 				logger.Debug(logger.HH, "[HHAuth] Received OTP, filling form...")
+
+				// 1. Вводим код через Fill (он сам чистит поле)
 				if err := s.sessionPage.Fill("input[data-qa='magritte-pincode-input-field']", code); err != nil {
 					_ = s.sessionPage.Fill("input[name='code']", code)
 				}
-				if err := s.sessionPage.Keyboard().Press("Enter"); err != nil {
-					s.fail(fmt.Errorf("failed to submit OTP: %w", err))
-					return
+
+				// 2. Ждем на случай, если ХХ сделает авто-сабмит после последней цифры
+				time.Sleep(500 * time.Millisecond)
+
+				// Проверяем, не словили ли мы уже редирект в фоне
+				select {
+				case <-s.codeChan:
+					// Редирект уже пошел, Enter нажимать нельзя
+					logger.Debug(logger.HH, "[HHAuth] Auto-submission detected, skipping Enter")
+				default:
+					// 3. Авто-сабмита не было, жмем Enter
+					if err := s.sessionPage.Keyboard().Press("Enter"); err != nil {
+						s.fail(fmt.Errorf("failed to submit OTP: %w", err))
+						return
+					}
 				}
+
+				// 4. КРИТИЧНО: Ждем прогрузки страницы.
+				// Иначе цикл сразу сделает detectState(), увидит инпут и снова запросит код
+				time.Sleep(3 * time.Second)
 			case <-ctx.Done():
 				s.fail(fmt.Errorf("auth timeout"))
 				return
@@ -270,13 +288,19 @@ func (s *HHAuthService) runFlow(identify string) {
 			select {
 			case resolution := <-s.captchaChan:
 				logger.Debug(logger.HH, "[HHAuth] Received Captcha, filling form...")
+
 				if err := s.sessionPage.Fill("input[data-qa='account-captcha-input']", resolution); err != nil {
 					_ = s.sessionPage.Fill("input[name='captcha']", resolution)
 				}
+
+				// На капче авто-сабмитов обычно нет, поэтому жмем сразу
 				if err := s.sessionPage.Keyboard().Press("Enter"); err != nil {
 					s.fail(fmt.Errorf("failed to submit captcha: %w", err))
 					return
 				}
+
+				// Точно так же блокируем луп, чтобы страница успела обновиться
+				time.Sleep(3 * time.Second)
 			case <-ctx.Done():
 				s.fail(fmt.Errorf("auth timeout"))
 				return

@@ -6,12 +6,15 @@ services:
       - "${HTTP_PORT:-3000}:3000"
     volumes:
       - ./data:/app/data
+    # КРИТИЧЕСКИ ВАЖНО: Выделяем 1 ГБ разделяемой памяти для Chromium
+    shm_size: '1gb' 
     environment:
       - DB_PATH=/app/data/hr-sorter.db
       - HTTP_PORT=3000
       - HH_CLIENT_ID=${HH_CLIENT_ID}
       - HH_CLIENT_SECRET=${HH_CLIENT_SECRET}
-      # For Playwright in container
-      - PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 # If already installed in Dockerfile
+      # Настройки Playwright
+      - PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+      - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright # Указываем точный путь
       - HEADLESS=true
     restart: unless-stopped
