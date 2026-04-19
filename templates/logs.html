@@ -1,15 +1,15 @@
 {{ define "content" }}
 <div class="max-w-6xl mx-auto">
-    <div class="flex justify-between items-center mb-6">
-        <div class="flex items-center space-x-4">
-            <h2 class="text-2xl font-bold text-gray-800 dark:text-white">{{ Tr "system_logs" }}</h2>
+    <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center mb-6 gap-4">
+        <div class="flex items-center space-x-4 shrink-0">
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-white whitespace-nowrap">{{ Tr "system_logs" }}</h2>
             <div class="flex bg-gray-200 dark:bg-gray-700 p-1 rounded-xl gap-1 border dark:border-gray-600">
                 <button onclick="applyPreset('dashboard')" class="px-3 py-1 text-[10px] font-black uppercase rounded-lg hover:bg-white dark:hover:bg-gray-600 transition-all">{{ Tr "preset_dashboard" }}</button>
                 <button onclick="applyPreset('network')" class="px-3 py-1 text-[10px] font-black uppercase rounded-lg hover:bg-white dark:hover:bg-gray-600 transition-all">{{ Tr "preset_network" }}</button>
                 <button onclick="applyPreset('logic')" class="px-3 py-1 text-[10px] font-black uppercase rounded-lg hover:bg-white dark:hover:bg-gray-600 transition-all">{{ Tr "preset_logic" }}</button>
             </div>
         </div>
-        <div class="flex flex-wrap items-center justify-between flex-1 ml-4">
+        <div class="flex flex-wrap items-center justify-end gap-3 flex-1">
             <div class="flex flex-wrap items-center gap-3">
                 <!-- Filter Controls -->
                 <div class="flex flex-wrap bg-gray-100 dark:bg-gray-700 p-1.5 rounded-xl border dark:border-gray-600 gap-1">
@@ -17,43 +17,43 @@
                     
                     <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
                         <button onclick="setLogCategory('TG')" id="btn-tg" class="text-gray-500 dark:text-gray-400 hover:text-blue-400">TG</button>
-                        <input type="checkbox" checked onchange="toggleCategory('tg', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer">
+                        <input type="checkbox" id="chk-tg" checked onchange="toggleCategory('tg', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer">
                     </div>
 
                     <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
                         <button onclick="setLogCategory('HH')" id="btn-hh" class="text-gray-500 dark:text-gray-400 hover:text-red-400">HH</button>
-                        <input type="checkbox" checked onchange="toggleCategory('hh', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer">
+                        <input type="checkbox" id="chk-hh" checked onchange="toggleCategory('hh', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer">
                     </div>
 
                     <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
                         <button onclick="setLogCategory('SYNC')" id="btn-sync" class="text-gray-500 dark:text-gray-400 hover:text-green-400">Sync</button>
-                        <input type="checkbox" checked onchange="toggleCategory('sync', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer">
+                        <input type="checkbox" id="chk-sync" checked onchange="toggleCategory('sync', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer">
                     </div>
 
                     <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
                         <button onclick="setLogCategory('ADD-SEQUENCE')" id="btn-add-sequence" class="text-gray-500 dark:text-gray-400 hover:text-orange-400">Sequences</button>
-                        <input type="checkbox" checked onchange="toggleCategory('add-sequence', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-orange-600 focus:ring-orange-500 cursor-pointer">
+                        <input type="checkbox" id="chk-add-sequence" checked onchange="toggleCategory('add-sequence', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-orange-600 focus:ring-orange-500 cursor-pointer">
                     </div>
 
                     <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
                         <button onclick="setLogCategory('HH-NET')" id="btn-hh-net" class="text-gray-500 dark:text-gray-400 hover:text-indigo-400">HH-Net</button>
-                        <input type="checkbox" checked onchange="toggleCategory('hh-net', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+                        <input type="checkbox" id="chk-hh-net" checked onchange="toggleCategory('hh-net', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
                     </div>
 
                     <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
                         <button onclick="setLogCategory('MSG')" id="btn-msg" class="text-gray-500 dark:text-gray-400 hover:text-purple-400">Msg</button>
-                        <input type="checkbox" checked onchange="toggleCategory('msg', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer">
+                        <input type="checkbox" id="chk-msg" checked onchange="toggleCategory('msg', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer">
                     </div>
                 </div>
 
                 <div class="flex items-center bg-gray-100 dark:bg-gray-700 p-1.5 rounded-xl border dark:border-gray-600 gap-2">
                     <span class="text-[10px] font-black uppercase text-gray-400 px-2 tracking-widest">Level</span>
-                    <select onchange="updateLogLevel(this.value)" class="bg-transparent text-[10px] font-black outline-none dark:text-white uppercase cursor-pointer">
-                        <option value="0" {{ if eq .Level 0 }}selected{{ end }}>TRACE</option>
-                        <option value="1" {{ if eq .Level 1 }}selected{{ end }}>DEBUG</option>
-                        <option value="2" {{ if eq .Level 2 }}selected{{ end }}>INFO</option>
-                        <option value="3" {{ if eq .Level 3 }}selected{{ end }}>WARN</option>
-                        <option value="4" {{ if eq .Level 4 }}selected{{ end }}>ERROR</option>
+                    <select id="log-level-select" onchange="updateLogLevel(this.value)" class="bg-transparent text-[10px] font-black outline-none dark:text-white uppercase cursor-pointer">
+                        <option value="0">TRACE</option>
+                        <option value="1">DEBUG</option>
+                        <option value="2">INFO</option>
+                        <option value="3">WARN</option>
+                        <option value="4">ERROR</option>
                     </select>
                 </div>
 
@@ -62,7 +62,7 @@
                 </button>
             </div>
 
-            <div id="connection-status" class="flex items-center px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200 border border-yellow-200 dark:border-yellow-800 whitespace-nowrap min-w-[140px] justify-center ml-4">
+            <div id="connection-status" class="flex items-center px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200 border border-yellow-200 dark:border-yellow-800 whitespace-nowrap w-[120px] justify-center">
                 <span class="w-2 h-2 rounded-full bg-yellow-500 mr-2"></span>
                 {{ Tr "connecting" }}
             </div>
@@ -83,22 +83,71 @@
     };
 
     let eventSource;
-    let currentCategory = 'ALL';
+    let currentCategory = localStorage.getItem('log-category') || 'ALL';
+    let checkboxStates = JSON.parse(localStorage.getItem('log-checkboxes') || '{}');
+
+    // Initialize UI from state and SYNC WITH SERVER
+    async function initState() {
+        const categories = ['tg', 'hh', 'sync', 'add-sequence', 'hh-net', 'msg'];
+        
+        // Sync checkboxes with server
+        for (const cat of categories) {
+            const chk = document.getElementById(`chk-${cat}`);
+            if (chk) {
+                if (checkboxStates[cat] !== undefined) {
+                    chk.checked = checkboxStates[cat];
+                }
+                // Tell server about our state
+                await fetch(`/logs/update?category=${cat}&enabled=${chk.checked}`, { 
+                    method: 'POST',
+                    headers: { 'X-CSRF-Token': getCsrfToken() }
+                });
+            }
+        }
+        
+        const storedLevel = localStorage.getItem('log-level');
+        if (storedLevel !== null) {
+            const select = document.getElementById('log-level-select');
+            if (select) {
+                select.value = storedLevel;
+                updateLogLevel(storedLevel);
+            }
+        }
+
+        setLogCategory(currentCategory, false);
+    }
 
     function getCsrfToken() {
         return '{{ csrfToken }}';
     }
 
     function toggleCategory(cat, enabled) {
+        checkboxStates[cat] = enabled;
+        localStorage.setItem('log-checkboxes', JSON.stringify(checkboxStates));
+        
         fetch(`/logs/update?category=${cat}&enabled=${enabled}`, { 
             method: 'POST',
             headers: {
                 'X-CSRF-Token': getCsrfToken()
             }
         });
+
+        // Re-filter visible logs if we are in ALL view
+        if (currentCategory === 'ALL') {
+            const entries = logContainer.querySelectorAll('div.log-entry');
+            entries.forEach(entry => {
+                const logCat = entry.getAttribute('data-category')?.toLowerCase();
+                if (shouldShow(logCat, 'ALL')) {
+                    entry.classList.remove('hidden');
+                } else {
+                    entry.classList.add('hidden');
+                }
+            });
+        }
     }
 
     function updateLogLevel(lvl) {
+        localStorage.setItem('log-level', lvl);
         fetch(`/logs/update?level=${lvl}`, { 
             method: 'POST',
             headers: {
@@ -117,12 +166,11 @@
         const categories = presets[name];
         if (!categories) return;
 
-        // First disable all, then enable only specific ones
-        const allCats = ['tg', 'hh', 'sync', 'add-sequence', 'hh-net', 'msg', 'filters', 'reports', 'history', 'trace'];
+        const allCats = ['tg', 'hh', 'sync', 'add-sequence', 'hh-net', 'msg'];
         
         allCats.forEach(cat => {
             const shouldEnable = categories.includes(cat);
-            const checkbox = document.querySelector(`input[onchange*="'${cat}'"]`);
+            const checkbox = document.getElementById(`chk-${cat}`);
             if (checkbox && checkbox.checked !== shouldEnable) {
                 checkbox.checked = shouldEnable;
                 toggleCategory(cat, shouldEnable);
@@ -130,8 +178,9 @@
         });
     }
 
-    function setLogCategory(cat) {
+    function setLogCategory(cat, filterExisting = true) {
         currentCategory = cat;
+        localStorage.setItem('log-category', cat);
         
         // Update button styles
         document.querySelectorAll('[id^="btn-"]').forEach(btn => {
@@ -144,15 +193,17 @@
             }
         });
 
-        // Filter existing logs
-        const entries = logContainer.querySelectorAll('div.log-entry');
-        entries.forEach(entry => {
-            if (shouldShow(entry.textContent, cat)) {
-                entry.classList.remove('hidden');
-            } else {
-                entry.classList.add('hidden');
-            }
-        });
+        if (filterExisting) {
+            const entries = logContainer.querySelectorAll('div.log-entry');
+            entries.forEach(entry => {
+                const logCat = entry.getAttribute('data-category')?.toLowerCase();
+                if (shouldShow(logCat, cat)) {
+                    entry.classList.remove('hidden');
+                } else {
+                    entry.classList.add('hidden');
+                }
+            });
+        }
     }
 
     async function loadHistory() {
@@ -160,7 +211,6 @@
             const resp = await fetch(`/logs/history?category=${currentCategory}&limit=500`);
             const logs = await resp.json();
             
-            // Clear but keep placeholder if empty
             logContainer.innerHTML = '';
             if (logs.length === 0) {
                 const placeholder = document.createElement('div');
@@ -178,22 +228,21 @@
     }
 
     function appendLog(logData, scroll = true) {
-        // Remove "Awaiting logs" on first message
         const placeholder = logContainer.querySelector('.italic');
         if (placeholder) {
             logContainer.removeChild(placeholder);
         }
 
         const div = document.createElement('div');
-        div.className = 'log-entry mb-1 border-l-2 border-transparent hover:border-gray-700 dark:hover:border-gray-500 pl-2 transition-colors whitespace-pre-wrap break-all';
-        
         const level = logData.level.toUpperCase();
         const cat = (logData.category || 'system').toUpperCase();
         const msg = logData.msg || logData.message || '';
         const ts = logData.ts || logData.timestamp || '';
 
-        // Formatting: [TS] [LEVEL] [CAT] MSG
-        const formattedTs = ts.split(' ')[1] || ts; // Show only time if possible
+        div.className = 'log-entry mb-1 border-l-2 border-transparent hover:border-gray-700 dark:hover:border-gray-500 pl-2 transition-colors whitespace-pre-wrap break-all';
+        div.setAttribute('data-category', cat);
+        
+        const formattedTs = ts.split(' ')[1] || ts;
         div.textContent = `[${formattedTs}] [${level}] [${cat}] ${msg}`;
 
         if (level === 'ERROR' || level === 'DPANIC' || level === 'PANIC' || level === 'FATAL') {
@@ -214,7 +263,6 @@
 
         logContainer.appendChild(div);
         
-        // Auto-scroll
         if (scroll && logContainer.scrollHeight - logContainer.scrollTop - logContainer.clientHeight < 250) {
             logContainer.scrollTop = logContainer.scrollHeight;
         }
@@ -225,40 +273,40 @@
     }
 
     function shouldShow(logCat, filterCat) {
+        const cat = logCat ? logCat.toLowerCase() : 'system';
+        const isPlatformEnabled = checkboxStates[cat] !== false; 
+        
+        if (!isPlatformEnabled && filterCat === 'ALL') return false;
         if (filterCat === 'ALL') return true;
-        return logCat.toUpperCase() === filterCat.toUpperCase();
+        return cat === filterCat.toLowerCase();
     }
 
     function connect() {
-        if (eventSource) eventSource.close();
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
         
-        // Add a random param to bypass any cache
         eventSource = new EventSource('/logs/stream?t=' + Date.now());
         
         eventSource.onopen = () => {
-            console.log('[SSE] Connection established');
             statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>${translations.live}`;
-            statusEl.className = 'flex items-center px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 border border-green-200 dark:border-green-800 whitespace-nowrap min-w-[100px] justify-center';
+            statusEl.className = 'flex items-center px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 border border-green-200 dark:border-green-800 whitespace-nowrap w-[120px] justify-center';
         };
 
         eventSource.onerror = (e) => {
-            console.error('[SSE] Error:', e);
+            if (eventSource && eventSource.readyState === EventSource.CLOSED) return;
             statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 mr-2"></span>${translations.disconnected}`;
-            statusEl.className = 'flex items-center px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200 border border-red-200 dark:border-red-800 whitespace-nowrap min-w-[100px] justify-center';
-            
-            // Reconnect after delay
-            setTimeout(connect, 3000);
+            statusEl.className = 'flex items-center px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200 border border-red-200 dark:border-red-800 whitespace-nowrap w-[120px] justify-center';
         };
 
         eventSource.onmessage = (e) => {
             if (!e.data) return;
-            
             try {
                 const logData = JSON.parse(e.data);
                 appendLog(logData);
             } catch (err) {
-                // Fallback for non-JSON logs (like ping or old format)
-                if (e.data.startsWith(':')) return; // ignore comments/pings
+                if (e.data.startsWith(':')) return;
                 appendLog({ level: 'INFO', category: 'system', msg: e.data, ts: new Date().toISOString() });
             }
         };
@@ -268,8 +316,35 @@
         logContainer.innerHTML = '';
     }
 
-    loadHistory();
-    connect();
+    // Cleanup on HTMX nav
+    document.body.addEventListener('htmx:beforeCleanupElement', (evt) => {
+        if (evt.detail.elt.contains(logContainer)) {
+            if (eventSource) {
+                console.log('[SSE] Closing connection due to navigation');
+                eventSource.close();
+                eventSource = null;
+            }
+        }
+    });
+
+    // Initialize only after DOM is settled
+    document.body.addEventListener('htmx:afterSettle', (evt) => {
+        if (document.getElementById('log-container')) {
+            console.log('[Logs] Initializing...');
+            initLogs();
+        }
+    });
+
+    async function initLogs() {
+        await initState();
+        await loadHistory();
+        connect();
+    }
+
+    // Initial load
+    if (document.getElementById('log-container')) {
+        initLogs();
+    }
 
     window.addEventListener('beforeunload', () => {
         if (eventSource) eventSource.close();

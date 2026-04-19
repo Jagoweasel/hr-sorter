@@ -54,7 +54,7 @@ func TestGETEndpoints(t *testing.T) {
 	ctx := context.Background()
 	h := NewHandler(ctx, nil, nil, nil, nil, tm, ls,
 		accRepo, intRepo, conRepo, msgRepo, seqRepo, fltRepo, mapRepo,
-		accService, intService, seqService, conService, fltService, repService)
+		accService, intService, seqService, conService, fltService, repService, db)
 
 	// Seed some data
 	accRepo.Create(ctx, "Test Account", "test-account")

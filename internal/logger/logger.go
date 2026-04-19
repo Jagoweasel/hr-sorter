@@ -30,23 +30,25 @@ const (
 )
 
 func Enable(cat Category) {
-	// No-op in new unified logger for now, or you can implement dynamic level switching
+	logger.Enable(cat)
 }
 
 func Disable(cat Category) {
-	// No-op
+	logger.Disable(cat)
 }
 
 func SetLevel(l Level) {
-	// No-op
+	logger.SetLevel(logger.Level(l))
 }
 
 func IsEnabled(cat Category) bool {
-	return true // Zap handles this internally
+	conf, _ := logger.GetConfig()
+	return conf[cat]
 }
 
 func GetConfig() (map[Category]bool, Level) {
-	return make(map[Category]bool), 2 // Default INFO
+	conf, lvl := logger.GetConfig()
+	return conf, Level(lvl)
 }
 
 func Debug(cat Category, format string, v ...interface{}) {

@@ -9,12 +9,10 @@ import (
 )
 
 func (h *Handler) handleLogs(w http.ResponseWriter, r *http.Request) {
-	// For now, we still use the old logger configuration to keep the UI controls working
-	// But in a full migration, we should move this to Zap's AtomicLevel
-	// Since we are doing a phased transition, let's just show default values or adapt.
+	cats, lvl := logger.GetConfig()
 	data := map[string]interface{}{
-		"Categories": make(map[string]bool), // TODO: Link with Zap level enabler
-		"Level":      2,                     // Default to INFO (logger.LevelInfo)
+		"Categories": cats,
+		"Level":      int(lvl),
 	}
 	h.templates.RenderWithStatus(w, r, "logs.html", http.StatusOK, data, h.getLocale(r))
 }
