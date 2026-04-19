@@ -46,8 +46,13 @@ func (r *SequenceRepository) GetByID(ctx context.Context, id interface{}) (*mode
 	return &s, err
 }
 
-func (r *SequenceRepository) UpdateStatus(ctx context.Context, id interface{}, status string) error {
-	_, err := r.db.ExecContext(ctx, "UPDATE sequences SET status = ? WHERE id = ?", status, id)
+func (r *SequenceRepository) UpdateStatus(ctx context.Context, tx *sqlx.Tx, id interface{}, status string) error {
+	query := "UPDATE sequences SET status = ? WHERE id = ?"
+	if tx != nil {
+		_, err := tx.ExecContext(ctx, query, status, id)
+		return err
+	}
+	_, err := r.db.ExecContext(ctx, query, status, id)
 	return err
 }
 
@@ -267,8 +272,13 @@ func (r *SequenceRepository) GetStageByID(ctx context.Context, id interface{}) (
 	return &s, err
 }
 
-func (r *SequenceRepository) UpdateStageStatus(ctx context.Context, id interface{}, completed bool) error {
-	_, err := r.db.ExecContext(ctx, "UPDATE interview_stages SET is_completed = ? WHERE id = ?", completed, id)
+func (r *SequenceRepository) UpdateStageStatus(ctx context.Context, tx *sqlx.Tx, id interface{}, completed bool) error {
+	query := "UPDATE interview_stages SET is_completed = ? WHERE id = ?"
+	if tx != nil {
+		_, err := tx.ExecContext(ctx, query, completed, id)
+		return err
+	}
+	_, err := r.db.ExecContext(ctx, query, completed, id)
 	return err
 }
 

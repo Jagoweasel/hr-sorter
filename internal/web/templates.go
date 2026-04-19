@@ -205,7 +205,8 @@ func (tm *TemplateManager) Render(w io.Writer, r *http.Request, name string, dat
 }
 
 func (tm *TemplateManager) RenderWithStatus(w http.ResponseWriter, r *http.Request, name string, status int, data interface{}, locale string) {
-	// Set status before rendering
+	// Set status and content type before rendering
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	if err := tm.Render(w, r, name, data, locale); err != nil {
 		log.Printf("Template error: %v", err)

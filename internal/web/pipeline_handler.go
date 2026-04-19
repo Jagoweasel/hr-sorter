@@ -4,7 +4,6 @@ import (
 	"hr-sorter/internal/logger"
 	"hr-sorter/internal/models"
 	"hr-sorter/internal/repository"
-	"log"
 	"net/http"
 	"strconv"
 )
@@ -21,23 +20,25 @@ type PipelineColumn struct {
 }
 
 func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
-	view := r.URL.Query().Get("view")
+	view := r.FormValue("view")
 	if view == "" {
 		view = h.getCookie(r, "pipe_view", "kanban")
 	}
 
-	activeAccountID := r.URL.Query().Get("account_id")
+	activeAccountID := r.FormValue("account_id")
 	if activeAccountID == "" {
 		activeAccountID = h.getCookie(r, "filter_account_id", "")
 	}
 
-	hideRejectedStr := r.URL.Query().Get("hide_rejected")
+	logger.Trace(logger.AddSequence, "[Web] handlePipeline: View=%s, AccountID=%s", view, activeAccountID)
+
+	hideRejectedStr := r.FormValue("hide_rejected")
 	if hideRejectedStr == "" {
 		hideRejectedStr = h.getCookie(r, "pipe_hide_rejected", "false")
 	}
 	hideRejected := hideRejectedStr == "true"
 
-	hideAcceptedStr := r.URL.Query().Get("hide_accepted")
+	hideAcceptedStr := r.FormValue("hide_accepted")
 	if hideAcceptedStr == "" {
 		hideAcceptedStr = h.getCookie(r, "pipe_hide_accepted", "false")
 	}
@@ -46,10 +47,12 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 	allAccounts, _ := h.accRepo.GetAll(r.Context())
 	sequences, err := h.seqRepo.GetAll(r.Context(), activeAccountID)
 	if err != nil {
-		log.Printf("Web: Error fetching sequences: %v", err)
+		logger.Error(logger.AddSequence, "[Web] handlePipeline: Error fetching sequences: %v", err)
 		http.Error(w, err.Error(), 500)
 		return
 	}
+
+	logger.Trace(logger.AddSequence, "[Web] handlePipeline: Loaded %d raw sequences", len(sequences))
 
 	var seqIDs []int64
 	for _, s := range sequences {

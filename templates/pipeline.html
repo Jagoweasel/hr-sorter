@@ -6,10 +6,11 @@
             <h1 class="text-lg font-black text-gray-900 dark:text-white tracking-tighter">{{ Tr "pipeline" }}</h1>
         </div>
 
-        <div class="flex items-center space-x-4 ml-4 mr-auto">
+        <div class="flex items-center space-x-4 ml-4 mr-auto" id="filter-form-data">
+            <input type="hidden" name="view" value="{{ .View }}">
             <div class="flex flex-col min-w-[120px]">
                 <label class="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">{{ Tr "active_account" }}</label>
-                <select id="account-filter" onchange="applyFilters()"
+                <select id="account-filter" name="account_id" onchange="applyFilters()"
                         class="bg-gray-50 border border-gray-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white rounded px-2 py-0.5 text-[10px] font-black focus:border-blue-500 outline-none appearance-none cursor-pointer">
                     <option value="">{{ Tr "all_accounts" }}</option>
                     {{ range .Accounts }}
@@ -19,11 +20,11 @@
             </div>
             <div class="flex items-center space-x-4">
                 <label class="flex items-center space-x-1 cursor-pointer">
-                    <input type="checkbox" onchange="applyFilters()" id="hide-rejected" {{ if .HideRejected }}checked{{ end }} class="w-3 h-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+                    <input type="checkbox" name="hide_rejected" value="true" onchange="applyFilters()" id="hide-rejected" {{ if .HideRejected }}checked{{ end }} class="w-3 h-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
                     <span class="text-[9px] font-black text-gray-400 uppercase tracking-tight">{{ Tr "hide_rejected" }}</span>
                 </label>
                 <label class="flex items-center space-x-1 cursor-pointer">
-                    <input type="checkbox" onchange="applyFilters()" id="hide-accepted" {{ if .HideAccepted }}checked{{ end }} class="w-3 h-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+                    <input type="checkbox" name="hide_accepted" value="true" onchange="applyFilters()" id="hide-accepted" {{ if .HideAccepted }}checked{{ end }} class="w-3 h-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
                     <span class="text-[9px] font-black text-gray-400 uppercase tracking-tight">{{ Tr "hide_accepted" }}</span>
                 </label>
             </div>
@@ -54,7 +55,8 @@
         </div>
     </div>
 
-    <div class="flex-1 overflow-hidden" id="pipeline-content">
+    <div class="flex-1 overflow-hidden" id="pipeline-content" 
+         hx-get="/pipeline" hx-trigger="refreshPipeline from:body" hx-target="#main-content" hx-swap="morph" hx-include="#filter-form-data">
         {{ if eq .View "kanban" }}
         <!-- Compact Kanban View -->
         <div id="kanban-scroll-area" class="h-full overflow-auto pb-8" idm-preserve-scroll="true">

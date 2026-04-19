@@ -164,6 +164,11 @@ func (h *Handler) InitHandler() http.Handler {
 }
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "static/favicon.ico")
+	})
+
 	mux.HandleFunc("/", h.handleIndex)
 	mux.HandleFunc("/reports", h.handleReports)
 	mux.HandleFunc("/reports/export/xlsx", h.handleExportXLSX)

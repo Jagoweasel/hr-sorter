@@ -2,11 +2,12 @@
 <html lang="{{ Locale }}" class="light">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ Tr "hr_sorter" }}</title>
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <script src="https://unpkg.com/htmx-ext-idiomorph@0.1.0/dist/idiomorph-ext.js"></script>
-    <script src="https://unpkg.com/htmx.org/dist/ext/preload.js"></script>
+    <script src="/static/js/htmx.min.js"></script>
+    <script src="/static/js/idiomorph-ext.js"></script>
+    <script src="/static/js/preload.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -68,7 +69,7 @@
         document.body.addEventListener('new-message', function(evt) {
             const data = evt.detail.value;
             if (Notification.permission === 'granted') {
-                new Notification("{{ Tr "new_recruiter_message" }}", {
+                new Notification('{{ Tr "new_recruiter_message" }}', {
                     body: `${data.sender}: ${data.text}`,
                     icon: '/static/icon.png' // Optional icon
                 });
@@ -77,20 +78,30 @@
 
         // Global SSE for control signals
         let lastRefresh = 0;
+        const globalEventSource = new EventSource('/logs/stream');
+        
         globalEventSource.onmessage = (e) => {
             if (e.data.startsWith('[CONTROL]')) {
                 const command = e.data.replace('[CONTROL]', '').trim();
                 if (command === 'refreshContacts') {
                     const now = Date.now();
-                    // Throttle refreshes and prevent if selecting text
-                    if (now - lastRefresh > 5000 && window.getSelection().toString() === "") {
+                    // Throttle refreshes and prevent if selecting text or if an HTMX request is in progress
+                    const isHtmxRequest = document.querySelector('.htmx-request') !== null;
+                    
+                    if (now - lastRefresh > 5000 && window.getSelection().toString() === "" && !isHtmxRequest) {
+                        console.log('[SSE] Triggering refresh from command:', command);
                         document.body.dispatchEvent(new Event('refreshContacts'));
                         document.body.dispatchEvent(new Event('refresh'));
                         lastRefresh = now;
+                    } else {
+                        console.log('[SSE] Refresh skipped: throttled, text selected, or htmx in progress');
                     }
                 }
             }
         };
+
+        // Enable HTMX logging for debugging
+        // htmx.logAll();
     </script>
     <nav class="bg-blue-600 dark:bg-blue-800 text-white p-4 shadow-md">
         <div class="container mx-auto flex justify-between items-center">

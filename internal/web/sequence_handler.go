@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"hr-sorter/internal/logger"
 	"log"
 	"net/http"
 	"strconv"
@@ -91,20 +92,28 @@ func (h *Handler) handleUpdateStage(w http.ResponseWriter, r *http.Request) {
 	completed := r.URL.Query().Get("completed") == "true"
 	view := r.URL.Query().Get("view")
 
+	logger.Trace(logger.AddSequence, "[Web] handleUpdateStage: StageID=%s, Completed=%v, View=%s", stageID, completed, view)
+
 	if err := h.seqService.UpdateStageCompletion(r.Context(), stageID, completed); err != nil {
+		logger.Error(logger.AddSequence, "[Web] handleUpdateStage Error: %v", err)
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	if view != "" {
+	if view == "kanban" {
+		logger.Trace(logger.AddSequence, "[Web] handleUpdateStage: Refreshing full Kanban board")
+		h.handlePipeline(w, r)
+		return
+	}
+
+	if view == "timeline" {
 		// Partial update for a specific card
-		// We need sequence ID, but stage completion update might need us to fetch the sequence
 		stage, _ := h.seqRepo.GetStageByID(r.Context(), stageID)
 		if stage != nil {
 			details, _ := h.seqRepo.GetFullDetailsByID(r.Context(), stage.SequenceID)
 			if details != nil {
 				details.ColumnDefs = h.getColumnDefs(r)
-				h.templates.RenderWithStatus(w, r, "fragments/pipeline/card_"+view+".html", http.StatusOK, details, h.getLocale(r))
+				h.templates.RenderWithStatus(w, r, "fragments/pipeline/card_timeline.html", http.StatusOK, details, h.getLocale(r))
 				return
 			}
 		}
@@ -165,34 +174,39 @@ func (h *Handler) handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 	}
 	seqID, _ := strconv.ParseInt(seqIDStr, 10, 64)
 
+	logger.Trace(logger.AddSequence, "[Web] handleMoveSequence: SeqID=%d, Status=%s, View=%s", seqID, status, view)
+
 	if status == "" {
-		log.Printf("[Web] Warning: handleMoveSequence called with empty status for seq %s", seqIDStr)
+		logger.Warn(logger.AddSequence, "[Web] handleMoveSequence: Empty status for SeqID=%d", seqID)
 		h.setHXLocation(w, h.getRedirectURL(r))
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
 	if err := h.seqService.MoveSequence(r.Context(), seqID, status); err != nil {
+		logger.Error(logger.AddSequence, "[Web] handleMoveSequence Error: %v", err)
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	if view == "kanban" {
-		h.handlePipeline(w, r)
-		return
-	}
-
-	if view == "timeline" {
-		details, _ := h.seqRepo.GetFullDetailsByID(r.Context(), seqID)
-		if details != nil {
-			details.ColumnDefs = h.getColumnDefs(r)
-			h.templates.RenderWithStatus(w, r, "fragments/pipeline/card_"+view+".html", http.StatusOK, details, h.getLocale(r))
+	if r.Header.Get("HX-Request") != "" {
+		if view == "kanban" {
+			logger.Trace(logger.AddSequence, "[Web] handleMoveSequence: Refreshing full Kanban board for SeqID=%d", seqID)
+			h.handlePipeline(w, r)
 			return
 		}
-	}
+		if view == "timeline" {
+			logger.Trace(logger.AddSequence, "[Web] handleMoveSequence: Partial update for card SeqID=%d", seqID)
+			details, _ := h.seqRepo.GetFullDetailsByID(r.Context(), seqID)
+			if details != nil {
+				details.ColumnDefs = h.getColumnDefs(r)
+				h.templates.RenderWithStatus(w, r, "fragments/pipeline/card_timeline.html", http.StatusOK, details, h.getLocale(r))
+				return
+			}
+		}
 
-	if r.Header.Get("HX-Request") != "" {
-		h.setHXLocation(w, h.getRedirectURL(r))
+		logger.Trace(logger.AddSequence, "[Web] handleMoveSequence: Triggering refreshPipeline event")
+		w.Header().Set("HX-Trigger", "refreshPipeline")
 		w.WriteHeader(http.StatusOK)
 		return
 	}

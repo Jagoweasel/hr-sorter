@@ -204,12 +204,12 @@ func (s *SequenceService) UpdateStageCompletion(ctx context.Context, stageID str
 				return err
 			}
 		} else {
-			if err := s.seqRepo.UpdateStageStatus(ctx, stageID, false); err != nil {
+			if err := s.seqRepo.UpdateStageStatus(ctx, nil, stageID, false); err != nil {
 				return err
 			}
 		}
 	} else {
-		if err := s.seqRepo.UpdateStageStatus(ctx, stageID, true); err != nil {
+		if err := s.seqRepo.UpdateStageStatus(ctx, nil, stageID, true); err != nil {
 			return err
 		}
 	}
@@ -228,9 +228,9 @@ func (s *SequenceService) UpdateStageCompletion(ctx context.Context, stageID str
 		} else if strings.Contains(name, "screen") {
 			newStatus = "screening"
 		}
-		return s.seqRepo.UpdateStatus(ctx, stage.SequenceID, newStatus)
+		return s.seqRepo.UpdateStatus(ctx, nil, stage.SequenceID, newStatus)
 	} else {
-		return s.seqRepo.UpdateStatus(ctx, stage.SequenceID, "initial")
+		return s.seqRepo.UpdateStatus(ctx, nil, stage.SequenceID, "initial")
 	}
 }
 
@@ -238,7 +238,14 @@ func (s *SequenceService) MoveSequence(ctx context.Context, seqID int64, status 
 	if status == "" {
 		return fmt.Errorf("status cannot be empty")
 	}
-	if err := s.seqRepo.UpdateStatus(ctx, seqID, status); err != nil {
+
+	tx, err := s.seqRepo.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if err := s.seqRepo.UpdateStatus(ctx, tx, seqID, status); err != nil {
 		return err
 	}
 
@@ -270,15 +277,15 @@ func (s *SequenceService) MoveSequence(ctx context.Context, seqID int64, status 
 				}
 
 				if sRank <= targetRank {
-					s.seqRepo.UpdateStageStatus(ctx, st.ID, true)
+					s.seqRepo.UpdateStageStatus(ctx, tx, st.ID, true)
 				} else {
-					s.seqRepo.UpdateStageStatus(ctx, st.ID, false)
+					s.seqRepo.UpdateStageStatus(ctx, tx, st.ID, false)
 				}
 			}
 		}
 	}
 
-	return nil
+	return tx.Commit()
 }
 
 func (s *SequenceService) AddStage(ctx context.Context, seqID int64, category, customName string) error {
@@ -344,5 +351,5 @@ func (s *SequenceService) AddStage(ctx context.Context, seqID int64, category, c
 	if category == "initial" {
 		status = "initial"
 	}
-	return s.seqRepo.UpdateStatus(ctx, seqID, status)
+	return s.seqRepo.UpdateStatus(ctx, nil, seqID, status)
 }
