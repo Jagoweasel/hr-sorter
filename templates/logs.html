@@ -13,34 +13,37 @@
             <div class="flex flex-wrap items-center gap-3">
                 <!-- Filter Controls -->
                 <div class="flex flex-wrap bg-gray-100 dark:bg-gray-700 p-1.5 rounded-xl border dark:border-gray-600 gap-1">
-                    <button onclick="setLogCategory('ALL')" id="btn-all" class="px-3 py-1 rounded-lg text-[10px] font-black uppercase transition-colors bg-white dark:bg-gray-600 shadow-sm">{{ Tr "all" }}</button>
+                    <div class="flex gap-1 pr-1 border-r dark:border-gray-600 mr-1">
+                        <button onclick="setLogCategory('ALL')" id="btn-all" class="px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors bg-white dark:bg-gray-600 shadow-sm">{{ Tr "all" }}</button>
+                        <button onclick="setLogCategory('NONE')" id="btn-none" class="px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50 text-gray-400">{{ Tr "none" }}</button>
+                    </div>
                     
-                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors category-btn-container" id="container-tg">
                         <button onclick="setLogCategory('TG')" id="btn-tg" class="text-gray-500 dark:text-gray-400 hover:text-blue-400">TG</button>
                         <input type="checkbox" id="chk-tg" checked onchange="toggleCategory('tg', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer">
                     </div>
 
-                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors category-btn-container" id="container-hh">
                         <button onclick="setLogCategory('HH')" id="btn-hh" class="text-gray-500 dark:text-gray-400 hover:text-red-400">HH</button>
                         <input type="checkbox" id="chk-hh" checked onchange="toggleCategory('hh', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer">
                     </div>
 
-                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors category-btn-container" id="container-sync">
                         <button onclick="setLogCategory('SYNC')" id="btn-sync" class="text-gray-500 dark:text-gray-400 hover:text-green-400">Sync</button>
                         <input type="checkbox" id="chk-sync" checked onchange="toggleCategory('sync', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer">
                     </div>
 
-                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors category-btn-container" id="container-add-sequence">
                         <button onclick="setLogCategory('ADD-SEQUENCE')" id="btn-add-sequence" class="text-gray-500 dark:text-gray-400 hover:text-orange-400">Sequences</button>
                         <input type="checkbox" id="chk-add-sequence" checked onchange="toggleCategory('add-sequence', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-orange-600 focus:ring-orange-500 cursor-pointer">
                     </div>
 
-                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors category-btn-container" id="container-hh-net">
                         <button onclick="setLogCategory('HH-NET')" id="btn-hh-net" class="text-gray-500 dark:text-gray-400 hover:text-indigo-400">HH-Net</button>
                         <input type="checkbox" id="chk-hh-net" checked onchange="toggleCategory('hh-net', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
                     </div>
 
-                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-white/50 dark:hover:bg-gray-600/50">
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-colors category-btn-container" id="container-msg">
                         <button onclick="setLogCategory('MSG')" id="btn-msg" class="text-gray-500 dark:text-gray-400 hover:text-purple-400">Msg</button>
                         <input type="checkbox" id="chk-msg" checked onchange="toggleCategory('msg', this.checked)" class="w-3.5 h-3.5 rounded-md border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer">
                     </div>
@@ -133,17 +136,21 @@
         });
 
         // Re-filter visible logs if we are in ALL view
-        if (currentCategory === 'ALL') {
-            const entries = logContainer.querySelectorAll('div.log-entry');
-            entries.forEach(entry => {
-                const logCat = entry.getAttribute('data-category')?.toLowerCase();
-                if (shouldShow(logCat, 'ALL')) {
-                    entry.classList.remove('hidden');
-                } else {
-                    entry.classList.add('hidden');
-                }
-            });
+        if (currentCategory === 'ALL' || currentCategory === 'NONE') {
+            filterVisibleLogs();
         }
+    }
+
+    function filterVisibleLogs() {
+        const entries = logContainer.querySelectorAll('div.log-entry');
+        entries.forEach(entry => {
+            const logCat = entry.getAttribute('data-category')?.toLowerCase();
+            if (shouldShow(logCat, currentCategory)) {
+                entry.classList.remove('hidden');
+            } else {
+                entry.classList.add('hidden');
+            }
+        });
     }
 
     function updateLogLevel(lvl) {
@@ -182,27 +189,51 @@
         currentCategory = cat;
         localStorage.setItem('log-category', cat);
         
-        // Update button styles
+        // Reset all button and container styles
         document.querySelectorAll('[id^="btn-"]').forEach(btn => {
-            if (btn.id === `btn-${cat.toLowerCase()}`) {
-                btn.parentElement.classList.add('bg-white', 'dark:bg-gray-600', 'shadow-sm');
-                btn.parentElement.classList.remove('hover:bg-white/50', 'dark:hover:bg-gray-600/50');
-            } else {
-                btn.parentElement.classList.remove('bg-white', 'dark:bg-gray-600', 'shadow-sm');
-                btn.parentElement.classList.add('hover:bg-white/50', 'dark:hover:bg-gray-600/50');
-            }
+            btn.classList.remove('bg-white', 'dark:bg-gray-600', 'shadow-sm');
+            if (btn.id !== 'btn-none') btn.classList.add('hover:bg-white/50', 'dark:hover:bg-gray-600/50');
+        });
+        document.querySelectorAll('.category-btn-container').forEach(c => {
+            c.classList.remove('bg-white', 'dark:bg-gray-600', 'shadow-sm');
+            c.classList.add('hover:bg-white/50', 'dark:hover:bg-gray-600/50');
         });
 
-        if (filterExisting) {
-            const entries = logContainer.querySelectorAll('div.log-entry');
-            entries.forEach(entry => {
-                const logCat = entry.getAttribute('data-category')?.toLowerCase();
-                if (shouldShow(logCat, cat)) {
-                    entry.classList.remove('hidden');
-                } else {
-                    entry.classList.add('hidden');
+        // Highlight selected
+        const btn = document.getElementById(`btn-${cat.toLowerCase()}`);
+        if (btn) {
+            const isPlatform = !['btn-all', 'btn-none'].includes(btn.id);
+            const target = isPlatform ? btn.parentElement : btn;
+            target.classList.add('bg-white', 'dark:bg-gray-600', 'shadow-sm');
+            target.classList.remove('hover:bg-white/50', 'dark:hover:bg-gray-600/50');
+        }
+
+        // Special case for ALL: enable all checkboxes
+        if (cat === 'ALL') {
+            const categories = ['tg', 'hh', 'sync', 'add-sequence', 'hh-net', 'msg'];
+            categories.forEach(c => {
+                const checkbox = document.getElementById(`chk-${c}`);
+                if (checkbox && !checkbox.checked) {
+                    checkbox.checked = true;
+                    toggleCategory(c, true);
                 }
             });
+        }
+
+        // Special case for NONE: disable all checkboxes
+        if (cat === 'NONE') {
+            const categories = ['tg', 'hh', 'sync', 'add-sequence', 'hh-net', 'msg'];
+            categories.forEach(c => {
+                const checkbox = document.getElementById(`chk-${c}`);
+                if (checkbox && checkbox.checked) {
+                    checkbox.checked = false;
+                    toggleCategory(c, false);
+                }
+            });
+        }
+
+        if (filterExisting) {
+            filterVisibleLogs();
         }
     }
 
@@ -276,6 +307,7 @@
         const cat = logCat ? logCat.toLowerCase() : 'system';
         const isPlatformEnabled = checkboxStates[cat] !== false; 
         
+        if (filterCat === 'NONE') return false;
         if (!isPlatformEnabled && filterCat === 'ALL') return false;
         if (filterCat === 'ALL') return true;
         return cat === filterCat.toLowerCase();
@@ -320,7 +352,7 @@
     document.body.addEventListener('htmx:beforeCleanupElement', (evt) => {
         if (evt.detail.elt.contains(logContainer)) {
             if (eventSource) {
-                console.log('[SSE] Closing connection due to navigation');
+                console.log('[Logs] Closing SSE');
                 eventSource.close();
                 eventSource = null;
             }
@@ -330,7 +362,6 @@
     // Initialize only after DOM is settled
     document.body.addEventListener('htmx:afterSettle', (evt) => {
         if (document.getElementById('log-container')) {
-            console.log('[Logs] Initializing...');
             initLogs();
         }
     });

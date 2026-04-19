@@ -1,4 +1,5 @@
 {
+  "none": "Ничего",
   "dashboard": "Дашборд",
   "pipeline": "Воронка",
   "reports": "Отчеты",
@@ -28,6 +29,7 @@
   "in_pipeline": "В воронке",
   "not_in_pipeline": "Не в воронке",
   "all": "Все",
+  "none": "Ничего",
   "sync_active": "Синхр. активна",
   "sync_idle": "Синхр. в ожидании",
   "account_management": "Управление аккаунтами",

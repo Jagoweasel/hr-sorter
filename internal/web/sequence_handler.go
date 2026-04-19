@@ -177,7 +177,12 @@ func (h *Handler) handleMoveSequence(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if view != "" {
+	if view == "kanban" {
+		h.handlePipeline(w, r)
+		return
+	}
+
+	if view == "timeline" {
 		details, _ := h.seqRepo.GetFullDetailsByID(r.Context(), seqID)
 		if details != nil {
 			details.ColumnDefs = h.getColumnDefs(r)
@@ -283,6 +288,20 @@ func (h *Handler) getRedirectURL(r *http.Request) string {
 	if referer == "" {
 		return "/"
 	}
+
+	// Parse referer to get path and query
+	if strings.Contains(referer, "://") {
+		parts := strings.SplitN(referer, "//", 2)
+		if len(parts) > 1 {
+			subParts := strings.SplitN(parts[1], "/", 2)
+			if len(subParts) > 1 {
+				return "/" + subParts[1]
+			}
+		}
+	} else if strings.HasPrefix(referer, "/") {
+		return referer
+	}
+
 	if strings.Contains(referer, "view=timeline") {
 		return "/pipeline?view=timeline"
 	}

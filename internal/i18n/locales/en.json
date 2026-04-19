@@ -1,4 +1,5 @@
 {
+  "none": "None",
   "dashboard": "Dashboard",
   "pipeline": "Pipeline",
   "reports": "Reports",
@@ -28,6 +29,7 @@
   "in_pipeline": "In Pipeline",
   "not_in_pipeline": "Not in Pipeline",
   "all": "All",
+  "none": "None",
   "sync_active": "Sync Active",
   "sync_idle": "Sync Idle",
   "account_management": "Account Management",

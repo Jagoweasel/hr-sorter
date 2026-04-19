@@ -104,6 +104,7 @@ func NewLogger(output io.Writer, db *sqlx.DB) *Logger {
 // filteringCore wraps any core to provide category-based filtering
 type filteringCore struct {
 	zapcore.Core
+	category string
 }
 
 func (f *filteringCore) Check(ent zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
@@ -114,7 +115,11 @@ func (f *filteringCore) Check(ent zapcore.Entry, ce *zapcore.CheckedEntry) *zapc
 }
 
 func (f *filteringCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
-	category := "system"
+	category := f.category
+	if category == "" {
+		category = "system"
+	}
+
 	for _, field := range fields {
 		if field.Key == "category" {
 			category = field.String
@@ -135,7 +140,17 @@ func (f *filteringCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
 }
 
 func (f *filteringCore) With(fields []zapcore.Field) zapcore.Core {
-	return &filteringCore{Core: f.Core.With(fields)}
+	category := f.category
+	for _, field := range fields {
+		if field.Key == "category" {
+			category = field.String
+			break
+		}
+	}
+	return &filteringCore{
+		Core:     f.Core.With(fields),
+		category: category,
+	}
 }
 
 // dbCore implements zapcore.Core to write logs to SQLite
